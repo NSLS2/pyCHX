@@ -85,6 +85,7 @@ def compress_eigerdata(
     images_per_file=100,
     copy_rawdata=True,
     new_path="/tmp/",
+    func_images_per_file=get_eigerImage_per_file,
 ):
     """
     Init 2016, YG@CHX
@@ -104,7 +105,7 @@ def compress_eigerdata(
             # para_compress=   True
     # print( dtypes )
     if direct_load_data:
-        images_per_file = get_eigerImage_per_file(data_path)
+        images_per_file = func_images_per_file(data_path)
         if data_path is None:
             sud = get_sid_filenames(db[uid])
             data_path = sud[2][0]
