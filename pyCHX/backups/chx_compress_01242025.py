@@ -6,7 +6,7 @@ import struct
 import sys
 from contextlib import closing
 from glob import iglob
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool
 
 import dill
 import matplotlib.pyplot as plt
@@ -74,7 +74,7 @@ def compress_eigerdata(
     bins=1,
     bad_frame_list=None,
     para_compress=False,
-    num_sub=128,
+    num_sub=100,
     dtypes="uid",
     reverse=True,
     rot90=False,
@@ -84,7 +84,7 @@ def compress_eigerdata(
     data_path=None,
     images_per_file=100,
     copy_rawdata=True,
-    new_path="/tmp/",
+    new_path="/tmp_data/data/",
 ):
     """
     Init 2016, YG@CHX
@@ -181,7 +181,6 @@ def compress_eigerdata(
                     data_path=data_path,
                     images_per_file=images_per_file,
                     copy_rawdata=copy_rawdata,
-                    new_path=new_path
                 )
             else:
                 return init_compress_eigerdata(
@@ -274,7 +273,7 @@ def para_compress_eigerdata(
     mask,
     md,
     filename,
-    num_sub=128,
+    num_sub=100,
     bad_pixel_threshold=1e15,
     hot_pixel_threshold=2**30,
     bad_pixel_low_threshold=0,
@@ -284,13 +283,13 @@ def para_compress_eigerdata(
     reverse=True,
     rot90=False,
     num_max_para_process=500,
-    cpu_core_number=0,
+    cpu_core_number=72,
     with_pickle=True,
     direct_load_data=False,
     data_path=None,
     images_per_file=100,
     copy_rawdata=True,
-    new_path="/tmp/",
+    new_path="/tmp_data/data/",
 ):
 
     data_path_ = data_path
@@ -306,7 +305,7 @@ def para_compress_eigerdata(
             if not copy_rawdata:
                 images_ = EigerImages(data_path, images_per_file, md)
             else:
-                print("Due to a IO problem running on GPFS. The raw data will be copied to /tmp/")
+                print("Due to a IO problem running on GPFS. The raw data will be copied to /tmp_data/Data.")
                 print("Copying...")
                 copy_data(data_path, new_path)
                 # print(data_path, new_path)
@@ -323,14 +322,10 @@ def para_compress_eigerdata(
 
     else:
         N = len(images)
-
-    if cpu_core_number == 0:
-        cpu_core_number = cpu_count()
-        
     N = int(np.ceil(N / bins))
     Nf = int(np.ceil(N / num_sub))
     if Nf > cpu_core_number:
-        print("The process number is larger than %s (current server's core threads)" % cpu_core_number)
+        print("The process number is larger than %s (XF11ID server core number)" % cpu_core_number)
         num_sub_old = num_sub
         num_sub = int(np.ceil(N / cpu_core_number))
         Nf = int(np.ceil(N / num_sub))

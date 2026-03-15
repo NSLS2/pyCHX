@@ -48,7 +48,8 @@ markers = np.array(markers * 100)
 
 
 flatten_nestlist = lambda l: [item for sublist in l for item in sublist]
-"""a function to flatten a nest list
+"""
+a function to flatten a nest list
 e.g., flatten( [ ['sg','tt'],'ll' ]   )
 gives ['sg', 'tt', 'l', 'l']
 """
@@ -862,71 +863,6 @@ def save_oavs_tifs(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1
             plt.plot([1100, 1100 + pixel_scalebar], [150, 150], "r-", Linewidth=5)  # scale bar.
             plt.text(1000, 50, text_string, fontsize=14, color="r")
         plt.text(600, 50, str(oav_times[m])[:5] + " [s]", fontsize=14, color="r")
-        plt.axis("off")
-    plt.savefig(data_dir + "uid=%s_OVA_images.png" % uid)
-
-def save_oavs_tifs_v2(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1, threshold=0,cross=[685, 440, 50]):
-    """
-    save OAV images collected for a uid as an 'aggregate' image that can be attached to Olog (attaching is not part of this function)
-    Adds time stamps for series of OAV images
-    uid: uid
-    data_dir: directory for saving aggregate image
-    brightness_scale: scale brightness of images (default: 1, i.e. no scaling)
-    scalebar_size: [pixel] if sufficient information available in md, add scalebar to images;  (default: 100)
-    cross: [xpos,ypos,width] (xpos,ypos): pixel coordinate of X-ray beam, width: width of cross on image [pixel] ;default: [685, 440, 50] -> optical axis for 12x zoom, 50 pixel wide cross
-    scale/threshold: manipulation of image intensity, enhancement of areas (currently not implemented)
-    01/28/2025 by LW
-    """
-    h=db[uid].v2.start
-    detectors=h['detectors']
-    for d in detectors:
-        if 'oav' in d or 'OAV' in d:
-            oav_det=d
-            oav_cam = '%s_image'%d
-             
-    oavs = list(db[uid].data(oav_cam))[0]
-    res_key=None
-    for k in h.keys():
-        if 'OAV' in k and 'resolution' in k:
-            res_key = k
-    try:
-            pixel_scalebar = np.ceil(scalebar_size / h[res_key])
-    except:
-        pixel_scalebar = None
-        print("No OAV resolution is available.")
-    text_string = "%s $\mu$m" % scalebar_size
-    oav_period=np.array(db[uid].v2['primary']['config'][oav_det]['%s_cam_acquire_period'%oav_det])[0]
-    oav_expt=np.array(db[uid].v2['primary']['config'][oav_det]['%s_cam_acquire_time'%oav_det])[0]
-    
-    oav_times = []
-    for i in range(len(oavs)):
-        oav_times.append(oav_expt + i * oav_period)
-    fig = plt.subplots(int(np.ceil(len(oavs) / 3)), 3, figsize=(3 * 5.08, int(np.ceil(len(oavs) / 3)) * 4))
-    pc=1
-    for m in range(len(oavs)):
-        plt.subplot(int(np.ceil(len(oavs) / 3)), 3, m + 1)
-        # plt.subplots(figsize=(5.2,4))
-        img = oavs[m]
-        try:
-            ind = np.flipud(img * scale)[:, :, 2] < threshold
-        except:
-            ind = np.flipud(img * scale) < threshold
-        rgb_cont_img = np.copy(np.flipud(img))
-        # rgb_cont_img[ind,0]=1000
-        if brightness_scale != 1:
-            rgb_cont_img = scale_rgb(rgb_cont_img, scale=brightness_scale)
-    
-        plt.imshow(rgb_cont_img, interpolation="none", resample=True, cmap="gray")
-        plt.axis("equal")
-        plt.plot([cross[0] - cross[2] / 2, cross[0] + cross[2] / 2], [cross[1], cross[1]], "r-")
-        plt.plot([cross[0], cross[0]], [cross[1] - cross[2] / 2, cross[1] + cross[2] / 2], "r-")
-        if pixel_scalebar != None:
-            plt.plot([1100, 1100 + pixel_scalebar], [150, 150], "r-", Linewidth=5)  # scale bar.
-            plt.text(1000, 50, text_string, fontsize=14, color="r")
-        plt.text(600, 50, str(oav_times[m])[:5] + " [s]", fontsize=14, color="r")
-        plt.axis("off");pc+=1
-    for i in range(int(np.ceil(len(oavs) / 3))* 3-pc+1):
-        plt.subplot(int(np.ceil(len(oavs) / 3)), 3, pc)
         plt.axis("off")
     plt.savefig(data_dir + "uid=%s_OVA_images.png" % uid)
 
@@ -2449,8 +2385,8 @@ def create_user_folder(CYCLE, username=None, default_dir="/XF11ID/analysis/"):
 
 
 ##################################
-#########For dose analysis #######
-##################################
+# ########For dose analysis #######
+# #################################
 def get_fra_num_by_dose(exp_dose, exp_time, att=1, dead_time=2):
     """
     Calculate the frame number to be correlated by giving a X-ray exposure dose
@@ -3502,56 +3438,49 @@ def get_sid_filenames(hdr, verbose=False):
     return ret
 
 
-def get_sid_filenames_v2(run):
-    """
-    get scan_id, uid and detector filename from databroker
-    get_sid_filenames(run,verbose=False)
-    run = db[uid]
-    returns (scan_id, uid, filepath)
-    01/26/2025 function by Dan Allan, modified by LW to handle Eiger + oav
-    """
-    from pathlib import Path
-    import event_model
-    from area_detector_handlers.eiger import EigerHandler
-    
-    run = run.v2
-    sid = run.start['scan_id']
-    uid = run.start['uid']
-    resources = [doc for name, doc in run.documents() if name == "resource"]
-    for r in resources:
-        if r['spec'] in list(['AD_EIGER2']):
-            resource = r
-    datum_pages = [doc for name, doc in run.documents() if name == "datum_page"]
-    handler = EigerHandler(str(Path(resource['root'], resource['resource_path'])), **resource['resource_kwargs'])
-    datums = []
-    for datum_page in datum_pages:
-        for datum in event_model.unpack_datum_page(datum_page):
-            if 'seq_id' in datum['datum_kwargs'].keys():
-                datums.append(datum)
-    datum_set = sorted(set(handler.get_file_list([datum["datum_kwargs"] for datum in datums])))
-    for datum in datum_set:
-        if "_master.h5" in datum:
-            return sid, uid, datum
+# def get_sid_filenames(header):
+#     """YG. Dev Jan, 2016
+#     Get a bluesky scan_id, unique_id, filename by giveing uid
 
-def get_sid_filenames_v3(run):
-    """
-    get scan_id, uid and detector filename from databroker
-    get_sid_filenames(run,verbose=False)
-    run = db[uid]
-    returns (scan_id, uid, filepath)
-    01/26/2025 based on get_sid_filenames_v2 by Dan Allan, modified by LW to handle Eiger +oav as detectors and using md['sequence_id'] from 'series'
-    """
-    run = run.v2
-    sid = run.start['scan_id']
-    uid = run.start['uid']
-    resources = [doc for name, doc in run.documents() if name == "resource"]
-    for r in resources:
-        if r['spec'] in list(['AD_EIGER2']):
-            resource = r
-    if 'eiger' in  resource['root']:
-        datum = '%s/%s_%s_master.h5'%(resource['root'],resource['resource_path'],run.start['sequence id'])
-    return sid, uid, datum
-                
+#     Parameters
+#     ----------
+#     header: a header of a bluesky scan, e.g. db[-1]
+
+#     Returns
+#     -------
+#     scan_id: integer
+#     unique_id: string, a full string of a uid
+#     filename: sring
+
+#     Usuage:
+#     sid,uid, filenames   = get_sid_filenames(db[uid])
+
+#     """
+#     from collections import defaultdict
+#     from glob import glob
+#     from pathlib import Path
+
+#     filepaths = []
+#     resources = {}  # uid: document
+#     datums = defaultdict(list)  # uid: List(document)
+#     for name, doc in header.documents():
+#         if name == "resource":
+#             resources[doc["uid"]] = doc
+#         elif name == "datum":
+#             datums[doc["resource"]].append(doc)
+#         elif name == "datum_page":
+#             for datum in event_model.unpack_datum_page(doc):
+#                 datums[datum["resource"]].append(datum)
+#     for resource_uid, resource in resources.items():
+#         file_prefix = Path(resource.get('root', '/'), resource["resource_path"])
+#         if 'eiger' not in resource['spec'].lower():
+#             continue
+#         for datum in datums[resource_uid]:
+#             dm_kw = datum["datum_kwargs"]
+#             seq_id = dm_kw['seq_id']
+#             new_filepaths = glob(f'{file_prefix!s}_{seq_id}*')
+#             filepaths.extend(new_filepaths)
+#     return header.start['scan_id'],  header.start['uid'], filepaths
 
 
 def load_dask_data(uid, detector, mask_path_full, reverse=False, rot90=False):
@@ -3582,20 +3511,10 @@ def load_dask_data(uid, detector, mask_path_full, reverse=False, rot90=False):
         "beam_center_x": "beam_center_x",
         "beam_center_y": "beam_center_y",
     }
-
-    det_mapping = {
-        "eiger4m": "eiger4m",
-        "eiger1m": "eiger1m",
-        "eiger500k": "eiger500K",
-        "eiger500K": "eiger500K"
-    }
-    
-    det_short = next((short for key, short in det_mapping.items() if key in det), None)
-    
     img_md = {}
     for k in list(img_md_dict.keys()):
         img_md[k] = hdr.config_data(det)["primary"][0]["%s_%s" % (det, img_md_dict[k])]
-    if det_short is not None:
+    if detector in ["eiger4m_single_image", "eiger1m_single_image", "eiger500K_single_image"]:
         img_md.update({"y_pixel_size": 7.5e-05, "x_pixel_size": 7.5e-05})
         got_pixel_mask = True
     else:
@@ -3604,7 +3523,7 @@ def load_dask_data(uid, detector, mask_path_full, reverse=False, rot90=False):
     # load pixel mask from static location
     if got_pixel_mask:
         # json_open = open(_mask_path_ + "pixel_masks/pixel_mask_compression_%s.json" % detector.split("_")[0])
-        json_open = open(mask_path_full + "pixel_mask_compression_%s.json" % det_short)
+        json_open = open(mask_path_full + "pixel_mask_compression_%s.json" % detector.split("_")[0])
         mask_dict = json.load(json_open)
         img_md["pixel_mask"] = np.array(mask_dict["pixel_mask"])
         img_md["binary_mask"] = np.array(mask_dict["binary_mask"])
@@ -5639,8 +5558,8 @@ def get_short_long_labels_from_qval_dict(qval_dict, geometry="saxs"):
 
 
 ############################################
-##a good func to plot g2 for all types of geogmetries
-############################################
+# #a good func to plot g2 for all types of geogmetries
+# ###########################################
 
 
 def plot_g2_general(

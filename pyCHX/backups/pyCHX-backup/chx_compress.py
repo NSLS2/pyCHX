@@ -74,7 +74,7 @@ def compress_eigerdata(
     bins=1,
     bad_frame_list=None,
     para_compress=False,
-    num_sub=128,
+    num_sub=100,
     dtypes="uid",
     reverse=True,
     rot90=False,
@@ -84,7 +84,7 @@ def compress_eigerdata(
     data_path=None,
     images_per_file=100,
     copy_rawdata=True,
-    new_path="/tmp/",
+    new_path="/tmp_data/data/",
 ):
     """
     Init 2016, YG@CHX
@@ -290,7 +290,7 @@ def para_compress_eigerdata(
     data_path=None,
     images_per_file=100,
     copy_rawdata=True,
-    new_path="/tmp/",
+    new_path="/tmp_data/data/",
 ):
 
     data_path_ = data_path
@@ -306,7 +306,7 @@ def para_compress_eigerdata(
             if not copy_rawdata:
                 images_ = EigerImages(data_path, images_per_file, md)
             else:
-                print("Due to a IO problem running on GPFS. The raw data will be copied to /tmp/")
+                print("Due to a IO problem running on GPFS. The raw data will be copied to /tmp_data/Data.")
                 print("Copying...")
                 copy_data(data_path, new_path)
                 # print(data_path, new_path)

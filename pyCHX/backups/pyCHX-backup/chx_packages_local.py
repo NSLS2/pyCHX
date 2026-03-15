@@ -1,11 +1,14 @@
+### This enables local import of pyCHX for testing
+
 import pickle as cpk
 
 import historydict
-from eiger_io.fs_handler import EigerImages
-from skimage.draw import line, line_aa, polygon
 
-from pyCHX.chx_handlers import use_dask, use_pims
-from pyCHX.chx_libs import (
+# from pyCHX.chx_handlers import use_dask, use_pims
+from chx_handlers import use_dask, use_pims
+
+# from pyCHX.chx_libs import (
+from chx_libs import (
     EigerHandler,
     Javascript,
     LogNorm,
@@ -28,10 +31,17 @@ from pyCHX.chx_libs import (
     utils,
     warnings,
 )
+from eiger_io.fs_handler import EigerImages
+from skimage.draw import line, line_aa, polygon
+
+# changes to current version of chx_packages.py
+# added load_dask_data in generic_functions
+
 
 use_pims(db)  # use pims for importing eiger data, register_handler 'AD_EIGER2' and 'AD_EIGER'
 
-from pyCHX.chx_compress import (
+# from pyCHX.chx_compress import (
+from chx_compress import (
     MultifileBNLCustom,
     combine_binary_files,
     compress_eigerdata,
@@ -43,7 +53,9 @@ from pyCHX.chx_compress import (
     read_compressed_eigerdata,
     segment_compress_eigerdata,
 )
-from pyCHX.chx_compress_analysis import (
+
+# from pyCHX.chx_compress_analysis import (
+from chx_compress_analysis import (
     Multifile,
     cal_each_ring_mean_intensityc,
     cal_waterfallc,
@@ -57,11 +69,20 @@ from pyCHX.chx_compress_analysis import (
     plot_waterfallc,
     read_compressed_eigerdata,
 )
-from pyCHX.chx_correlationc import Get_Pixel_Arrayc, auto_two_Arrayc, cal_g2c, get_pixelist_interp_iq
-from pyCHX.chx_correlationp import _one_time_process_errorp, auto_two_Arrayp, cal_g2p, cal_GPF, get_g2_from_ROI_GPF
-from pyCHX.chx_crosscor import CrossCorrelator2, run_para_ccorr_sym
-from pyCHX.chx_generic_functions import (
+
+# from pyCHX.chx_correlationc import Get_Pixel_Arrayc, auto_two_Arrayc, cal_g2c, get_pixelist_interp_iq
+from chx_correlationc import Get_Pixel_Arrayc, auto_two_Arrayc, cal_g2c, get_pixelist_interp_iq
+
+# from pyCHX.chx_correlationp import _one_time_process_errorp, auto_two_Arrayp, cal_g2p, cal_GPF, get_g2_from_ROI_GPF
+from chx_correlationp import _one_time_process_errorp, auto_two_Arrayp, cal_g2p, cal_GPF, get_g2_from_ROI_GPF
+
+# from pyCHX.chx_crosscor import CrossCorrelator2, run_para_ccorr_sym
+from chx_crosscor import CrossCorrelator2, run_para_ccorr_sym
+
+# from pyCHX.chx_generic_functions import (
+from chx_generic_functions import (
     R_2,
+    RemoveHot,
     apply_mask,
     average_array_withNan,
     check_bad_uids,
@@ -73,6 +94,7 @@ from pyCHX.chx_generic_functions import (
     create_cross_mask,
     create_fullImg_with_box,
     create_hot_pixel_mask,
+    create_multi_rotated_rectangle_mask,
     create_polygon_mask,
     create_rectangle_mask,
     create_ring_mask,
@@ -173,8 +195,15 @@ from pyCHX.chx_generic_functions import (
     update_roi_mask,
     validate_uid,
 )
-from pyCHX.chx_olog import Attachment, LogEntry, update_olog_id, update_olog_uid, update_olog_uid_with_file
-from pyCHX.chx_specklecp import (
+
+# from pyCHX.chx_olog import Attachment, LogEntry, update_olog_id, update_olog_uid, update_olog_uid_with_file
+# from chx_olog import Attachment, LogEntry, update_olog_id, update_olog_uid, update_olog_uid_with_file
+
+# from pyCHX.chx_outlier_detection import (
+from chx_outlier_detection import is_outlier, outlier_mask
+
+# from pyCHX.chx_specklecp import (
+from chx_specklecp import (
     get_binned_his_std,
     get_contrast,
     get_his_std_from_pds,
@@ -186,7 +215,32 @@ from pyCHX.chx_specklecp import (
     xsvsc,
     xsvsp,
 )
-from pyCHX.Create_Report import (
+
+# from pyCH.chx_xpcs_xsvs_jupyter_V1 import(
+from chx_xpcs_xsvs_jupyter_V1 import (
+    compress_multi_uids,
+    do_compress_on_line,
+    get_fra_num_by_dose,
+    get_iq_from_uids,
+    get_series_g2_from_g12,
+    get_series_one_time_mulit_uids,
+    get_t_iqc_uids,
+    get_two_time_mulit_uids,
+    get_uids_by_range,
+    get_uids_in_time_period,
+    plot_dose_g2,
+    plot_entries_from_csvlist,
+    plot_entries_from_uids,
+    plot_t_iqc_uids,
+    plot_t_iqtMq2,
+    realtime_xpcs_analysis,
+    run_xpcs_xsvs_single,
+    wait_data_acquistion_finish,
+    wait_func,
+)
+
+# from pyCHX.Create_Report import (
+from Create_Report import (
     create_multi_pdf_reports_for_uids,
     create_one_pdf_reports_for_uids,
     create_pdf_report,
@@ -194,8 +248,12 @@ from pyCHX.Create_Report import (
     extract_xpcs_results_from_h5,
     make_pdf_report,
 )
-from pyCHX.DataGonio import qphiavg
-from pyCHX.SAXS import (
+
+# from pyCHX.DataGonio import qphiavg
+from DataGonio import qphiavg
+
+# from pyCHX.SAXS import (
+from SAXS import (
     fit_form_factor,
     fit_form_factor2,
     form_factor_residuals_bg_lmfit,
@@ -204,7 +262,9 @@ from pyCHX.SAXS import (
     poly_sphere_form_factor_intensity,
     show_saxs_qmap,
 )
-from pyCHX.Two_Time_Correlation_Function import (
+
+# from pyCHX.Two_Time_Correlation_Function import (
+from Two_Time_Correlation_Function import (
     get_aged_g2_from_g12,
     get_aged_g2_from_g12q,
     get_four_time_from_two_time,
@@ -212,7 +272,9 @@ from pyCHX.Two_Time_Correlation_Function import (
     rotate_g12q_to_rectangle,
     show_C12,
 )
-from pyCHX.XPCS_GiSAXS import (
+
+# from pyCHX.XPCS_GiSAXS import (
+from XPCS_GiSAXS import (
     cal_1d_qr,
     convert_gisaxs_pixel_to_q,
     fit_qr_qz_rate,
@@ -236,7 +298,9 @@ from pyCHX.XPCS_GiSAXS import (
     show_qzr_map,
     show_qzr_roi,
 )
-from pyCHX.XPCS_SAXS import (
+
+# from pyCHX.XPCS_SAXS import (
+from XPCS_SAXS import (
     cal_g2,
     combine_two_roi_mask,
     create_hot_pixel_mask,

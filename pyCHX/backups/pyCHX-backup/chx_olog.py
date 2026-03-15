@@ -132,6 +132,5 @@ def update_olog_uid(olog_client, uid, text, attachments):
     atch = [Attachment(open(filename1, 'rb'))]
     update_olog_uid(uid='af8f66', text='Add xpcs pdf report', attachments=atch)
     """
-    logid = olog_client.find(search=f"*{uid}*")[-1]["id"]  # test: attach to FIRST occurance of this uid, which is when the data was actually created
-    #logid = olog_client.find(search=f"*{uid}*")[0]["id"]
+    logid = olog_client.find(search=f"*{uid}*")[0]["id"]
     update_olog_id(olog_client, logid, text, attachments)
