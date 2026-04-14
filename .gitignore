@@ -99,3 +99,6 @@ __enamlcache__/
 
 # PyBuilder
 target/
+# pixi environments
+.pixi/*
+!.pixi/config.toml

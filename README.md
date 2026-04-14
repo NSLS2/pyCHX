@@ -12,4 +12,10 @@ conda create --name pyCHX python=3.6 numpy scipy matplotlib
 source activate pyCHX
 pip install -r https://raw.githubusercontent.com/NSLS-II-CHX/pyCHX/master/requirements.txt
 pip install git+https://github.com/NSLS-II-CHX/pyCHX
+
+
+Pixi Install:
+- pixi install: installs only main dependencies
+- pixi install --with dev: installs main and dev dependencies
+- pixi run --with dev pytest: runs pytest with dev tols available
 ```
