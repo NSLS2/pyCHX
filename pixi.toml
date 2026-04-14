@@ -49,4 +49,3 @@ sphinx_rtd_theme = "*"
 
 [environments]
 dev = ["dev"]
-
