@@ -13,7 +13,7 @@ def read_imgs(inDir):
     return Images(inDir)
 
 
-def select_regoin(
+def select_region(
     img,
     vert,
     keep_shape=True,
@@ -33,12 +33,12 @@ def select_regoin(
 
         try:
             img_[ys:ye, xs:xe] = True
-        except:
+        except Exception:
             img_[ys:ye, xs:xe, :] = True
         pixellist_ = np.where(img_.ravel())[0]
         # pixellist_ =  img_.ravel()
         if qmask is not None:
-            b = np.where(qmask.flatten() == False)[0]
+            b = np.where(~qmask.flatten())[0]
             pixellist_ = np.intersect1d(pixellist_, b)
         # imgx = img[pixellist_]
         # imgx = imgx.reshape( xe-xs, ye-ys)
@@ -49,7 +49,7 @@ def select_regoin(
     else:
         try:
             imgx = img[ys:ye, xs:xe]
-        except:
+        except Exception:
             imgx = img[ys:ye, xs:xe, :]
 
     return imgx
@@ -88,7 +88,7 @@ def save_png_series(
     save png files
 
     """
-    if uid == None:
+    if uid is None:
         uid = "uid"
     num_frame = 0
     for img in imgs:
@@ -98,19 +98,19 @@ def save_png_series(
         ax.get_yaxis().set_visible(False)
         if ROI is None:
             i0 = img
-            asp = 1.0
+            _ = 1.0
         else:
-            i0 = select_regoin(
+            i0 = select_region(
                 img,
                 ROI,
                 keep_shape=False,
             )
             xs, xe, ys, ye = ROI
-            asp = (ye - ys) / float(xe - xs)
+            _ = (ye - ys) / float(xe - xs)
         ax.set_aspect("equal")
 
         if not logs:
-            im = ax.imshow(
+            _ = ax.imshow(
                 i0,
                 origin="lower",
                 cmap=cmap,
@@ -119,7 +119,7 @@ def save_png_series(
                 vmax=vmax,
             )  # vmin=0,vmax=1,
         else:
-            im = ax.imshow(
+            _ = ax.imshow(
                 i0,
                 origin="lower",
                 cmap=cmap,
@@ -202,16 +202,16 @@ def movie_maker(
 
     if ROI is None:
         i0 = imgs[0]
-        asp = 1.0
+        _ = 1.0
 
     else:
-        i0 = select_regoin(
+        i0 = select_region(
             imgs[0],
             ROI,
             keep_shape=False,
         )
         xs, xe, ys, ye = ROI
-        asp = (ye - ys) / float(xe - xs)
+        _ = (ye - ys) / float(xe - xs)
 
     ax.set_aspect("equal")
     # print( cmap, vmin, vmax )
@@ -245,7 +245,7 @@ def movie_maker(
         if ROI is None:
             ign = imgs[n]
         else:
-            ign = select_regoin(
+            ign = select_region(
                 imgs[n],
                 ROI,
                 keep_shape=False,
