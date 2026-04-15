@@ -1,19 +1,57 @@
 # python XPCS_XSVS_SAXS_Multi_2017_V4.py
 
-
-from pyCHX.chx_packages import *
+import os
+import getpass
+import numpy as np
+from pyCHX.chx_generic_functions import (
+    load_mask,
+    show_img,
+    save_arrays,
+    save_dict_csv,
+    psave_obj,
+    find_uids,
+    get_averaged_data_from_multi_res,
+    save_g2_general,
+    plot_g2_general,
+    plot_q_rate_fit_general,
+    get_q_rate_fit_general,
+    plot1D,
+    save_g2_fit_para_tocsv,
+    get_g2_fit_general,
+)
+from pyCHX.Two_Time_Correlation_Function import show_C12
+from pyCHX.chx_olog import update_olog_uid, Attachment
+from pyCHX.Create_Report import (
+    make_pdf_report,
+    export_xpcs_results_to_h5,
+    extract_xpcs_results_from_h5,
+)
+from pyCHX.chx_speckle import plot_g2_contrast
+from pyCHX.chx_compress_analysis import plot_each_ring_mean_intensityc, plot_waterfallc
+from pyCHX.SAXS import (
+    show_saxs_qmap,
+    plot_circular_average,
+    plot_qIq_with_ROI,
+    plot_t_iqc,
+    show_ROI_on_image,
+)
+from pyCHX.XPCS_GiSAXS import show_qzr_roi, plot_qr_1d_with_ROI
 
 
 def XPCS_XSVS_SAXS_Multi(
     start_time,
     stop_time,
     run_pargs,
+    pdf_version,
+    timeperframe,
     suf_ids=None,
+    qval_dict=None,
     uid_average="Au50_7p5PEGX1_vs_slow_120116",
 ):
+    setup_pargs = dict(run_pargs)
     scat_geometry = run_pargs["scat_geometry"]
-    force_compress = run_pargs["force_compress"]
-    para_compress = run_pargs["para_compress"]
+    # force_compress = run_pargs["force_compress"]
+    # para_compress = run_pargs["para_compress"]
     run_fit_form = run_pargs["run_fit_form"]
     run_waterfall = run_pargs["run_waterfall"]
     run_t_ROI_Inten = run_pargs["run_t_ROI_Inten"]
@@ -28,12 +66,12 @@ def XPCS_XSVS_SAXS_Multi(
         run_xsvs = False
     ###############################################################
     att_pdf_report = run_pargs["att_pdf_report"]
-    show_plot = run_pargs["show_plot"]
-    CYCLE = run_pargs["CYCLE"]
+    # show_plot = run_pargs["show_plot"]
+    # CYCLE = run_pargs["CYCLE"]
     mask_path = run_pargs["mask_path"]
     mask_name = run_pargs["mask_name"]
     good_start = run_pargs["good_start"]
-    use_imgsum_norm = run_pargs["use_imgsum_norm"]
+    # use_imgsum_norm = run_pargs["use_imgsum_norm"]
 
     mask = load_mask(
         mask_path,
@@ -45,8 +83,8 @@ def XPCS_XSVS_SAXS_Multi(
     # mask *= pixel_mask
     mask[:, 2069] = 0  # False  #Concluded from the previous results
     # np.save(  data_dir + 'mask', mask)
-    show_img(mask, image_name="%s_mask" % uid_average, save=True, path=data_dir)
-    mask_load = mask.copy()
+    # show_img(mask, image_name="%s_mask" % uid_average, save=True, path=data_dir)
+    # mask_load = mask.copy()
 
     username = getpass.getuser()
     data_dir0 = os.path.join(
@@ -59,18 +97,18 @@ def XPCS_XSVS_SAXS_Multi(
     uid_average = "uid=" + uid_average
 
     if suf_ids is None:
-        sids, uids, fuids = find_uids(start_time, stop_time)
+        _, uids, fuids = find_uids(start_time, stop_time)
     else:
-        sids, uids, fuids = suf_ids
+        _, uids, fuids = suf_ids
     print(uids)
     uid = uids[0]
 
-    data_dir_ = data_dir
-    uid_ = uid_average
+    # data_dir_ = data_dir
+    # uid_ = uid_average
     ### For Load results
 
     multi_res = {}
-    for uid, fuid in zip(guids, fuids):
+    for uid, fuid in zip(uids, fuids):
         multi_res[uid] = extract_xpcs_results_from_h5(
             filename="uid=%s_Res.h5" % fuid, import_dir=data_dir0 + uid + "/"
         )
@@ -88,7 +126,7 @@ def XPCS_XSVS_SAXS_Multi(
         iqst = get_averaged_data_from_multi_res(multi_res, keystr="iqst")
     elif scat_geometry == "gi_saxs":
         qr_1d_pds = get_averaged_data_from_multi_res(multi_res, keystr="qr_1d_pds")
-        qr_1d_pds = trans_data_to_pd(qr_1d_pds, label=qr_1d_pds_label)
+        # qr_1d_pds = trans_data_to_pd(qr_1d_pds, label=qr_1d_pds_label)
     if run_waterfall:
         wat = get_averaged_data_from_multi_res(multi_res, keystr="wat")
     if run_t_ROI_Inten:
@@ -100,7 +138,7 @@ def XPCS_XSVS_SAXS_Multi(
     if run_one_time:
         g2 = get_averaged_data_from_multi_res(multi_res, keystr="g2")
         taus = get_averaged_data_from_multi_res(multi_res, keystr="taus")
-        g2_pds = save_g2_general(
+        _ = save_g2_general(
             g2,
             taus=taus,
             qr=np.array(list(qval_dict.values()))[:, 0],
@@ -138,7 +176,7 @@ def XPCS_XSVS_SAXS_Multi(
         g2b = get_averaged_data_from_multi_res(multi_res, keystr="g2b")
         tausb = get_averaged_data_from_multi_res(multi_res, keystr="tausb")
 
-        g2b_pds = save_g2_general(
+        _ = save_g2_general(
             g2b,
             taus=tausb,
             qr=np.array(list(qval_dict.values()))[:, 0],
@@ -174,7 +212,7 @@ def XPCS_XSVS_SAXS_Multi(
     if run_four_time:
         g4 = get_averaged_data_from_multi_res(multi_res, keystr="g4")
         taus4 = get_averaged_data_from_multi_res(multi_res, keystr="taus4")
-        g4_pds = save_g2_general(
+        _ = save_g2_general(
             g4,
             taus=taus4,
             qr=np.array(list(qval_dict.values()))[:, 0],
@@ -191,56 +229,63 @@ def XPCS_XSVS_SAXS_Multi(
         times_xsvs = get_averaged_data_from_multi_res(
             multi_res, keystr="times_xsvs", different_length=False
         )
-        cont_pds = save_arrays(
+        _ = save_arrays(
             contrast_factorL,
             label=times_xsvs,
             filename="%s_contrast_factorL.csv" % uid,
             path=data_dir,
             return_res=True,
         )
-        if False:
-            spec_kmean = get_averaged_data_from_multi_res(
-                multi_res, keystr="spec_kmean"
-            )
-            spec_pds = get_averaged_data_from_multi_res(
-                multi_res, keystr="spec_pds", different_length=False
-            )
-            times_xsvs = get_averaged_data_from_multi_res(
-                multi_res, keystr="times_xsvs", different_length=False
-            )
-            spec_his, spec_std = get_his_std_from_pds(spec_pds, his_shapes=None)
-            ML_val, KL_val, K_ = get_xsvs_fit(
-                spec_his,
-                spec_kmean,
-                spec_std,
-                max_bins=2,
-                varyK=False,
-            )
-            contrast_factorL = get_contrast(ML_val)
-            spec_km_pds = save_KM(
-                spec_kmean,
-                KL_val,
-                ML_val,
-                qs=q_ring_center,
-                level_time=times_xsvs,
-                uid=uid_average,
-                path=data_dir_average,
-            )
-            plot_xsvs_fit(
-                spec_his,
-                ML_val,
-                KL_val,
-                K_mean=spec_kmean,
-                spec_std=spec_std,
-                xlim=[0, 15],
-                vlim=[0.9, 1.1],
-                uid=uid_average,
-                qth=None,
-                logy=True,
-                times=times_xsvs,
-                q_ring_center=q_ring_center,
-                path=data_dir,
-            )
+        # if False:
+        #     spec_kmean = get_averaged_data_from_multi_res(
+        #         multi_res, keystr="spec_kmean"
+        #     )
+        #     spec_pds = get_averaged_data_from_multi_res(
+        #         multi_res, keystr="spec_pds", different_length=False
+        #     )
+        #     times_xsvs = get_averaged_data_from_multi_res(
+        #         multi_res, keystr="times_xsvs", different_length=False
+        #     )
+        #     spec_his, spec_std = get_his_std_from_pds(spec_pds, his_shapes=None)
+        #     ML_val, KL_val, K_ = get_xsvs_fit(
+        #         spec_his,
+        #         spec_kmean,
+        #         spec_std,
+        #         max_bins=2,
+        #         varyK=False,
+        #     )
+        #     contrast_factorL = get_contrast(ML_val)
+        #     spec_km_pds = save_KM(
+        #         spec_kmean,
+        #         KL_val,
+        #         ML_val,
+        #         qs=q_ring_center,
+        #         level_time=times_xsvs,
+        #         uid=uid_average,
+        #         path=data_dir_average,
+        #     )
+        #     plot_xsvs_fit(
+        #         spec_his,
+        #         ML_val,
+        #         KL_val,
+        #         K_mean=spec_kmean,
+        #         spec_std=spec_std,
+        #         xlim=[0, 15],
+        #         vlim=[0.9, 1.1],
+        #         uid=uid_average,
+        #         qth=None,
+        #         logy=True,
+        #         times=times_xsvs,
+        #         q_ring_center=q_ring_center,
+        #         path=data_dir,
+        #     )
+    spec_pds = None
+    spec_km_pds = None
+    spec_kmean = None
+    roi_mask = None
+    pixel_mask = None
+    qr = None
+    qth_interest = None
 
     if scat_geometry == "saxs":
         show_saxs_qmap(
@@ -294,7 +339,7 @@ def XPCS_XSVS_SAXS_Multi(
         show_ROI_on_image(
             avg_img,
             roi_mask,
-            center,
+            center=None,
             label_on=False,
             rwidth=700,
             alpha=0.9,
@@ -311,7 +356,7 @@ def XPCS_XSVS_SAXS_Multi(
             vmin=0.1,
             vmax=np.max(avg_img * 0.1),
             logs=True,
-            image_name=uidstr + "_img_avg",
+            image_name=uid + "_img_avg",
             save=True,
             path=data_dir,
         )
@@ -320,18 +365,18 @@ def XPCS_XSVS_SAXS_Multi(
             qr_center=np.unique(np.array(list(qval_dict.values()))[:, 0]),
             loglog=False,
             save=True,
-            uid=uidstr,
+            uid=uid,
             path=data_dir,
         )
         show_qzr_roi(
             avg_img,
             roi_mask,
-            inc_x0,
-            ticks,
+            inc_x0=None,
+            ticks=None,
             alpha=0.5,
             save=True,
             path=data_dir,
-            uid=uidstr,
+            uid=uid,
         )
 
     if run_waterfall:
@@ -382,7 +427,6 @@ def XPCS_XSVS_SAXS_Multi(
             g12b,
             q_ind=qth_interest,
             N1=0,
-            N2=min(len(imgsa), 1000),
             vmin=1.01,
             vmax=1.25,
             timeperframe=timeperframe,
@@ -537,7 +581,7 @@ def XPCS_XSVS_SAXS_Multi(
         ):
             Exdt[k] = v
 
-        contr_pds = save_arrays(
+        _ = save_arrays(
             Exdt["contrast_factorL"],
             label=Exdt["times_xsvs"],
             filename="%s_contr.csv" % uid,
@@ -582,7 +626,7 @@ def XPCS_XSVS_SAXS_Multi(
                 text="Add XPCS Averaged Analysis PDF Report",
                 attachments=atch,
             )
-        except:
+        except Exception:
             print(
                 "I can't attach this PDF: %s due to a duplicated filename. Please give a different PDF file."
                 % pname
@@ -593,92 +637,92 @@ def XPCS_XSVS_SAXS_Multi(
     # The End!
 
 
-if False:
-    start_time, stop_time = (
-        "2016-12-1  16:30:00",
-        "2016-12-1  16:31:50",
-    )  # for 10 nm, 20, for test purpose
-    suf_ids = find_uids(start_time, stop_time)
-    sp = "test"
-    uid_averages = [
-        sp + "_vs_test1_120116",
-        sp + "_vs_test2_120116",
-        sp + "_vs_test3_120116",
-    ]
+# if False:
+#     start_time, stop_time = (
+#         "2016-12-1  16:30:00",
+#         "2016-12-1  16:31:50",
+#     )  # for 10 nm, 20, for test purpose
+#     suf_ids = find_uids(start_time, stop_time)
+#     sp = "test"
+#     uid_averages = [
+#         sp + "_vs_test1_120116",
+#         sp + "_vs_test2_120116",
+#         sp + "_vs_test3_120116",
+#     ]
 
-    run_pargs = dict(
-        scat_geometry="saxs",
-        # scat_geometry = 'gi_saxs',
-        force_compress=False,  # True, #False, #True,#False,
-        para_compress=True,
-        run_fit_form=False,
-        run_waterfall=True,  # False,
-        run_t_ROI_Inten=True,
-        # run_fit_g2 = True,
-        fit_g2_func="stretched",
-        run_one_time=True,  # False,
-        run_two_time=True,  # False,
-        run_four_time=False,  # True, #False,
-        run_xsvs=True,
-        att_pdf_report=True,
-        show_plot=False,
-        CYCLE="2016_3",
-        # if scat_geometry == 'gi_saxs':
-        # mask_path = '/XF11ID/analysis/2016_3/masks/',
-        # mask_name =  'Nov16_4M-GiSAXS_mask.npy',
-        # elif scat_geometry == 'saxs':
-        mask_path="/XF11ID/analysis/2016_3/masks/",
-        mask_name="Nov28_4M_SAXS_mask.npy",
-        good_start=5,
-        #####################################for saxs
-        uniformq=True,
-        inner_radius=0.005,  # 0.005 for 50 nmAu/SiO2, 0.006, #for 10nm/coralpor
-        outer_radius=0.04,  # 0.04 for 50 nmAu/SiO2, 0.05, #for 10nm/coralpor
-        num_rings=12,
-        gap_ring_number=6,
-        number_rings=1,
-        ############################for gi_saxs
-        # inc_x0 = 1473,
-        # inc_y0 = 372,
-        # refl_x0 = 1473,
-        # refl_y0 = 730,
-        qz_start=0.025,
-        qz_end=0.04,
-        qz_num=3,
-        gap_qz_num=1,
-        # qz_width = ( qz_end - qz_start)/(qz_num +1),
-        qr_start=0.0025,
-        qr_end=0.07,
-        qr_num=14,
-        gap_qr_num=5,
-        definde_second_roi=True,
-        qz_start2=0.04,
-        qz_end2=0.050,
-        qz_num2=1,
-        gap_qz_num2=1,
-        qr_start2=0.002,
-        qr_end2=0.064,
-        qr_num2=10,
-        gap_qr_num2=5,
-        # qcenters = [ 0.00235,0.00379,0.00508,0.00636,0.00773, 0.00902] #in A-1
-        # width = 0.0002
-        qth_interest=1,  # the intested single qth
-        use_sqnorm=False,
-        use_imgsum_norm=True,
-        pdf_version="_1",  # for pdf report name
-    )
+#     run_pargs = dict(
+#         scat_geometry="saxs",
+#         # scat_geometry = 'gi_saxs',
+#         force_compress=False,  # True, #False, #True,#False,
+#         para_compress=True,
+#         run_fit_form=False,
+#         run_waterfall=True,  # False,
+#         run_t_ROI_Inten=True,
+#         # run_fit_g2 = True,
+#         fit_g2_func="stretched",
+#         run_one_time=True,  # False,
+#         run_two_time=True,  # False,
+#         run_four_time=False,  # True, #False,
+#         run_xsvs=True,
+#         att_pdf_report=True,
+#         show_plot=False,
+#         CYCLE="2016_3",
+#         # if scat_geometry == 'gi_saxs':
+#         # mask_path = '/XF11ID/analysis/2016_3/masks/',
+#         # mask_name =  'Nov16_4M-GiSAXS_mask.npy',
+#         # elif scat_geometry == 'saxs':
+#         mask_path="/XF11ID/analysis/2016_3/masks/",
+#         mask_name="Nov28_4M_SAXS_mask.npy",
+#         good_start=5,
+#         #####################################for saxs
+#         uniformq=True,
+#         inner_radius=0.005,  # 0.005 for 50 nmAu/SiO2, 0.006, #for 10nm/coralpor
+#         outer_radius=0.04,  # 0.04 for 50 nmAu/SiO2, 0.05, #for 10nm/coralpor
+#         num_rings=12,
+#         gap_ring_number=6,
+#         number_rings=1,
+#         ############################for gi_saxs
+#         # inc_x0 = 1473,
+#         # inc_y0 = 372,
+#         # refl_x0 = 1473,
+#         # refl_y0 = 730,
+#         qz_start=0.025,
+#         qz_end=0.04,
+#         qz_num=3,
+#         gap_qz_num=1,
+#         # qz_width = ( qz_end - qz_start)/(qz_num +1),
+#         qr_start=0.0025,
+#         qr_end=0.07,
+#         qr_num=14,
+#         gap_qr_num=5,
+#         define_second_roi=True,
+#         qz_start2=0.04,
+#         qz_end2=0.050,
+#         qz_num2=1,
+#         gap_qz_num2=1,
+#         qr_start2=0.002,
+#         qr_end2=0.064,
+#         qr_num2=10,
+#         gap_qr_num2=5,
+#         # qcenters = [ 0.00235,0.00379,0.00508,0.00636,0.00773, 0.00902] #in A-1
+#         # width = 0.0002
+#         qth_interest=1,  # the interested single qth
+#         use_sqnorm=False,
+#         use_imgsum_norm=True,
+#         pdf_version="_1",  # for pdf report name
+#     )
 
-    step = 1
-    Nt = len(uid_averages)
-    for i in range(Nt):
-        t0 = time.time()
-        suf_idsi = (
-            suf_ids[0][i * step : (i + 1) * step],
-            suf_ids[1][i * step : (i + 1) * step],
-            suf_ids[2][i * step : (i + 1) * step],
-        )
-        XPCS_XSVS_SAXS_Multi(
-            0, 0, run_pargs=run_pargs, suf_ids=suf_idsi, uid_average=uid_averages[i]
-        )
+#     step = 1
+#     Nt = len(uid_averages)
+#     for i in range(Nt):
+#         t0 = time.time()
+#         suf_idsi = (
+#             suf_ids[0][i * step : (i + 1) * step],
+#             suf_ids[1][i * step : (i + 1) * step],
+#             suf_ids[2][i * step : (i + 1) * step],
+#         )
+#         XPCS_XSVS_SAXS_Multi(
+#             0, 0, run_pargs=run_pargs, suf_ids=suf_idsi, uid_average=uid_averages[i]
+#         )
 
-    run_time(t0)
+#     run_time(t0)
