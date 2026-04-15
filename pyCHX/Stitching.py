@@ -81,7 +81,7 @@ def Correct_Overlap_Images_Intensities(
      from scipy.signal import savgol_filter as sf
 
      Return: data: array, stitched image with corrected intensity
-            dataM: dict, each value is the image with correted intensity
+            dataM: dict, each value is the image with correlated intensity
             scale: scale for each image, the first scale=1 by definition
             scale_smooth: smoothed scale
 
@@ -214,7 +214,7 @@ def stitch_WAXS_in_Qspace(
     qx_max = q_range[1]
     qxs = np.arange(q_range[0], q_range[1], dq)
     qzs = np.arange(q_range[2], q_range[3], dq)
-    QXs, QZs = np.meshgrid(qxs, qzs)
+    _, _ = np.meshgrid(qxs, qzs)
     num_qx = len(qxs)
     qz_min = q_range[2]
     qz_max = q_range[3]
@@ -226,7 +226,7 @@ def stitch_WAXS_in_Qspace(
     # Intensity_mapN = np.zeros( (8, len(qzs), len(qxs)) )
     for i in range(len(phis)):
         dM = np.rot90(dataM[i].T)
-        D = dM.ravel()
+        _ = dM.ravel()
         phi = phis[i]
         calibration.set_angles(
             det_phi_g=phi, det_theta_g=0.0, offset_x=dx, offset_y=dy, offset_z=dz
