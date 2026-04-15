@@ -8,31 +8,23 @@ This module will provide XSVS analysis tools
 from __future__ import absolute_import, division, print_function
 
 import logging
-import time
 
-import six
 from skbeam.core import roi
 from skbeam.core.utils import bin_edges_to_centers, geometric_series
 
 logger = logging.getLogger(__name__)
 
-import itertools
 import os
-import sys
 from datetime import datetime
 from multiprocessing import Pool
 
-import dill
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy as sp
 import scipy.stats as st
-from matplotlib.colors import LogNorm
-from scipy.optimize import leastsq, minimize
+from scipy.optimize import leastsq
 from tqdm import tqdm
 
-from pyCHX.chx_compress import apply_async, go_through_FD, map_async, pass_FD, run_dill_encoded
+from pyCHX.chx_compress import apply_async, pass_FD
 from pyCHX.chx_generic_functions import trans_data_to_pd
 
 
@@ -151,11 +143,20 @@ def xsvsp_single(
     number_of_img = noframes
     for i in range(FD.beg, FD.end):
         pass_FD(FD, i)
-    label_arrays = [np.array(label_array == i, dtype=np.int64) for i in np.unique(label_array)[1:]]
+    label_arrays = [
+        np.array(label_array == i, dtype=np.int64) for i in np.unique(label_array)[1:]
+    ]
     qind, pixelist = roi.extract_label_indices(label_array)
     if norm is not None:
         norms = [
-            norm[np.in1d(pixelist, extract_label_indices(np.array(label_array == i, dtype=np.int64))[1])]
+            norm[
+                np.in1d(
+                    pixelist,
+                    extract_label_indices(np.array(label_array == i, dtype=np.int64))[
+                        1
+                    ],
+                )
+            ]
             for i in np.unique(label_array)[1:]
         ]
 
@@ -349,7 +350,7 @@ def xsvsc_single(
     norm=None,
     progress_bar=True,
 ):
-    """YG MOD@Octo 12, 2017, Change photon statistic error bar from sampling statistic bar to error bar with phisical meaning,
+    """YG MOD@Octo 12, 2017, Change photon statistic error bar from sampling statistic bar to error bar with physical meaning,
     photon_number@one_particular_count = photon_tolal_number * photon_distribution@one_particular_count +/-
                                                   sqrt( photon_number@one_particular_count )
 
@@ -398,8 +399,8 @@ def xsvsc_single(
        C. Carona and A. Fluerasu , "Photon statistics and speckle visibility
        spectroscopy with partially coherent x-rays" J. Synchrotron Rad.,
        vol 21, p 1288-1295, 2014.
-    .. [2] R. Bandyopadhyay, A. S. Gittings, S. S. Suh, P.K. Dixon and
-       D.J. Durian "Speckle-visibilty Spectroscopy: A tool to study
+    .. [2] R. Bandyopadhyay, A. S. Gittings, S. S. Such, P.K. Dixon and
+       D.J. Durian "Speckle-visibility Spectroscopy: A tool to study
        time-varying dynamics" Rev. Sci. Instrum. vol 76, p  093110, 2005.
     There is an example in https://github.com/scikit-xray/scikit-xray-examples
     It will demonstrate the use of these functions in this module for
@@ -573,7 +574,17 @@ def xsvsc_single(
 
 
 def _process(
-    num_roi, level, buf_no, buf, img_per_level, labels, max_cts, bin_edges, prob_k, prob_k_pow, track_bad_level
+    num_roi,
+    level,
+    buf_no,
+    buf,
+    img_per_level,
+    labels,
+    max_cts,
+    bin_edges,
+    prob_k,
+    prob_k_pow,
+    track_bad_level,
 ):
     """
     Internal helper function. This modifies inputs in place.
@@ -681,7 +692,10 @@ def get_his_std_qi(data_pixel_qi, max_cts=None):
     bins = np.arange(max_cts)
     dqn, dqm = data_pixel_qi.shape
     # get histogram here
-    H = np.apply_along_axis(np.bincount, 1, np.int_(data_pixel_qi), minlength=max_cts) / dqm
+    H = (
+        np.apply_along_axis(np.bincount, 1, np.int_(data_pixel_qi), minlength=max_cts)
+        / dqm
+    )
     # do average for different frame
     his = np.average(H, axis=0)
     std = np.std(H, axis=0)
@@ -712,7 +726,9 @@ def get_his_std(data_pixel, rois, max_cts=None):
     for qi in range(noqs):
         pixelist_qi = np.where(qind == qi + 1)[0]
         # print(qi, max_cts)
-        bins, his[qi], std[qi], kmean[qi] = get_his_std_qi(data_pixel[:, pixelist_qi], max_cts)
+        bins, his[qi], std[qi], kmean[qi] = get_his_std_qi(
+            data_pixel[:, pixelist_qi], max_cts
+        )
     return bins, his, std, kmean
 
 
@@ -786,7 +802,9 @@ def get_binned_his_std_qi(data_pixel_qi, lag_steps, max_cts=None):
     i = 0
     for lag in lag_steps:
         data_pixel_qi_ = np.sum(reshape_array(data_pixel_qi, lag), axis=1)
-        bins[i], his[i], std[i], kmean[i] = get_his_std_qi(data_pixel_qi_, max_cts * lag)
+        bins[i], his[i], std[i], kmean[i] = get_his_std_qi(
+            data_pixel_qi_, max_cts * lag
+        )
         i += 1
     return bins, his, std, kmean
 
@@ -875,7 +893,6 @@ def get_bin_edges(num_times, num_rois, mean_roi, max_cts):
 ##for fit
 ###################
 
-from scipy import stats
 from scipy.special import gamma, gammaln
 
 ###########################3
@@ -946,9 +963,9 @@ def nbinomlog1(p, hist, x, N, mu):
     Vary M (shape param) but mu (count rate) fixed (using leastsq)
 
     p: fitting parameter, in this case is M, coherent mode number
-    hist: histogram of photon count for each bin (is a number not probablity)
+    hist: histogram of photon count for each bin (is a number not probability)
     x: photon count
-    N: total photons count in the statistics, ( probablity = hist / N )
+    N: total photons count in the statistics, ( probability = hist / N )
     mu: average photon count for each bin
 
     """
@@ -1042,7 +1059,11 @@ def get_xsvs_fit(
             kmean_guess = K_mean[j, i]
             N = spec_sum[j, i]
             if spec_bins is None:
-                x_, x, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
+                x_, x, y = (
+                    bin_edges[j, i][:-1],
+                    Knorm_bin_edges[j, i][:-1],
+                    spe_cts_all[j, i],
+                )
             else:
                 x_, x, y = bin_edges[j], bin_edges[j] / kmean_guess, spe_cts_all[j, i]
 
@@ -1192,12 +1213,22 @@ def plot_xsvs_fit(
             L = len(spe_cts_all[j, i])
             if spec_bins is None:
                 max_cts_ = max_cts * 2**j
-                x_, x, y = bin_edges[j, i][:L], Knorm_bin_edges[j, i][:L], spe_cts_all[j, i]
-                xscale = (x_ / x)[1]  # bin_edges[j, i][:-1][1]/ Knorm_bin_edges[j, i][:-1][1]
+                x_, x, y = (
+                    bin_edges[j, i][:L],
+                    Knorm_bin_edges[j, i][:L],
+                    spe_cts_all[j, i],
+                )
+                xscale = (x_ / x)[
+                    1
+                ]  # bin_edges[j, i][:-1][1]/ Knorm_bin_edges[j, i][:-1][1]
                 # print( xscale )
             else:
                 max_cts_ = max_cts * lag_steps[j]
-                x_, x, y = bin_edges[j][:L], bin_edges[j][:L] / kmean_guess, spe_cts_all[j, i]
+                x_, x, y = (
+                    bin_edges[j][:L],
+                    bin_edges[j][:L] / kmean_guess,
+                    spe_cts_all[j, i],
+                )
                 xscale = kmean_guess
             # Using the best K and M values interpolate and get more values for fitting curve
 
@@ -1238,7 +1269,11 @@ def plot_xsvs_fit(
             # if j == 0:
             if j < 2:
                 label = "nbinom_L"
-                txts = r"$M=%s$" % round(ML_val[i][j], 2) + "," + r"$K=%s$" % round(KL_val[i][j], 2)
+                txts = (
+                    r"$M=%s$" % round(ML_val[i][j], 2)
+                    + ","
+                    + r"$K=%s$" % round(KL_val[i][j], 2)
+                )
                 # print( ML_val[i] )
                 x = 0.05
                 y0 = 0.2 - j * 0.1
@@ -1246,7 +1281,9 @@ def plot_xsvs_fit(
                     fontsize_ = fontsize * 2
                 else:
                     fontsize_ = 18
-                axes.text(x=x, y=y0, s=txts, fontsize=fontsize_, transform=axes.transAxes)
+                axes.text(
+                    x=x, y=y0, s=txts, fontsize=fontsize_, transform=axes.transAxes
+                )
             else:
                 label = ""
             (art,) = axes.plot(fitx_, fitL, "-r", label=label)
@@ -1317,14 +1354,22 @@ def save_KM(K_mean, KL_val, ML_val, qs=None, level_time=None, uid=None, path=Non
             + ["M_Fit_%s" % s for s in level_time]
             + ["Contrast_Fit_%s" % s for s in level_time]
         )
-    data = np.hstack([(K_mean).T, kl.reshape(L, n), ml.reshape(L, n), (1 / ml).reshape(L, n)])
+    data = np.hstack(
+        [(K_mean).T, kl.reshape(L, n), ml.reshape(L, n), (1 / ml).reshape(L, n)]
+    )
     if qs is not None:
         qs = np.array(qs)
         l = ["q"] + l
         # print(   (K_mean).T,  (K_mean).T.shape )
         # print(  qs )
         data = np.hstack(
-            [qs.reshape(L, 1), (K_mean).T, kl.reshape(L, n), ml.reshape(L, n), (1 / ml).reshape(L, n)]
+            [
+                qs.reshape(L, 1),
+                (K_mean).T,
+                kl.reshape(L, n),
+                ml.reshape(L, n),
+                (1 / ml).reshape(L, n),
+            ]
         )
 
     df = DataFrame(data)
@@ -1355,9 +1400,15 @@ def get_his_std_from_pds(spec_pds, his_shapes=None):
     spec_std = np.zeros([M, N], dtype=np.object)
     for i in range(M):
         for j in range(N):
-            spec_his[i, j] = np.array(spec_pds[spkeys[1 + i * N + j]][~np.isnan(spec_pds[spkeys[1 + i * N + j]])])
+            spec_his[i, j] = np.array(
+                spec_pds[spkeys[1 + i * N + j]][
+                    ~np.isnan(spec_pds[spkeys[1 + i * N + j]])
+                ]
+            )
             spec_std[i, j] = np.array(
-                spec_pds[spkeys[1 + 2 * N + i * N + j]][~np.isnan(spec_pds[spkeys[1 + 2 * N + i * N + j]])]
+                spec_pds[spkeys[1 + 2 * N + i * N + j]][
+                    ~np.isnan(spec_pds[spkeys[1 + 2 * N + i * N + j]])
+                ]
             )
     return spec_his, spec_std
 
@@ -1438,7 +1489,16 @@ def plot_g2_contrast(
     # plt.show()
 
 
-def get_xsvs_fit_old(spe_cts_all, K_mean, varyK=True, qth=None, max_bins=2, g2=None, times=None, taus=None):
+def get_xsvs_fit_old(
+    spe_cts_all,
+    K_mean,
+    varyK=True,
+    qth=None,
+    max_bins=2,
+    g2=None,
+    times=None,
+    taus=None,
+):
     """
     Fit the xsvs by Negative Binomial Function using max-likelihood chi-squares
     """
@@ -1471,7 +1531,11 @@ def get_xsvs_fit_old(spe_cts_all, K_mean, varyK=True, qth=None, max_bins=2, g2=N
             mi_g2 = 1 / (g2c[:, i] - 1)
             m_ = np.interp(times, taus, mi_g2)
         for j in range(num_times):
-            x_, x, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
+            x_, x, y = (
+                bin_edges[j, i][:-1],
+                Knorm_bin_edges[j, i][:-1],
+                spe_cts_all[j, i],
+            )
             if g2 is not None:
                 m0 = m_[j]
             else:
@@ -1521,8 +1585,8 @@ def gammaDist(x, params):
     """Gamma distribution function
     M,K = params, where K is  average photon counts <x>,
     M is the number of coherent modes,
-    In case of high intensity, the beam behavors like wave and
-    the probability density of photon, P(x), satify this gamma function.
+    In case of high intensity, the beam behaviors like wave and
+    the probability density of photon, P(x), satisfy this gamma function.
     """
 
     K, M = params
@@ -1605,8 +1669,8 @@ def nbinom_dist(bin_values, K, M):
 def poisson(x, K):
     """Poisson distribution function.
     K is  average photon counts
-    In case of low intensity, the beam behavors like particle and
-    the probability density of photon, P(x), satify this poisson function.
+    In case of low intensity, the beam behaviors like particle and
+    the probability density of photon, P(x), satisfy this poisson function.
     """
     K = float(K)
     Pk = np.exp(-K) * power(K, x) / gamma(x + 1)
@@ -1672,15 +1736,22 @@ def diff_mot_con_factor(times, relaxation_rate, contrast_factor, cf_baseline=0):
     negative_binom_distribution() function Notes
 
     """
-    co_eff = (np.exp(-2 * relaxation_rate * times) - 1 + 2 * relaxation_rate * times) / (
-        2 * (relaxation_rate * times) ** 2
-    )
+    co_eff = (
+        np.exp(-2 * relaxation_rate * times) - 1 + 2 * relaxation_rate * times
+    ) / (2 * (relaxation_rate * times) ** 2)
 
     return contrast_factor * co_eff + cf_baseline
 
 
-def plot_sxvs(Knorm_bin_edges, spe_cts_all, uid=None, q_ring_center=None, xlim=[0, 3.5], time_steps=None):
-    """a convinent function to plot sxvs results"""
+def plot_sxvs(
+    Knorm_bin_edges,
+    spe_cts_all,
+    uid=None,
+    q_ring_center=None,
+    xlim=[0, 3.5],
+    time_steps=None,
+):
+    """a convenient function to plot sxvs results"""
     num_rings = spe_cts_all.shape[1]
     num_times = Knorm_bin_edges.shape[0]
     sx = int(round(np.sqrt(num_rings)))
@@ -1701,7 +1772,10 @@ def plot_sxvs(Knorm_bin_edges, spe_cts_all, uid=None, q_ring_center=None, xlim=[
             axes.set_xlabel("K/<K>")
             axes.set_ylabel("P(K)")
             (art,) = axes.plot(
-                Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i], "-o", label=str(time_steps[j]) + " ms"
+                Knorm_bin_edges[j, i][:-1],
+                spe_cts_all[j, i],
+                "-o",
+                label=str(time_steps[j]) + " ms",
             )
             axes.set_xlim(xlim)
             axes.set_title("Q " + "%.4f  " % (q_ring_center[i]) + r"$\AA^{-1}$")
@@ -1723,7 +1797,7 @@ def fit_xsvs1(
     ylim=None,
     time_steps=None,
 ):
-    """a convinent function to plot sxvs results
+    """a convenient function to plot sxvs results
     supporting fit function include:
     'bn': Negative Binomaial Distribution
     'gm': Gamma Distribution
@@ -1731,18 +1805,17 @@ def fit_xsvs1(
 
     """
     from lmfit import Model
-    from scipy.interpolate import UnivariateSpline
 
     if func == "bn":
         mod = Model(nbinom_dist)
     elif func == "gm":
-        mod = Model(gamma_dist, indepdent_vars=["K"])
+        mod = Model(gamma_dist, independent_vars=["K"])
     elif func == "ps":
         mod = Model(poisson_dist)
     else:
         print("the current supporting function include 'bn', 'gm','ps'")
 
-    # g_mod = Model(gamma_dist, indepdent_vars=['K'])
+    # g_mod = Model(gamma_dist, independent_vars=['K'])
     # g_mod = Model( gamma_dist )
     # n_mod = Model(nbinom_dist)
     # p_mod = Model(poisson_dist)
@@ -1759,7 +1832,11 @@ def fit_xsvs1(
     else:
         sy = int(num_rings / sx + 1)
     fig = plt.figure(figsize=(10, 6))
-    plt.title("uid= %s" % uid + " Fitting with Negative Binomial Function", fontsize=20, y=1.02)
+    plt.title(
+        "uid= %s" % uid + " Fitting with Negative Binomial Function",
+        fontsize=20,
+        y=1.02,
+    )
     plt.axes(frameon=False)
     plt.xticks([])
     plt.yticks([])
@@ -1778,14 +1855,24 @@ def fit_xsvs1(
 
             # print ( rois )
             if func == "bn":
-                result = mod.fit(spe_cts_all[j, i][rois], bin_values=bin_edges[j, i][:-1][rois], K=5 * 2**j, M=12)
+                result = mod.fit(
+                    spe_cts_all[j, i][rois],
+                    bin_values=bin_edges[j, i][:-1][rois],
+                    K=5 * 2**j,
+                    M=12,
+                )
             elif func == "gm":
                 result = mod.fit(
-                    spe_cts_all[j, i][rois], bin_values=bin_edges[j, i][:-1][rois], K=K_mean[i] * 2**j, M=20
+                    spe_cts_all[j, i][rois],
+                    bin_values=bin_edges[j, i][:-1][rois],
+                    K=K_mean[i] * 2**j,
+                    M=20,
                 )
             elif func == "ps":
                 result = mod.fit(
-                    spe_cts_all[j, i][rois], bin_values=bin_edges[j, i][:-1][rois], K=K_mean[i] * 2**j
+                    spe_cts_all[j, i][rois],
+                    bin_values=bin_edges[j, i][:-1][rois],
+                    K=K_mean[i] * 2**j,
                 )
             else:
                 pass
@@ -1808,9 +1895,13 @@ def fit_xsvs1(
             fitx_ = np.linspace(0, max(Knorm_bin_edges[j, i][:-1]), 1000)
             fitx = np.linspace(0, max(bin_edges[j, i][:-1]), 1000)
             if func == "bn":
-                fity = nbinom_dist(fitx, K_val[i][j], M_val[i][j])  # M and K are fitted best values
+                fity = nbinom_dist(
+                    fitx, K_val[i][j], M_val[i][j]
+                )  # M and K are fitted best values
                 label = "nbinom"
-                txt = "K=" + "%.3f" % (K_val[i][0]) + "," + "M=" + "%.3f" % (M_val[i][0])
+                txt = (
+                    "K=" + "%.3f" % (K_val[i][0]) + "," + "M=" + "%.3f" % (M_val[i][0])
+                )
             elif func == "gm":
                 fity = gamma_dist(fitx, K_mean[i] * 2**j, M_val[i][j])
                 label = "gamma"
@@ -1829,7 +1920,10 @@ def fit_xsvs1(
 
             if i == 0:
                 (art,) = axes.plot(
-                    Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i], "o", label=str(time_steps[j]) + " ms"
+                    Knorm_bin_edges[j, i][:-1],
+                    spe_cts_all[j, i],
+                    "o",
+                    label=str(time_steps[j]) + " ms",
                 )
             else:
                 (art,) = axes.plot(
@@ -1944,7 +2038,15 @@ def plot_xsvs_g2(g2, taus, res_pargs=None, *argv, **kwargs):
 
 
 def get_xsvs_fit_old1(
-    spe_cts_all, K_mean, spec_std=None, varyK=True, qth=None, max_bins=None, g2=None, times=None, taus=None
+    spe_cts_all,
+    K_mean,
+    spec_std=None,
+    varyK=True,
+    qth=None,
+    max_bins=None,
+    g2=None,
+    times=None,
+    taus=None,
 ):
     """
     Fit the xsvs by Negative Binomial Function using max-likelihood chi-squares
@@ -1978,7 +2080,11 @@ def get_xsvs_fit_old1(
             mi_g2 = 1 / (g2c[:, i] - 1)
             m_ = np.interp(times, taus, mi_g2)
         for j in range(num_times):
-            x_, x, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
+            x_, x, y = (
+                bin_edges[j, i][:-1],
+                Knorm_bin_edges[j, i][:-1],
+                spe_cts_all[j, i],
+            )
             if spec_std is not None:
                 yerr = spec_std[j, i]
             else:

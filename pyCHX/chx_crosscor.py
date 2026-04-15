@@ -7,16 +7,14 @@
 """
 This module is for functions specific to spatial correlation in order to tackle the motion of speckles
 """
+
 from __future__ import absolute_import, division, print_function
 
-from collections import namedtuple
 
 import numpy as np
 from scipy.signal import fftconvolve
-from skbeam.core.roi import extract_label_indices
 
 # from __future__ import absolute_import, division, print_function
-from skbeam.core.utils import multi_tau_lags
 
 # for a convenient status bar
 try:
@@ -33,7 +31,12 @@ from scipy.fftpack.helper import next_fast_len
 def get_cor_region(cor, cij, qid, fitw):
     """YG developed@CHX July/2019, Get a rectangle region of the cor class by giving center and width"""
     ceni = cor.centers[qid]
-    x1, x2, y1, y2 = max(0, ceni[0] - fitw), ceni[0] + fitw, max(0, ceni[1] - fitw), ceni[1] + fitw
+    x1, x2, y1, y2 = (
+        max(0, ceni[0] - fitw),
+        ceni[0] + fitw,
+        max(0, ceni[1] - fitw),
+        ceni[1] + fitw,
+    )
     return cij[qid][x1:x2, y1:y2]
 
 
@@ -81,7 +84,9 @@ def direct_corss_cor(im1, im2):
                     d1 = im1[j:, i:]
                     d2 = im2[:-j, :-i]
             # print(i,j)
-            C[i + Nx, j + Ny] = np.sum(d1 * d2) / (np.average(d1) * np.average(d2) * d1.size)
+            C[i + Nx, j + Ny] = np.sum(d1 * d2) / (
+                np.average(d1) * np.average(d2) * d1.size
+            )
     return C.T
 
 
@@ -303,7 +308,9 @@ class CrossCorrelator2:
                 if self_correlation:
                     ccorr[w] /= maskcor[w] * np.average(tmpimg[w]) ** 2
                 else:
-                    ccorr[w] /= maskcor[w] * np.average(tmpimg[w]) * np.average(tmpimg2[w])
+                    ccorr[w] /= (
+                        maskcor[w] * np.average(tmpimg[w]) * np.average(tmpimg2[w])
+                    )
                     if check_res:
                         if reg == 0:
                             self.ckn = ccorr.copy()
@@ -337,55 +344,15 @@ def _centered(img, sz):
 
 
 import threading
-import warnings
 
 # from . import sigtools
-import numpy as np
 from numpy import (
-    allclose,
-    angle,
-    arange,
-    argsort,
     array,
     asarray,
-    atleast_1d,
-    atleast_2d,
-    dot,
-    exp,
-    expand_dims,
-    iscomplexobj,
-    isscalar,
-    mean,
-    ndarray,
-    newaxis,
-    ones,
-    pi,
-    poly,
-    polyadd,
-    polyder,
-    polydiv,
-    polymul,
-    polysub,
-    polyval,
-    prod,
-    r_,
-    ravel,
-    real_if_close,
-    reshape,
-    roots,
-    sort,
-    sum,
-    take,
-    transpose,
-    unique,
-    where,
-    zeros,
-    zeros_like,
 )
 from numpy.fft import irfftn, rfftn
 from numpy.lib import NumpyVersion
-from scipy import linalg
-from scipy.fftpack import fft, fft2, fftfreq, fftn, ifft, ifft2, ifftn, ifftshift
+from scipy.fftpack import fftn, ifftn
 
 # from ._arraytools import axis_slice, axis_reverse, odd_ext, even_ext, const_ext
 
@@ -484,7 +451,9 @@ def fftconvolve_new(in1, in2, mode="full"):
 
     s1 = array(in1.shape)
     s2 = array(in2.shape)
-    complex_result = np.issubdtype(in1.dtype, np.complex) or np.issubdtype(in2.dtype, np.complex)
+    complex_result = np.issubdtype(in1.dtype, np.complex) or np.issubdtype(
+        in2.dtype, np.complex
+    )
     shape = s1 + s2 - 1
 
     if mode == "valid":
@@ -518,7 +487,7 @@ def fftconvolve_new(in1, in2, mode="full"):
     elif mode == "valid":
         return _centered(ret, s1 - s2 + 1)
     else:
-        raise ValueError("Acceptable mode flags are 'valid'," " 'same', or 'full'.")
+        raise ValueError("Acceptable mode flags are 'valid', 'same', or 'full'.")
 
 
 def _cross_corr1(img1, img2=None):
@@ -687,7 +656,10 @@ class CrossCorrelator1:
                 self.positions.append(np.arange(maskcorr.shape[0]) - center[0])
             elif mask.ndim == 2:
                 self.positions.append(
-                    [np.arange(maskcorr.shape[0]) - center[0], np.arange(maskcorr.shape[1]) - center[1]]
+                    [
+                        np.arange(maskcorr.shape[0]) - center[0],
+                        np.arange(maskcorr.shape[1]) - center[1],
+                    ]
                 )
 
         if len(self.ids) == 1:
@@ -747,9 +719,13 @@ class CrossCorrelator1:
                 # do symmetric averaging
                 Icorr = _cross_corr1(tmpimg * self.submasks[reg], self.submasks[reg])
                 if self_correlation:
-                    Icorr2 = _cross_corr1(self.submasks[reg], tmpimg * self.submasks[reg])
+                    Icorr2 = _cross_corr1(
+                        self.submasks[reg], tmpimg * self.submasks[reg]
+                    )
                 else:
-                    Icorr2 = _cross_corr1(self.submasks[reg], tmpimg2 * self.submasks[reg])
+                    Icorr2 = _cross_corr1(
+                        self.submasks[reg], tmpimg2 * self.submasks[reg]
+                    )
                 # there is an extra condition that Icorr*Icorr2 != 0
                 w = np.where(np.abs(Icorr * Icorr2) > 0)  # DO WE NEED THIS (use i,j).
                 ccorr[w] *= self.maskcorrs[reg][w] / Icorr[w] / Icorr2[w]
@@ -761,7 +737,11 @@ class CrossCorrelator1:
                 if self_correlation:
                     ccorr[w] /= self.maskcorrs[reg][w] * np.average(tmpimg[w]) ** 2
                 else:
-                    ccorr[w] /= self.maskcorrs[reg][w] * np.average(tmpimg[w]) * np.average(tmpimg2[w])
+                    ccorr[w] /= (
+                        self.maskcorrs[reg][w]
+                        * np.average(tmpimg[w])
+                        * np.average(tmpimg2[w])
+                    )
             ccorrs.append(ccorr)
 
         if len(ccorrs) == 1:
@@ -773,9 +753,8 @@ class CrossCorrelator1:
 ##for parallel
 from multiprocessing import Pool
 
-import dill
 
-from pyCHX.chx_compress import apply_async, map_async
+from pyCHX.chx_compress import apply_async
 
 
 def run_para_ccorr_sym(ccorr_sym, FD, nstart=0, nend=None, imgsum=None, img_norm=None):
@@ -805,7 +784,10 @@ def run_para_ccorr_sym(ccorr_sym, FD, nstart=0, nend=None, imgsum=None, img_norm
         results[i] = apply_async(
             pool,
             ccorr_sym,
-            (FD.rdframe(i) / (imgsum[i] * img_norm), FD.rdframe(1 + i) / (imgsum[i + 1] * img_norm)),
+            (
+                FD.rdframe(i) / (imgsum[i] * img_norm),
+                FD.rdframe(1 + i) / (imgsum[i + 1] * img_norm),
+            ),
         )
     pool.close()
     print("Starting running the tasks...")

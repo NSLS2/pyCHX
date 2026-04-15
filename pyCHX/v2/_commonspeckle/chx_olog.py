@@ -110,12 +110,15 @@ def update_olog_id(logid, text, attachments, verbose=True):
     )
     client.updateLog(logid, upd)
     if verbose:
-        print(f"The url={url} was successfully updated with {text} and with " f"the attachments")
+        print(
+            f"The url={url} was successfully updated with {text} and with "
+            f"the attachments"
+        )
 
 
 def update_olog_uid(uid, text, attachments):
     """
-    Update olog book logid entry cotaining uid string with text and attachments
+    Update olog book logid entry containing uid string with text and attachments
     files.
 
     Parameters

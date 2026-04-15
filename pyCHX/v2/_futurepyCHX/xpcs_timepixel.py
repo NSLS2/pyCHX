@@ -10,52 +10,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pds
 from numpy import (
-    apply_over_axes,
     arange,
-    arctan,
-    around,
-    array,
     digitize,
     dot,
-    exp,
     histogram,
-    histogramdd,
     hstack,
     hypot,
     indices,
     int_,
     intersect1d,
     linspace,
-    load,
-    log,
-    log10,
-    ma,
-    mean,
-    mgrid,
-    ones,
-    pi,
-    poly1d,
-    polyfit,
-    power,
-    ravel,
-    reshape,
     round,
     save,
-    shape,
-    sin,
-    sqrt,
-    std,
-    sum,
-    unique,
-    vstack,
     where,
     zeros,
     zeros_like,
 )
-from numpy.linalg import lstsq
 from tqdm import tqdm
 
-from pyCHX.chx_compress import Multifile, go_through_FD, pass_FD
 from pyCHX.chx_libs import multi_tau_lags
 
 
@@ -238,7 +210,9 @@ def compress_timepix_data(
                 with_pickle=with_pickle,
             )
         else:
-            print("Using already created compressed file with filename as :%s." % filename)
+            print(
+                "Using already created compressed file with filename as :%s." % filename
+            )
             return pkl.load(open(filename + ".pkl", "rb"))
 
             # FD = Multifile(filename, 0, int(1e25)  )
@@ -277,7 +251,9 @@ def create_timepix_compress_header(md, filename, nobytes=2, bins=1):
     fp.close()
 
 
-def init_compress_timepix_data(pos, t, binstep, filename, mask=None, md=None, nobytes=2, with_pickle=True):
+def init_compress_timepix_data(
+    pos, t, binstep, filename, mask=None, md=None, nobytes=2, with_pickle=True
+):
     """YG.Dev@CHX Nov 19, 2017 with optimal algorithm by using complex index techniques
 
     Compress the timepixeldata, in a format of x, y, t
@@ -617,7 +593,9 @@ def apply_timepix_mask(x, y, t, roi):
     return x[w], y[w], t[w]
 
 
-def get_timepixel_data_from_series(data_dir, filename_prefix, total_filenum=72, colms=int(1e5)):
+def get_timepixel_data_from_series(
+    data_dir, filename_prefix, total_filenum=72, colms=int(1e5)
+):
     x = np.zeros(total_filenum * colms)
     y = np.zeros(total_filenum * colms)
     t = zeros(total_filenum * colms)
@@ -753,14 +731,14 @@ def read_xyt_frame(n=1):
 
 
 def readframe_series(n=1):
-    """Using this universe name for all the loading fucntions"""
+    """Using this universe name for all the loading functions"""
     return read_xyt_frame(n)
 
 
 class xpcs(object):
     def __init__(self):
         """DOCUMENT __init__(   )
-        the initilization of the XPCS class
+        the initialization of the XPCS class
         """
         self.version = "version_0"
         self.create_time = "July_14_2015"
@@ -822,7 +800,7 @@ class xpcs(object):
 
     def calqlist(self, qmask=None, shape="circle"):
         """DOCUMENT calqlist( qmask=,shape=, )
-        calculate the equvilent pixel with a shape,
+        calculate the equivalent pixel with a shape,
         return
             qind: the index of q
             pixellist: the list of pixle

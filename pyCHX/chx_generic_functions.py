@@ -1,18 +1,16 @@
 import copy
 from datetime import datetime
 from os import listdir
-from shutil import copyfile
 
 import matplotlib.cm as mcm
 import numpy as np
 import PIL
 import pytz
 import scipy
-from matplotlib import cm
 from modest_image import imshow
 from scipy.special import erf
-from skbeam.core.utils import angle_grid, radial_grid, radius_to_twotheta, twotheta_to_q
-from skimage.draw import disk, ellipse, line, line_aa, polygon
+from skbeam.core.utils import angle_grid, radial_grid, radius_to_twotheta
+from skimage.draw import disk, ellipse, polygon
 from skimage.filters import prewitt
 
 # from tqdm import *
@@ -87,7 +85,9 @@ def generate_h5_list(inDir, filename):
             for fp_ in fp:
                 if ".h5" in fp_:
                     append_txtfile(filename=filename, data=np.array([FP_ + "/" + fp_]))
-    print("The full path of all the .h5 in %s has been saved in %s." % (inDir, filename))
+    print(
+        "The full path of all the .h5 in %s has been saved in %s." % (inDir, filename)
+    )
     print("You can use ./analysis/run_gui to visualize all the h5 file.")
 
 
@@ -103,7 +103,7 @@ def fit_one_peak_curve(x, y, fit_range=None):
         fwhm:  float, full width at half max intensity of the peak, 2*sigma
         fwhm_std:float, error bar of the full width at half max intensity of the peak
         xf: the x in the fit
-        out: the fitting class resutled from lmfit
+        out: the fitting class resulted from lmfit
 
     """
     from lmfit.models import LinearModel, LorentzianModel
@@ -213,10 +213,18 @@ def get_roi_mask_qval_qwid_by_shift(
     """YG Dev April 22, 2019 Get  roi_mask, qval_dict, qwid_dict by shift the pre-defined big roi_mask"""
     center = setup_pargs["center"]
     roi_mask1 = shift_mask(
-        new_cen=center, new_mask=new_mask, old_cen=old_cen, old_roi_mask=old_roi_mask, limit_qnum=limit_qnum
+        new_cen=center,
+        new_mask=new_mask,
+        old_cen=old_cen,
+        old_roi_mask=old_roi_mask,
+        limit_qnum=limit_qnum,
     )
     qval_dict_, qwid_dict_ = get_masked_qval_qwid_dict_using_Rmax(
-        new_mask=new_mask, setup_pargs=setup_pargs, old_roi_mask=old_roi_mask, old_cen=old_cen, geometry=geometry
+        new_mask=new_mask,
+        setup_pargs=setup_pargs,
+        old_roi_mask=old_roi_mask,
+        old_cen=old_cen,
+        geometry=geometry,
     )
     w, w1 = get_zero_nozero_qind_from_roi_mask(roi_mask1, new_mask)
     # print(w,w1)
@@ -240,12 +248,21 @@ def get_zero_nozero_qind_from_roi_mask(roi_mask, mask):
     return w, w1
 
 
-def get_masked_qval_qwid_dict_using_Rmax(new_mask, setup_pargs, old_roi_mask, old_cen, geometry):
+def get_masked_qval_qwid_dict_using_Rmax(
+    new_mask, setup_pargs, old_roi_mask, old_cen, geometry
+):
     """YG Dev April 22, 2019 Get qval_dict, qwid_dict by applying mask to roi_mask using a Rmax method"""
     cy, cx = setup_pargs["center"]
     my, mx = new_mask.shape
     Rmax = int(
-        np.ceil(max(np.hypot(cx, cy), np.hypot(cx - mx, cy - my), np.hypot(cx, cy - my), np.hypot(cx - mx, cy)))
+        np.ceil(
+            max(
+                np.hypot(cx, cy),
+                np.hypot(cx - mx, cy - my),
+                np.hypot(cx, cy - my),
+                np.hypot(cx - mx, cy),
+            )
+        )
     )
     Fmask = np.zeros([Rmax * 2, Rmax * 2], dtype=int)
     Fmask[Rmax - cy : Rmax - cy + my, Rmax - cx : Rmax - cx + mx] = new_mask
@@ -262,7 +279,9 @@ def get_masked_qval_qwid_dict_using_Rmax(new_mask, setup_pargs, old_roi_mask, ol
         "Ldet": setup_pargs["Ldet"],
         "lambda_": setup_pargs["lambda_"],
     }
-    qval_dict1, qwid_dict1 = get_masked_qval_qwid_dict(roi_mask1, Fmask, setup_pargs_, geometry)
+    qval_dict1, qwid_dict1 = get_masked_qval_qwid_dict(
+        roi_mask1, Fmask, setup_pargs_, geometry
+    )
     # w = get_zero_qind_from_roi_mask(roi_mask1,Fmask)
     return qval_dict1, qwid_dict1  # ,w
 
@@ -270,7 +289,9 @@ def get_masked_qval_qwid_dict_using_Rmax(new_mask, setup_pargs, old_roi_mask, ol
 def get_masked_qval_qwid_dict(roi_mask, mask, setup_pargs, geometry):
     """YG Dev April 22, 2019 Get qval_dict, qwid_dict by applying mask to roi_mask"""
 
-    qval_dict_, qwid_dict_ = get_qval_qwid_dict(roi_mask, setup_pargs, geometry=geometry)
+    qval_dict_, qwid_dict_ = get_qval_qwid_dict(
+        roi_mask, setup_pargs, geometry=geometry
+    )
     w, w1 = get_zero_nozero_qind_from_roi_mask(roi_mask, mask)
     qval_dictx = {k: v for (k, v) in list(qval_dict_.items()) if k not in w}
     qwid_dictx = {k: v for (k, v) in list(qwid_dict_.items()) if k not in w}
@@ -288,7 +309,7 @@ def get_qval_qwid_dict(roi_mask, setup_pargs, geometry="saxs"):
     Input:
         roi_mask: integer type 2D array
         setup_pargs: dict, should at least contains, center (direct beam center), dpix (in mm),
-                                                     lamda_: in A-1, Ldet: in mm
+                                                     lambda_: in A-1, Ldet: in mm
                    e.g.,
                    {'Ldet': 1495.0,   abs            #essential
                      'center': [-4469, 363],         #essential
@@ -300,7 +321,7 @@ def get_qval_qwid_dict(roi_mask, setup_pargs, geometry="saxs"):
                      'uid': 'uid=b85dad'}
         geometry: support saxs for isotropic transmission SAXS
                           ang_saxs for anisotropic transmission SAXS
-                          flow_saxs for anisotropic transmission SAXS under flow (center symetric)
+                          flow_saxs for anisotropic transmission SAXS under flow (center symmetric)
 
     Return:
         qval_dict: dict, key as q-number, val: q val
@@ -449,7 +470,12 @@ def shift_mask(new_cen, new_mask, old_cen, old_roi_mask, limit_qnum=None):
     """
     nsx, nsy = new_mask.shape
     down, up, left, right = new_cen[0], nsx - new_cen[0], new_cen[1], nsy - new_cen[1]
-    x1, x2, y1, y2 = [old_cen[0] - down, old_cen[0] + up, old_cen[1] - left, old_cen[1] + right]
+    x1, x2, y1, y2 = [
+        old_cen[0] - down,
+        old_cen[0] + up,
+        old_cen[1] - left,
+        old_cen[1] + right,
+    ]
     nroi_mask_ = old_roi_mask[x1:x2, y1:y2] * new_mask
     nroi_mask = np.zeros_like(nroi_mask_)
     qind, pixelist = roi.extract_label_indices(nroi_mask_)
@@ -588,12 +614,16 @@ def plot_q_g2fitpara_general(
             if geometry == "ang_saxs":
                 title_short = "Angle= %.2f" % (short_ulabel[s_ind]) + r"$^\circ$"
             elif geometry == "gi_saxs":
-                title_short = r"$Q_z= $" + "%.4f" % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
+                title_short = (
+                    r"$Q_z= $" + "%.4f" % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
+                )
             else:
                 title_short = ""
         else:  # qr
             if geometry == "ang_saxs" or geometry == "gi_saxs":
-                title_short = r"$Q_r= $" + "%.5f  " % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
+                title_short = (
+                    r"$Q_r= $" + "%.5f  " % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
+                )
             else:
                 title_short = ""
         # print(geometry)
@@ -623,10 +653,32 @@ def plot_q_g2fitpara_general(
         ax2 = fig.add_subplot(4, 1, 2)
         ax3 = fig.add_subplot(4, 1, 3)
         ax4 = fig.add_subplot(4, 1, 4)
-        plot1D(x=qi, y=betai, m="o", ls="--", c="k", ax=ax1, legend=r"$\beta$", title="")
-        plot1D(x=qi, y=alphai, m="o", ls="--", c="r", ax=ax2, legend=r"$\alpha$", title="")
-        plot1D(x=qi, y=baselinei, m="o", ls="--", c="g", ax=ax3, legend=r"$baseline$", title="")
-        plot1D(x=qi, y=relaxation_ratei, m="o", c="b", ls="--", ax=ax4, legend=r"$\gamma$ $(s^{-1})$", title="")
+        plot1D(
+            x=qi, y=betai, m="o", ls="--", c="k", ax=ax1, legend=r"$\beta$", title=""
+        )
+        plot1D(
+            x=qi, y=alphai, m="o", ls="--", c="r", ax=ax2, legend=r"$\alpha$", title=""
+        )
+        plot1D(
+            x=qi,
+            y=baselinei,
+            m="o",
+            ls="--",
+            c="g",
+            ax=ax3,
+            legend=r"$baseline$",
+            title="",
+        )
+        plot1D(
+            x=qi,
+            y=relaxation_ratei,
+            m="o",
+            c="b",
+            ls="--",
+            ax=ax4,
+            legend=r"$\gamma$ $(s^{-1})$",
+            title="",
+        )
 
         ax4.set_ylabel(r"$\gamma$ $(s^{-1})$")
         ax4.set_xlabel(r"$q $ $(\AA)$", fontsize=16)
@@ -757,12 +809,12 @@ def plot_xy_x2(
     **kwargs,
 ):
     """YG.@CHX 2019/10/ Plot x, y, x2, if have, will plot as twiny( same y, different x)
-       This funciton is primary for plot q-Iq
+       This function is primary for plot q-Iq
 
     Input:
         x: one-d array, x in one unit
         y: one-d array,
-        x2:one-d array, x in anoter unit
+        x2:one-d array, x in another unit
         pargs: dict, could include 'uid', 'path'
         loglog: if True, if plot x and y in log, by default plot in y-log
         save: if True, save the plot in the path defined in pargs
@@ -815,7 +867,9 @@ def plot_xy_x2(
         fig.savefig(fp, dpi=fig.dpi)
 
 
-def save_oavs_tifs(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1, threshold=0):
+def save_oavs_tifs(
+    uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1, threshold=0
+):
     """save oavs as png"""
     tifs = list(db[uid].data("OAV_image"))[0]
     try:
@@ -832,14 +886,22 @@ def save_oavs_tifs(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1
     detectors = sorted(get_detectors(h))
     for d in range(len(detectors)):
         try:
-            oav_period = h["descriptors"][d]["configuration"]["OAV"]["data"]["OAV_cam_acquire_period"]
-            oav_expt = h["descriptors"][d]["configuration"]["OAV"]["data"]["OAV_cam_acquire_time"]
+            oav_period = h["descriptors"][d]["configuration"]["OAV"]["data"][
+                "OAV_cam_acquire_period"
+            ]
+            oav_expt = h["descriptors"][d]["configuration"]["OAV"]["data"][
+                "OAV_cam_acquire_time"
+            ]
         except:
             pass
     oav_times = []
     for i in range(len(oavs)):
         oav_times.append(oav_expt + i * oav_period)
-    fig = plt.subplots(int(np.ceil(len(oavs) / 3)), 3, figsize=(3 * 5.08, int(np.ceil(len(oavs) / 3)) * 4))
+    fig = plt.subplots(
+        int(np.ceil(len(oavs) / 3)),
+        3,
+        figsize=(3 * 5.08, int(np.ceil(len(oavs) / 3)) * 4),
+    )
     for m in range(len(oavs)):
         plt.subplot(int(np.ceil(len(oavs) / 3)), 3, m + 1)
         # plt.subplots(figsize=(5.2,4))
@@ -855,11 +917,21 @@ def save_oavs_tifs(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1
 
         plt.imshow(rgb_cont_img, interpolation="none", resample=True, cmap="gray")
         plt.axis("equal")
-        cross = [685, 440, 50]  # definintion of direct beam: x, y, size
-        plt.plot([cross[0] - cross[2] / 2, cross[0] + cross[2] / 2], [cross[1], cross[1]], "r-")
-        plt.plot([cross[0], cross[0]], [cross[1] - cross[2] / 2, cross[1] + cross[2] / 2], "r-")
+        cross = [685, 440, 50]  # definition of direct beam: x, y, size
+        plt.plot(
+            [cross[0] - cross[2] / 2, cross[0] + cross[2] / 2],
+            [cross[1], cross[1]],
+            "r-",
+        )
+        plt.plot(
+            [cross[0], cross[0]],
+            [cross[1] - cross[2] / 2, cross[1] + cross[2] / 2],
+            "r-",
+        )
         if pixel_scalebar != None:
-            plt.plot([1100, 1100 + pixel_scalebar], [150, 150], "r-", Linewidth=5)  # scale bar.
+            plt.plot(
+                [1100, 1100 + pixel_scalebar], [150, 150], "r-", Linewidth=5
+            )  # scale bar.
             plt.text(1000, 50, text_string, fontsize=14, color="r")
         plt.text(600, 50, str(oav_times[m])[:5] + " [s]", fontsize=14, color="r")
         plt.axis("off")
@@ -902,10 +974,16 @@ def get_current_time():
 
 def evalue_array(array, verbose=True):
     """Y.G., Dev Nov 1, 2018 Get min, max, avg, std of an array"""
-    _min, _max, avg, std = np.min(array), np.max(array), np.average(array), np.std(array)
+    _min, _max, avg, std = (
+        np.min(array),
+        np.max(array),
+        np.average(array),
+        np.std(array),
+    )
     if verbose:
         print(
-            "The  min, max, avg, std of this array are: %s  %s   %s   %s, respectively." % (_min, _max, avg, std)
+            "The  min, max, avg, std of this array are: %s  %s   %s   %s, respectively."
+            % (_min, _max, avg, std)
         )
     return _min, _max, avg, std
 
@@ -922,7 +1000,10 @@ def find_good_xpcs_uids(fuids, Nlim=100, det=["4m", "1m", "500"]):
     """
     guids = []
     for i, uid in enumerate(fuids):
-        if db[uid]["start"]["plan_name"] == "count" or db[uid]["start"]["plan_name"] == "manual_count":
+        if (
+            db[uid]["start"]["plan_name"] == "count"
+            or db[uid]["start"]["plan_name"] == "manual_count"
+        ):
             head = db[uid]["start"]
             for dec in head["detectors"]:
                 for dt in det:
@@ -956,7 +1037,9 @@ def create_fullImg_with_box(
     roi_mask = np.zeros(shape, dtype=np.int32)
     for i in range(box_nx):
         for j in range(box_ny):
-            roi_mask[i * Wrow : (i + 1) * Wrow, j * Wcol : (j + 1) * Wcol] = i * box_ny + j + 1
+            roi_mask[i * Wrow : (i + 1) * Wrow, j * Wcol : (j + 1) * Wcol] = (
+                i * box_ny + j + 1
+            )
     # roi_mask *= mask
     return roi_mask
 
@@ -1005,7 +1088,11 @@ def lin2log_g2(lin_tau, lin_g2, num_points=False):
     # re-sample correlation function:
     log_g2 = []
     for i in range(log_tau.size - 1):
-        y = [i, log_tau[i] - (log_tau[i + 1] - log_tau[i]) / 2, log_tau[i] + (log_tau[i + 1] - log_tau[i]) / 2]
+        y = [
+            i,
+            log_tau[i] - (log_tau[i + 1] - log_tau[i]) / 2,
+            log_tau[i] + (log_tau[i + 1] - log_tau[i]) / 2,
+        ]
         # x=lin_tau[lin_tau>y[1]]
         x1 = lin_tau > y[1]
         x2 = lin_tau < y[2]
@@ -1017,7 +1104,11 @@ def lin2log_g2(lin_tau, lin_g2, num_points=False):
             log_g2.append(np.interp(log_tau[i], lin_tau, lin_g2))
         if i == log_tau.size - 2:
             # print(log_tau[i+1])
-            y = [i + 1, log_tau[i + 1] - (log_tau[i + 1] - log_tau[i]) / 2, log_tau[i + 1]]
+            y = [
+                i + 1,
+                log_tau[i + 1] - (log_tau[i + 1] - log_tau[i]) / 2,
+                log_tau[i + 1],
+            ]
             x1 = lin_tau > y[1]
             x2 = lin_tau < y[2]
             x = x1 * x2
@@ -1051,7 +1142,10 @@ def copy_data(old_path, new_path="/tmp_data/data/"):
     for fp in tqdm(fps):
         if not os.path.exists(new_path + os.path.basename(fp)):
             shutil.copy(fp, new_path)
-    print("The files %s are copied: %s." % (old_path[:-10] + "*", new_path + os.path.basename(fp)))
+    print(
+        "The files %s are copied: %s."
+        % (old_path[:-10] + "*", new_path + os.path.basename(fp))
+    )
 
 
 def delete_data(old_path, new_path="/tmp_data/data/"):
@@ -1061,7 +1155,6 @@ def delete_data(old_path, new_path="/tmp_data/data/"):
     new_path: the new path
     """
     import glob
-    import shutil
 
     # old_path = sud[2][0]
     # new_path = '/tmp_data/data/'
@@ -1073,12 +1166,20 @@ def delete_data(old_path, new_path="/tmp_data/data/"):
 
 
 def show_tif_series(
-    tif_series, Nx=None, center=None, w=50, vmin=None, vmax=None, cmap=cmap_vge_hdr, logs=False, figsize=[10, 16]
+    tif_series,
+    Nx=None,
+    center=None,
+    w=50,
+    vmin=None,
+    vmax=None,
+    cmap=cmap_vge_hdr,
+    logs=False,
+    figsize=[10, 16],
 ):
     """
     tif_series: list of 2D tiff images
-    Nx: the number in the row for dispalying
-    center: the center of iamge (or direct beam pixel)
+    Nx: the number in the row for displaying
+    center: the center of image (or direct beam pixel)
     w: the ROI half size in pixel
     vmin: the min intensity value for plot
     vmax: if None, will be max intensity value of the ROI
@@ -1121,9 +1222,6 @@ def show_tif_series(
     return fig, ax
 
 
-from scipy.special import erf
-
-
 def ps(y, shift=0.5, replot=True, logplot="off", x=None):
     """
     Dev 16, 2018
@@ -1158,7 +1256,10 @@ def ps(y, shift=0.5, replot=True, logplot="off", x=None):
     for i in range(len(y)):
         current_positive = is_positive(ym[i])
         if current_positive != positive:
-            list_of_roots.append(x[i - 1] + (x[i] - x[i - 1]) / (abs(ym[i]) + abs(ym[i - 1])) * abs(ym[i - 1]))
+            list_of_roots.append(
+                x[i - 1]
+                + (x[i] - x[i - 1]) / (abs(ym[i]) + abs(ym[i - 1])) * abs(ym[i - 1])
+            )
             positive = not positive
     if len(list_of_roots) >= 2:
         FWHM = abs(list_of_roots[-1] - list_of_roots[0])
@@ -1275,13 +1376,19 @@ def create_seg_ring(ring_edges, ang_edges, mask, setup_pargs):
         flow_geometry=False,
     )
 
-    roi_mask, good_ind = combine_two_roi_mask(roi_mask_qr, roi_mask_ang, pixel_num_thres=100)
-    qval_dict_ = get_qval_dict(qr_center=qr, qz_center=ang_center, one_qz_multi_qr=False)
+    roi_mask, good_ind = combine_two_roi_mask(
+        roi_mask_qr, roi_mask_ang, pixel_num_thres=100
+    )
+    qval_dict_ = get_qval_dict(
+        qr_center=qr, qz_center=ang_center, one_qz_multi_qr=False
+    )
     qval_dict = {i: qval_dict_[k] for (i, k) in enumerate(good_ind)}
     return roi_mask, qval_dict
 
 
-def find_bad_pixels_FD(bad_frame_list, FD, img_shape=[514, 1030], threshold=15, show_progress=True):
+def find_bad_pixels_FD(
+    bad_frame_list, FD, img_shape=[514, 1030], threshold=15, show_progress=True
+):
     """Designed to find bad pixel list in 500K
     threshold: the max intensity in 5K
     """
@@ -1305,7 +1412,7 @@ def find_bad_pixels_FD(bad_frame_list, FD, img_shape=[514, 1030], threshold=15, 
 def get_q_iq_using_dynamic_mask(FD, mask, setup_pargs, bin_number=1, threshold=15):
     """DEV by Yugang@CHX, June 6, 2019
     Get circular average of a time series using a dynamics mask, which pixel values are defined as
-        zeors if above a threshold.
+        zeros if above a threshold.
     Return an averaged q(pix)-Iq-q(A-1) of the whole time series using bin frames with bin_number
     Input:
         FD: the multifile handler for the time series
@@ -1315,7 +1422,7 @@ def get_q_iq_using_dynamic_mask(FD, mask, setup_pargs, bin_number=1, threshold=1
                      'dpix',  'Ldet','lambda_', 'center'
         bin_number: bin number of the frame
         threshold: define the dynamics mask, which pixel values are defined as
-                    zeors if above this threshold
+                    zeros if above this threshold
     Output:
        qp_saxs: q in pixel
        iq_saxs: intenstity
@@ -1327,22 +1434,37 @@ def get_q_iq_using_dynamic_mask(FD, mask, setup_pargs, bin_number=1, threshold=1
     Nimg_ = FD.end - FD.beg
     # Nimg_ = 100
     Nimg = Nimg_ // bin_number
-    time_edge = np.array(create_time_slice(N=Nimg_, slice_num=Nimg, slice_width=bin_number)) + beg
+    time_edge = (
+        np.array(create_time_slice(N=Nimg_, slice_num=Nimg, slice_width=bin_number))
+        + beg
+    )
     for n in tqdm(range(Nimg)):
         t1, t2 = time_edge[n]
         # print(t1,t2)
         if bin_number == 1:
             avg_imgi = FD.rdframe(t1)
         else:
-            avg_imgi = get_avg_imgc(FD, beg=t1, end=t2, sampling=1, plot_=False, show_progress=False)
+            avg_imgi = get_avg_imgc(
+                FD, beg=t1, end=t2, sampling=1, plot_=False, show_progress=False
+            )
         badpi = find_bad_pixels_FD(
-            np.arange(t1, t2), FD, img_shape=avg_imgi.shape, threshold=threshold, show_progress=False
+            np.arange(t1, t2),
+            FD,
+            img_shape=avg_imgi.shape,
+            threshold=threshold,
+            show_progress=False,
         )
         img = avg_imgi * mask * badpi
-        qp_saxsi, iq_saxsi, q_saxsi = get_circular_average(img, mask * badpi, save=False, pargs=setup_pargs)
+        qp_saxsi, iq_saxsi, q_saxsi = get_circular_average(
+            img, mask * badpi, save=False, pargs=setup_pargs
+        )
         # print( img.max())
         if t1 == FD.beg:
-            qp_saxs, iq_saxs, q_saxs = np.zeros_like(qp_saxsi), np.zeros_like(iq_saxsi), np.zeros_like(q_saxsi)
+            qp_saxs, iq_saxs, q_saxs = (
+                np.zeros_like(qp_saxsi),
+                np.zeros_like(iq_saxsi),
+                np.zeros_like(q_saxsi),
+            )
         qp_saxs += qp_saxsi
         iq_saxs += iq_saxsi
         q_saxs += q_saxsi
@@ -1388,10 +1510,10 @@ def get_img_from_iq(qp, iq, img_shape, center):
 
 def average_array_withNan(array, axis=0, mask=None):
     """YG. Jan 23, 2018
-    Average array invovling np.nan along axis
+    Average array involving np.nan along axis
 
     Input:
-        array: ND array, actually should be oneD or twoD at this stage..TODOLIST for ND
+        array: AND array, actually should be oneD or twoD at this stage..TODOLIST for AND
         axis: the average axis
         mask: bool, same shape as array, if None, will mask all the nan values
     Output:
@@ -1414,10 +1536,10 @@ def average_array_withNan(array, axis=0, mask=None):
 
 def deviation_array_withNan(array, axis=0, mask=None):
     """YG. Jan 23, 2018
-    Get the deviation of array invovling np.nan along axis
+    Get the deviation of array involving np.nan along axis
 
     Input:
-        array: ND array
+        array: AND array
         axis: the average axis
         mask: bool, same shape as array, if None, will mask all the nan values
     Output:
@@ -1500,10 +1622,14 @@ def get_echos(dat_arr, min_distance=10):
     """
     from skimage.feature import peak_local_max
 
-    max_ind = peak_local_max(dat_arr, min_distance)  # !!! careful, skimage function reverses the order (wtf?)
+    max_ind = peak_local_max(
+        dat_arr, min_distance
+    )  # !!! careful, skimage function reverses the order (wtf?)
     min_ind = []
     for i in range(len(max_ind[:-1])):
-        min_ind.append(max_ind[i + 1][0] + np.argmin(dat_arr[max_ind[i + 1][0] : max_ind[i][0]]))
+        min_ind.append(
+            max_ind[i + 1][0] + np.argmin(dat_arr[max_ind[i + 1][0] : max_ind[i][0]])
+        )
     # unfortunately, skimage function fu$$s up the format: max_ind is an array of a list of lists...fix this:
     mmax_ind = []
     for l in max_ind:
@@ -1516,10 +1642,10 @@ def pad_length(arr, pad_val=np.nan):
     """
     arr: 2D matrix
     pad_val: values being padded
-    adds pad_val to each row, to make the length of each row equal to the lenght of the longest row of the original matrix
+    adds pad_val to each row, to make the length of each row equal to the length of the longest row of the original matrix
     -> used to convert python generic data object to HDF5 native format
     function fixes python bug in padding (np.pad) integer array with np.nan
-    update June 2023: remove use of np.shape and np.size that doesn't work (anymore?) on arrays with inhomogenous size
+    update June 2023: remove use of np.shape and np.size that doesn't work (anymore?) on arrays with inhomogeneous size
     by LW 12/30/2017
     """
     max_len = []
@@ -1527,7 +1653,12 @@ def pad_length(arr, pad_val=np.nan):
         max_len.append([len(arr[i])])
     max_len = np.max(max_len)
     for l in range(len(arr)):
-        arr[l] = np.pad(arr[l] * 1.0, (0, max_len - np.size(arr[l])), mode="constant", constant_values=pad_val)
+        arr[l] = np.pad(
+            arr[l] * 1.0,
+            (0, max_len - np.size(arr[l])),
+            mode="constant",
+            constant_values=pad_val,
+        )
     return arr
 
 
@@ -1552,8 +1683,8 @@ def ls_dir(inDir, have_list=[], exclude_list=[]):
     """Y.G. Aug 1, 2019
     List all filenames in a filefolder
     inDir: fullpath of the inDir
-    have_string:   only retrun filename containing the string
-    exclude_string:   only retrun filename not containing the string
+    have_string:   only return filename containing the string
+    exclude_string:   only return filename not containing the string
 
     """
     from os import listdir
@@ -1579,7 +1710,7 @@ def ls_dir2(inDir, string=None):
     """Y.G. Nov 1, 2017
     List all filenames in a filefolder (not include hidden files and subfolders)
     inDir: fullpath of the inDir
-    string: if not None, only retrun filename containing the string
+    string: if not None, only return filename containing the string
     """
     from os import listdir
     from os.path import isfile, join
@@ -1587,7 +1718,9 @@ def ls_dir2(inDir, string=None):
     if string == None:
         tifs = np.array([f for f in listdir(inDir) if isfile(join(inDir, f))])
     else:
-        tifs = np.array([f for f in listdir(inDir) if (isfile(join(inDir, f))) & (string in f)])
+        tifs = np.array(
+            [f for f in listdir(inDir) if (isfile(join(inDir, f))) & (string in f)]
+        )
     return tifs
 
 
@@ -1625,7 +1758,17 @@ def re_filename_dir(old_pattern, new_pattern, inDir, verbose=True):
             re_filename(old_filename, new_filename, inDir, verbose=verbose)
 
 
-def get_roi_nr(qdict, q, phi, q_nr=True, phi_nr=False, q_thresh=0, p_thresh=0, silent=True, qprecision=5):
+def get_roi_nr(
+    qdict,
+    q,
+    phi,
+    q_nr=True,
+    phi_nr=False,
+    q_thresh=0,
+    p_thresh=0,
+    silent=True,
+    qprecision=5,
+):
     """
     function to return roi number from qval_dict, corresponding  Q and phi, lists (sets) of all available Qs and phis
     [roi_nr,Q,phi,Q_list,phi_list]=get_roi_nr(..)
@@ -1660,13 +1803,17 @@ def get_roi_nr(qdict, q, phi, q_nr=True, phi_nr=False, q_thresh=0, p_thresh=0, s
         qindices = [i for i, x in enumerate(qs) if np.abs(x - qinterest) < q_thresh]
     else:
         qinterest = q
-        qindices = [i for i, x in enumerate(qs) if np.abs(x - qinterest) < q_thresh]  # new
+        qindices = [
+            i for i, x in enumerate(qs) if np.abs(x - qinterest) < q_thresh
+        ]  # new
     if phi_nr:
         phiinterest = phislist[phi]
         phiindices = [i for i, x in enumerate(phis) if x == phiinterest]
     else:
         phiinterest = phi
-        phiindices = [i for i, x in enumerate(phis) if np.abs(x - phiinterest) < p_thresh]  # new
+        phiindices = [
+            i for i, x in enumerate(phis) if np.abs(x - phiinterest) < p_thresh
+        ]  # new
     ret_list = [
         list(set(qindices).intersection(phiindices))[0],
         qinterest,
@@ -1679,7 +1826,14 @@ def get_roi_nr(qdict, q, phi, q_nr=True, phi_nr=False, q_thresh=0, p_thresh=0, s
         print(qslist)
         print("list of available phis:")
         print(phislist)
-        print("Roi number for Q= " + str(ret_list[1]) + " and phi= " + str(ret_list[2]) + ": " + str(ret_list[0]))
+        print(
+            "Roi number for Q= "
+            + str(ret_list[1])
+            + " and phi= "
+            + str(ret_list[2])
+            + ": "
+            + str(ret_list[0])
+        )
     return ret_list
 
 
@@ -1690,7 +1844,7 @@ def get_fit_by_two_linear(
     mid_xpoint2=None,
     xrange=None,
 ):
-    """YG Octo 16,2017 Fit a curve with two linear func, the curve is splitted by mid_xpoint,
+    """YG Octo 16,2017 Fit a curve with two linear func, the curve is split by mid_xpoint,
             namely, fit the curve in two regions defined by (xmin,mid_xpoint ) and  (mid_xpoint2, xmax)
     Input:
         x: 1D np.array
@@ -1700,9 +1854,9 @@ def get_fit_by_two_linear(
     Return:
         D1, gmfit1, D2, gmfit2 :
             fit parameter (slope, background) of linear fit1
-            convinent fit class, gmfit1(x) gives yvale
+            convenient fit class, gmfit1(x) gives yvale
             fit parameter (slope, background) of linear fit2
-            convinent fit class, gmfit2(x) gives yvale
+            convenient fit class, gmfit2(x) gives yvale
 
     """
     if xrange == None:
@@ -1734,7 +1888,9 @@ def get_curve_turning_points(
     """YG Octo 16,2017
     Get a turning point of a curve by doing a two-linear fit
     """
-    D1, gmfit1, D2, gmfit2 = get_fit_by_two_linear(x, y, mid_xpoint1, mid_xpoint2, xrange)
+    D1, gmfit1, D2, gmfit2 = get_fit_by_two_linear(
+        x, y, mid_xpoint1, mid_xpoint2, xrange
+    )
     return get_cross_point(x, gmfit1, gmfit2)
 
 
@@ -1742,7 +1898,9 @@ def plot_fit_two_linear_fit(x, y, gmfit1, gmfit2, ax=None):
     """YG Octo 16,2017 Plot data with two fitted linear func"""
     if ax == None:
         fig, ax = plt.subplots()
-    plot1D(x=x, y=y, ax=ax, c="k", legend="data", m="o", ls="")  # logx=True, logy=True )
+    plot1D(
+        x=x, y=y, ax=ax, c="k", legend="data", m="o", ls=""
+    )  # logx=True, logy=True )
     plot1D(x=x, y=gmfit1(x), ax=ax, c="r", m="", ls="-", legend="fit1")
     plot1D(x=x, y=gmfit2(x), ax=ax, c="b", m="", ls="-", legend="fit2")
     return ax
@@ -1754,7 +1912,10 @@ def linear_fit(x, y, xrange=None):
     """
     if xrange != None:
         xmin, xmax = xrange
-        x1, x2 = find_index(x, xmin, tolerance=None), find_index(x, xmax, tolerance=None)
+        x1, x2 = (
+            find_index(x, xmin, tolerance=None),
+            find_index(x, xmax, tolerance=None),
+        )
         x_ = x[x1:x2]
         y_ = y[x1:x2]
     else:
@@ -1866,22 +2027,32 @@ def sgolay2d(z, window_size, order, derivative=None):
     Z = np.zeros((new_shape))
     # top band
     band = z[0, :]
-    Z[:half_size, half_size:-half_size] = band - np.abs(np.flipud(z[1 : half_size + 1, :]) - band)
+    Z[:half_size, half_size:-half_size] = band - np.abs(
+        np.flipud(z[1 : half_size + 1, :]) - band
+    )
     # bottom band
     band = z[-1, :]
-    Z[-half_size:, half_size:-half_size] = band + np.abs(np.flipud(z[-half_size - 1 : -1, :]) - band)
+    Z[-half_size:, half_size:-half_size] = band + np.abs(
+        np.flipud(z[-half_size - 1 : -1, :]) - band
+    )
     # left band
     band = np.tile(z[:, 0].reshape(-1, 1), [1, half_size])
-    Z[half_size:-half_size, :half_size] = band - np.abs(np.fliplr(z[:, 1 : half_size + 1]) - band)
+    Z[half_size:-half_size, :half_size] = band - np.abs(
+        np.fliplr(z[:, 1 : half_size + 1]) - band
+    )
     # right band
     band = np.tile(z[:, -1].reshape(-1, 1), [1, half_size])
-    Z[half_size:-half_size, -half_size:] = band + np.abs(np.fliplr(z[:, -half_size - 1 : -1]) - band)
+    Z[half_size:-half_size, -half_size:] = band + np.abs(
+        np.fliplr(z[:, -half_size - 1 : -1]) - band
+    )
     # central band
     Z[half_size:-half_size, half_size:-half_size] = z
 
     # top left corner
     band = z[0, 0]
-    Z[:half_size, :half_size] = band - np.abs(np.flipud(np.fliplr(z[1 : half_size + 1, 1 : half_size + 1])) - band)
+    Z[:half_size, :half_size] = band - np.abs(
+        np.flipud(np.fliplr(z[1 : half_size + 1, 1 : half_size + 1])) - band
+    )
     # bottom right corner
     band = z[-1, -1]
     Z[-half_size:, -half_size:] = band + np.abs(
@@ -1890,10 +2061,14 @@ def sgolay2d(z, window_size, order, derivative=None):
 
     # top right corner
     band = Z[half_size, -half_size:]
-    Z[:half_size, -half_size:] = band - np.abs(np.flipud(Z[half_size + 1 : 2 * half_size + 1, -half_size:]) - band)
+    Z[:half_size, -half_size:] = band - np.abs(
+        np.flipud(Z[half_size + 1 : 2 * half_size + 1, -half_size:]) - band
+    )
     # bottom left corner
     band = Z[-half_size:, half_size].reshape(-1, 1)
-    Z[-half_size:, :half_size] = band - np.abs(np.fliplr(Z[-half_size:, half_size + 1 : 2 * half_size + 1]) - band)
+    Z[-half_size:, :half_size] = band - np.abs(
+        np.fliplr(Z[-half_size:, half_size + 1 : 2 * half_size + 1]) - band
+    )
 
     # solve system and convolve
     if derivative == None:
@@ -1908,7 +2083,9 @@ def sgolay2d(z, window_size, order, derivative=None):
     elif derivative == "both":
         c = np.linalg.pinv(A)[1].reshape((window_size, -1))
         r = np.linalg.pinv(A)[2].reshape((window_size, -1))
-        return scipy.signal.fftconvolve(Z, -r, mode="valid"), scipy.signal.fftconvolve(Z, -c, mode="valid")
+        return scipy.signal.fftconvolve(Z, -r, mode="valid"), scipy.signal.fftconvolve(
+            Z, -c, mode="valid"
+        )
 
 
 def load_filelines(fullpath):
@@ -1943,7 +2120,7 @@ def extract_data_from_file(
         good_line_pattern: str, data will be extract below this good_line_pattern
         Or giving start_row: int
         good_cols: list of integer, good index of cols
-        lables: the label of the good_cols
+        labels: the label of the good_cols
         #save: False, if True will save the data into a csv file with filename appending csv ??
     Return:
         a pds.dataframe
@@ -2027,7 +2204,7 @@ def get_print_uids(start_time, stop_time, return_all_info=False):
 
 def get_last_uids(n=-1):
     """YG Sep 26, 2017
-    A Convinient function to copy uid to jupyter for analysis"""
+    A Convenient function to copy uid to jupyter for analysis"""
     uid = db[n]["start"]["uid"][:8]
     sid = db[n]["start"]["scan_id"]
     m = db[n]["start"]["Measurement"]
@@ -2042,14 +2219,16 @@ def get_base_all_filenames(inDir, base_filename_cut_length=-7):
        base_filename_cut_length: to which length the base name is unique
     Output:
       dict: keys,  base filename
-            vales, all realted filename
+            vales, all related filename
     """
     from os import listdir
     from os.path import isfile, join
 
     tifs = np.array([f for f in listdir(inDir) if isfile(join(inDir, f))])
     tifsc = list(tifs.copy())
-    utifs = np.sort(np.unique(np.array([f[:base_filename_cut_length] for f in tifs])))[::-1]
+    utifs = np.sort(np.unique(np.array([f[:base_filename_cut_length] for f in tifs])))[
+        ::-1
+    ]
     files = {}
     for uf in utifs:
         files[uf] = []
@@ -2190,7 +2369,9 @@ def get_mass_center_one_roi(FD, roi_mask, roi_ind):
     m = roi_mask == roi_ind
     cx, cy = np.zeros(int((FD.end - FD.beg) / 1)), np.zeros(int((FD.end - FD.beg) / 1))
     n = 0
-    for i in tqdm(range(FD.beg, FD.end, 1), desc="Get mass center of one ROI of each frame"):
+    for i in tqdm(
+        range(FD.beg, FD.end, 1), desc="Get mass center of one ROI of each frame"
+    ):
         img = FD.rdframe(i) * m
         c = scipy.ndimage.measurements.center_of_mass(img)
         cx[n], cy[n] = int(c[0]), int(c[1])
@@ -2324,7 +2505,9 @@ def create_chip_edges_mask(det="1M"):
     return mask
 
 
-def create_ellipse_donut(cx, cy, wx_inner, wy_inner, wx_outer, wy_outer, roi_mask, gap=0):
+def create_ellipse_donut(
+    cx, cy, wx_inner, wy_inner, wx_outer, wy_outer, roi_mask, gap=0
+):
     Nmax = np.max(np.unique(roi_mask))
     rr1, cc1 = ellipse(cy, cx, wy_inner, wx_inner)
     rr2, cc2 = ellipse(cy, cx, wy_inner + gap, wx_inner + gap)
@@ -2390,10 +2573,10 @@ def get_fra_num_by_dose(exp_dose, exp_time, att=1, dead_time=2):
     """
     Calculate the frame number to be correlated by giving a X-ray exposure dose
 
-    Paramters:
+    Parameters:
         exp_dose: a list, the exposed dose, e.g., in unit of exp_time(ms)*N(fram num)*att( attenuation)
         exp_time: float, the exposure time for a xpcs time sereies
-        dead_time: dead time for the fast shutter reponse time, CHX = 2ms
+        dead_time: dead time for the fast shutter response time, CHX = 2ms
     Return:
         noframes: the frame number to be correlated, exp_dose/( exp_time + dead_time )
     e.g.,
@@ -2410,7 +2593,7 @@ def get_multi_tau_lag_steps(fra_max, num_bufs=8):
     """
     Get taus in log steps ( a multi-taus defined taus ) for a time series with max frame number as fra_max
     Parameters:
-        fra_max: integer, the maximun frame number
+        fra_max: integer, the maximum frame number
         buf_num (default=8),
     Return:
         taus_in_log, a list
@@ -2424,12 +2607,14 @@ def get_multi_tau_lag_steps(fra_max, num_bufs=8):
     return lag_steps[lag_steps < fra_max]
 
 
-def get_series_g2_taus(fra_max_list, acq_time=1, max_fra_num=None, log_taus=True, num_bufs=8):
+def get_series_g2_taus(
+    fra_max_list, acq_time=1, max_fra_num=None, log_taus=True, num_bufs=8
+):
     """
     Get taus for dose dependent analysis
     Parameters:
         fra_max_list: a list, a lsit of largest available frame number
-        acq_time: acquistion time for each frame
+        acq_time: acquisition time for each frame
         log_taus: if true, will use the multi-tau defined taus bu using buf_num (default=8),
                otherwise, use deltau =1
     Return:
@@ -2452,8 +2637,8 @@ def get_series_g2_taus(fra_max_list, acq_time=1, max_fra_num=None, log_taus=True
         if n > L:
             warnings.warn(
                 "Warning: the dose value is too large, and please"
-                "check the maxium dose in this data set and give a smaller dose value."
-                "We will use the maxium dose of the data."
+                "check the maximum dose in this data set and give a smaller dose value."
+                "We will use the maximum dose of the data."
             )
             n = L
         if log_taus:
@@ -2464,11 +2649,13 @@ def get_series_g2_taus(fra_max_list, acq_time=1, max_fra_num=None, log_taus=True
     return tausd
 
 
-def check_lost_metadata(md, Nimg=None, inc_x0=None, inc_y0=None, pixelsize=7.5 * 10 * (-5)):
+def check_lost_metadata(
+    md, Nimg=None, inc_x0=None, inc_y0=None, pixelsize=7.5 * 10 * (-5)
+):
     """Y.G. Dec 31, 2016, check lost metadata
 
     Parameter:
-        md: dict, meta data dictionay
+        md: dict, meta data dictionary
         Nimg: number of frames for this uid metadata
         inc_x0/y0: incident beam center x0/y0, if None, will over-write the md['beam_center_x/y']
         pixelsize: if md don't have ['x_pixel_size'], the pixelsize will add it
@@ -2516,11 +2703,20 @@ def check_lost_metadata(md, Nimg=None, inc_x0=None, inc_y0=None, pixelsize=7.5 *
     timeperframe = acquisition_period
     if inc_x0 != None:
         mdn["beam_center_x"] = inc_y0
-        print("Beam_center_x has been changed to %s. (no change in raw metadata): " % inc_y0)
+        print(
+            "Beam_center_x has been changed to %s. (no change in raw metadata): "
+            % inc_y0
+        )
     if inc_y0 != None:
         mdn["beam_center_y"] = inc_x0
-        print("Beam_center_y has been changed to %s.  (no change in raw metadata): " % inc_x0)
-    center = [int(mdn["beam_center_x"]), int(mdn["beam_center_y"])]  # beam center [y,x] for python image
+        print(
+            "Beam_center_y has been changed to %s.  (no change in raw metadata): "
+            % inc_x0
+        )
+    center = [
+        int(mdn["beam_center_x"]),
+        int(mdn["beam_center_y"]),
+    ]  # beam center [y,x] for python image
     center = [center[1], center[0]]
 
     return dpix, lambda_, Ldet, exposuretime, timeperframe, center
@@ -2571,7 +2767,13 @@ def combine_images(filenames, outputfile, outsize=(2000, 2400)):
     print("The combined image is saved as: %s" % outputfile)
 
 
-def get_qval_dict(qr_center, qz_center=None, qval_dict=None, multi_qr_for_one_qz=True, one_qz_multi_qr=True):
+def get_qval_dict(
+    qr_center,
+    qz_center=None,
+    qval_dict=None,
+    multi_qr_for_one_qz=True,
+    one_qz_multi_qr=True,
+):
     """Y.G. Dec 27, 2016
     Map the roi label array with qr or (qr,qz) or (q//, q|-) values
     Parameters:
@@ -2661,11 +2863,11 @@ def check_bad_uids(uids, mask, img_choice_N=10, bad_uids_index=None):
         bad_uids_index: a list of known bad uid list, default is None
     Return:
         guids: list, good uids
-        buids, list, bad uids
+        builds, list, bad uids
     """
     import random
 
-    buids = []
+    builds = []
     guids = list(uids)
     # print( guids )
     if bad_uids_index == None:
@@ -2679,20 +2881,23 @@ def check_bad_uids(uids, mask, img_choice_N=10, bad_uids_index=None):
             imgsa = apply_mask(imgs, mask)
             avg_img = get_avg_img(imgsa, img_samp_index, plot_=False, uid=uid)
             if avg_img.max() == 0:
-                buids.append(uid)
+                builds.append(uid)
                 guids.pop(list(np.where(np.array(guids) == uid)[0])[0])
                 print("The bad uid is: %s" % uid)
         else:
             guids.pop(list(np.where(np.array(guids) == uid)[0])[0])
-            buids.append(uid)
+            builds.append(uid)
             print("The bad uid is: %s" % uid)
-    print("The total and bad uids number are %s and %s, repsectively." % (len(uids), len(buids)))
-    return guids, buids
+    print(
+        "The total and bad uids number are %s and %s, respectively."
+        % (len(uids), len(builds))
+    )
+    return guids, builds
 
 
 def find_uids(start_time, stop_time):
     """Y.G. Dec 22, 2016
-    A wrap funciton to find uids by giving start and end time
+    A wrap function to find uids by giving start and end time
     Return:
     sids: list, scan id
     uids: list, uid with 8 character length
@@ -2772,7 +2977,14 @@ def check_bad_data_points(
         fig = plt.figure()
         ax = fig.add_subplot(2, 1, 1)
         plot1D(d_, ax=ax, color="k", legend="data", legend_size=legend_size)
-        plot1D(pfit, ax=ax, color="b", legend="ploy-fit", title="Find Bad Points", legend_size=legend_size)
+        plot1D(
+            pfit,
+            ax=ax,
+            color="b",
+            legend="ploy-fit",
+            title="Find Bad Points",
+            legend_size=legend_size,
+        )
 
         ax2 = fig.add_subplot(2, 1, 2)
         plot1D(
@@ -2863,7 +3075,14 @@ def get_bad_frame_list(
         fig = plt.figure()
         ax = fig.add_subplot(2, 1, 1)
         plot1D(imgsum_, ax=ax, color="k", legend="data", legend_size=legend_size)
-        plot1D(pfit, ax=ax, color="b", legend="ploy-fit", title=uid + "_imgsum", legend_size=legend_size)
+        plot1D(
+            pfit,
+            ax=ax,
+            color="b",
+            legend="ploy-fit",
+            title=uid + "_imgsum",
+            legend_size=legend_size,
+        )
 
         ax2 = fig.add_subplot(2, 1, 2)
         plot1D(
@@ -2904,7 +3123,9 @@ def get_bad_frame_list(
             fp = path + "%s" % (uid) + "_imgsum_analysis" + ".png"
             plt.savefig(fp, dpi=fig.dpi)
 
-    bd2 = list(np.where(np.abs(data - data.mean()) > scale * data.std())[0] + good_start)
+    bd2 = list(
+        np.where(np.abs(data - data.mean()) > scale * data.std())[0] + good_start
+    )
 
     if return_ylim:
         return np.array(bd1 + bd2 + bd3), ymin, ymax
@@ -2980,7 +3201,7 @@ def get_meta_data(uid, default_dec="eiger", *argv, **kwargs):
         kwargs: overwrite the meta data, for example
             get_meta_data( uid = uid, sample = 'test') --> will overwrtie the meta's sample to test
     return:
-        meta data of the uid: a dictionay
+        meta data of the uid: a dictionary
         with keys:
             detector
             suid: the simple given uid
@@ -3044,8 +3265,12 @@ def get_meta_data(uid, default_dec="eiger", *argv, **kwargs):
     md.update(header.start.items())
 
     # print(header.start.time)
-    md["start_time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(header.start["time"]))
-    md["stop_time"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(header.stop["time"]))
+    md["start_time"] = time.strftime(
+        "%Y-%m-%d %H:%M:%S", time.localtime(header.start["time"])
+    )
+    md["stop_time"] = time.strftime(
+        "%Y-%m-%d %H:%M:%S", time.localtime(header.stop["time"])
+    )
     try:  # added: try to handle runs that don't contain image data
         if "primary" in header.v2:
             descriptor = header.v2["primary"].descriptors[0]
@@ -3094,11 +3319,18 @@ def get_max_countc(FD, labeled_array):
     if labeled_array.shape != (FD.md["ncols"], FD.md["nrows"]):
         raise ValueError(
             " `image` shape (%d, %d) in FD is not equal to the labeled_array shape (%d, %d)"
-            % (FD.md["ncols"], FD.md["nrows"], labeled_array.shape[0], labeled_array.shape[1])
+            % (
+                FD.md["ncols"],
+                FD.md["nrows"],
+                labeled_array.shape[0],
+                labeled_array.shape[1],
+            )
         )
 
     max_inten = 0
-    for i in tqdm(range(FD.beg, FD.end, 1), desc="Get max intensity of ROIs in all frames"):
+    for i in tqdm(
+        range(FD.beg, FD.end, 1), desc="Get max intensity of ROIs in all frames"
+    ):
         try:
             (p, v) = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
@@ -3121,7 +3353,7 @@ def create_polygon_mask(image, xcorners, ycorners):
 
 
     """
-    from skimage.draw import disk, line, line_aa, polygon
+    from skimage.draw import polygon
 
     imy, imx = image.shape
     bst_mask = np.zeros_like(image, dtype=bool)
@@ -3144,7 +3376,7 @@ def create_rectangle_mask(image, xcorners, ycorners):
 
 
     """
-    from skimage.draw import disk, line, line_aa, polygon
+    from skimage.draw import polygon
 
     imy, imx = image.shape
     bst_mask = np.zeros_like(image, dtype=bool)
@@ -3154,7 +3386,9 @@ def create_rectangle_mask(image, xcorners, ycorners):
     return bst_mask
 
 
-def create_multi_rotated_rectangle_mask(image, center=None, length=100, width=50, angles=[0]):
+def create_multi_rotated_rectangle_mask(
+    image, center=None, length=100, width=50, angles=[0]
+):
     """Developed at July 10, 2017 by Y.G.@CHX, NSLS2
      Create multi rectangle-shaped mask by rotating a rectangle with a list of angles
      The original rectangle is defined by four corners, i.e.,
@@ -3183,13 +3417,22 @@ def create_multi_rotated_rectangle_mask(image, center=None, length=100, width=50
     mask = np.zeros(image.shape, dtype=bool)
     wy = length
     wx = width
-    x = np.array([max(0, cx - wx // 2), min(imx, cx + wx // 2), min(imx, cx + wx // 2), max(0, cx - wx // 2)])
+    x = np.array(
+        [
+            max(0, cx - wx // 2),
+            min(imx, cx + wx // 2),
+            min(imx, cx + wx // 2),
+            max(0, cx - wx // 2),
+        ]
+    )
     y = np.array([cy, cy, min(imy, cy + wy), min(imy, cy + wy)])
     rr, cc = polygon(y, x, shape=image.shape)
     mask[rr, cc] = 1
     mask_rot = np.zeros(image.shape, dtype=bool)
     for angle in angles:
-        mask_rot += np.array(rotate(mask, angle, center=center), dtype=bool)  # , preserve_range=True)
+        mask_rot += np.array(
+            rotate(mask, angle, center=center), dtype=bool
+        )  # , preserve_range=True)
     return ~mask_rot
 
 
@@ -3199,7 +3442,7 @@ def create_wedge(image, center, radius, wcors, acute_angle=True):
     wcors: [ [x1,x2,x3...], [y1,y2,y3..]
 
     """
-    from skimage.draw import disk, line, line_aa, polygon
+    from skimage.draw import disk, polygon
 
     imy, imx = image.shape
     cy, cx = center
@@ -3223,12 +3466,19 @@ def create_wedge(image, center, radius, wcors, acute_angle=True):
 
 
 def create_cross_mask(
-    image, center, wy_left=4, wy_right=4, wx_up=4, wx_down=4, center_disk=True, center_radius=10
+    image,
+    center,
+    wy_left=4,
+    wy_right=4,
+    wx_up=4,
+    wx_down=4,
+    center_disk=True,
+    center_radius=10,
 ):
     """
     Give image and the beam center to create a cross-shaped mask
     wy_left: the width of left h-line
-    wy_right: the width of rigth h-line
+    wy_right: the width of right h-line
     wx_up: the width of up v-line
     wx_down: the width of down v-line
     center_disk: if True, create a disk with center and center_radius
@@ -3236,7 +3486,7 @@ def create_cross_mask(
     Return:
     the cross mask
     """
-    from skimage.draw import disk, line, line_aa, polygon
+    from skimage.draw import disk, polygon
 
     imy, imx = image.shape
     cx, cy = center
@@ -3292,7 +3542,10 @@ def generate_edge(centers, width):
 
 
 def export_scan_scalar(
-    uid, x="dcm_b", y=["xray_eye1_stats1_total"], path="/XF11ID/analysis/2016_3/commissioning/Results/"
+    uid,
+    x="dcm_b",
+    y=["xray_eye1_stats1_total"],
+    path="/XF11ID/analysis/2016_3/commissioning/Results/",
 ):
     """YG. 10/17/2016
     export uid data to a txt file
@@ -3397,14 +3650,21 @@ def get_sid_filenames(hdr, verbose=False):
     )  # looking for (eiger) datafile at the path specified in metadata
     if len(ret[2]) == 0:
         if verbose:
-            print('could not find detector filename from "data_path" in metadata: %s' % start_doc["data path"])
+            print(
+                'could not find detector filename from "data_path" in metadata: %s'
+                % start_doc["data path"]
+            )
     else:
         if verbose:
             print('Found detector filename from "data_path" in metadata!')
         success = True
 
-    if not success:  # looking at path in metadata, but taking the date from the run start document
-        data_path = start_doc["data path"][:-11] + strftime("%Y/%m/%d/", localtime(start_doc["time"]))
+    if (
+        not success
+    ):  # looking at path in metadata, but taking the date from the run start document
+        data_path = start_doc["data path"][:-11] + strftime(
+            "%Y/%m/%d/", localtime(start_doc["time"])
+        )
         ret = (
             start_doc["scan_id"],
             start_doc["uid"],
@@ -3418,10 +3678,10 @@ def get_sid_filenames(hdr, verbose=False):
                 print("Found detector filename in %s" % data_path)
             success = True
 
-    if (
-        not success
-    ):  # looking at path in metadata, but taking the date from the run stop document (in case the date rolled over between creating the start doc and staging the detector)
-        data_path = start_doc["data path"][:-11] + strftime("%Y/%m/%d/", localtime(stop_doc["time"]))
+    if not success:  # looking at path in metadata, but taking the date from the run stop document (in case the date rolled over between creating the start doc and staging the detector)
+        data_path = start_doc["data path"][:-11] + strftime(
+            "%Y/%m/%d/", localtime(stop_doc["time"])
+        )
         ret = (
             start_doc["scan_id"],
             start_doc["uid"],
@@ -3439,7 +3699,7 @@ def get_sid_filenames(hdr, verbose=False):
 
 # def get_sid_filenames(header):
 #     """YG. Dev Jan, 2016
-#     Get a bluesky scan_id, unique_id, filename by giveing uid
+#     Get a bluesky scan_id, unique_id, filename by giving uid
 
 #     Parameters
 #     ----------
@@ -3449,9 +3709,9 @@ def get_sid_filenames(hdr, verbose=False):
 #     -------
 #     scan_id: integer
 #     unique_id: string, a full string of a uid
-#     filename: sring
+#     filename: string
 
-#     Usuage:
+#     Usage:
 #     sid,uid, filenames   = get_sid_filenames(db[uid])
 
 #     """
@@ -3513,7 +3773,11 @@ def load_dask_data(uid, detector, mask_path_full, reverse=False, rot90=False):
     img_md = {}
     for k in list(img_md_dict.keys()):
         img_md[k] = hdr.config_data(det)["primary"][0]["%s_%s" % (det, img_md_dict[k])]
-    if detector in ["eiger4m_single_image", "eiger1m_single_image", "eiger500K_single_image"]:
+    if detector in [
+        "eiger4m_single_image",
+        "eiger1m_single_image",
+        "eiger500K_single_image",
+    ]:
         img_md.update({"y_pixel_size": 7.5e-05, "x_pixel_size": 7.5e-05})
         got_pixel_mask = True
     else:
@@ -3522,7 +3786,9 @@ def load_dask_data(uid, detector, mask_path_full, reverse=False, rot90=False):
     # load pixel mask from static location
     if got_pixel_mask:
         # json_open = open(_mask_path_ + "pixel_masks/pixel_mask_compression_%s.json" % detector.split("_")[0])
-        json_open = open(mask_path_full + "pixel_mask_compression_%s.json" % detector.split("_")[0])
+        json_open = open(
+            mask_path_full + "pixel_mask_compression_%s.json" % detector.split("_")[0]
+        )
         mask_dict = json.load(json_open)
         img_md["pixel_mask"] = np.array(mask_dict["pixel_mask"])
         img_md["binary_mask"] = np.array(mask_dict["binary_mask"])
@@ -3537,8 +3803,10 @@ def load_dask_data(uid, detector, mask_path_full, reverse=False, rot90=False):
     return dimg, img_md
 
 
-def load_data(uid, detector="eiger4m_single_image", fill=True, reverse=False, rot90=False):
-    """load bluesky scan data by giveing uid and detector
+def load_data(
+    uid, detector="eiger4m_single_image", fill=True, reverse=False, rot90=False
+):
+    """load bluesky scan data by giving uid and detector
 
     Parameters
     ----------
@@ -3552,7 +3820,7 @@ def load_data(uid, detector="eiger4m_single_image", fill=True, reverse=False, ro
     image data: a pims frames series
     if not success read the uid, will return image data as 0
 
-    Usuage:
+    Usage:
     imgs = load_data( uid, detector  )
     md = imgs.md
     """
@@ -3597,7 +3865,7 @@ def load_data(uid, detector="eiger4m_single_image", fill=True, reverse=False, ro
 
 def mask_badpixels(mask, detector):
     """
-    Mask known bad pixel from the giveing mask
+    Mask known bad pixel from the giving mask
 
     """
     if detector == "eiger1m_single_image":
@@ -3622,7 +3890,7 @@ def mask_badpixels(mask, detector):
 
 
 def load_data2(uid, detector="eiger4m_single_image"):
-    """load bluesky scan data by giveing uid and detector
+    """load bluesky scan data by giving uid and detector
 
     Parameters
     ----------
@@ -3634,7 +3902,7 @@ def load_data2(uid, detector="eiger4m_single_image"):
     image data: a pims frames series
     if not success read the uid, will return image data as 0
 
-    Usuage:
+    Usage:
     imgs = load_data( uid, detector  )
     md = imgs.md
     """
@@ -3650,7 +3918,7 @@ def load_data2(uid, detector="eiger4m_single_image"):
 
     if flag:
         print("Can't Load Data!")
-        uid = "00000"  # in case of failling load data
+        uid = "00000"  # in case of failing load data
         imgs = 0
     else:
         imgs = ev["data"][detector]
@@ -3684,7 +3952,9 @@ def pload_obj(filename):
         return pickle.load(f)
 
 
-def load_mask(path, mask_name, plot_=False, reverse=False, rot90=False, *argv, **kwargs):
+def load_mask(
+    path, mask_name, plot_=False, reverse=False, rot90=False, *argv, **kwargs
+):
     """load a mask file
     the mask is a numpy binary file (.npy)
 
@@ -3692,14 +3962,14 @@ def load_mask(path, mask_name, plot_=False, reverse=False, rot90=False, *argv, *
     ----------
     path: the path of the mask file
     mask_name: the name of the mask file
-    plot_: a boolen type
+    plot_: a boolean type
     reverse: if True, reverse the image upside down to match the "real" image geometry (should always be True in the future)
     Returns
     -------
     mask: array
     if plot_ =True, will show the mask
 
-    Usuage:
+    Usage:
     mask = load_mask( path, mask_name, plot_ =  True )
     """
 
@@ -3714,7 +3984,9 @@ def load_mask(path, mask_name, plot_=False, reverse=False, rot90=False, *argv, *
     return mask
 
 
-def create_hot_pixel_mask(img, threshold, center=None, center_radius=300, outer_radius=0):
+def create_hot_pixel_mask(
+    img, threshold, center=None, center_radius=300, outer_radius=0
+):
     """create a hot pixel mask by giving threshold
     Input:
         img: the image to create hot pixel mask
@@ -3867,7 +4139,13 @@ def show_img(
             )  # vmin=0,vmax=1,
         else:
             im = ax.imshow(
-                image, origin=origin, cmap=cmap, interpolation=interpolation, vmin=vmin, vmax=vmax, extent=extent
+                image,
+                origin=origin,
+                cmap=cmap,
+                interpolation=interpolation,
+                vmin=vmin,
+                vmax=vmax,
+                extent=extent,
             )  # vmin=0,vmax=1,
     else:
         if not use_mat_imshow:
@@ -3890,7 +4168,9 @@ def show_img(
                 extent=extent,
             )
     if label_array != None:
-        im2 = show_label_array(ax, label_array, alpha=alpha, cmap=cmap, interpolation=interpolation)
+        im2 = show_label_array(
+            ax, label_array, alpha=alpha, cmap=cmap, interpolation=interpolation
+        )
 
     ax.set_title(image_name)
     if xlim != None:
@@ -3902,7 +4182,6 @@ def show_img(
         ax.set_yticks([])
         ax.set_xticks([])
     else:
-
         ax.tick_params(axis="both", which="major", labelsize=tick_size)
         ax.tick_params(axis="both", which="minor", labelsize=tick_size)
         # mpl.rcParams['xtick.labelsize'] = tick_size
@@ -3922,13 +4201,21 @@ def show_img(
         ax.set_aspect(aspect="auto")
 
     if show_colorbar:
-        cbar = fig.colorbar(im, extend="neither", spacing="proportional", orientation="vertical")
+        cbar = fig.colorbar(
+            im, extend="neither", spacing="proportional", orientation="vertical"
+        )
         cbar.ax.tick_params(labelsize=colorbar_fontsize)
     fig.set_tight_layout(tight)
     if save:
         if show_time:
             dt = datetime.now()
-            CurTime = "_%s%02d%02d-%02d%02d-" % (dt.year, dt.month, dt.day, dt.hour, dt.minute)
+            CurTime = "_%s%02d%02d-%02d%02d-" % (
+                dt.year,
+                dt.month,
+                dt.day,
+                dt.hour,
+                dt.minute,
+            )
             fp = path + "%s" % (file_name) + CurTime + "." + save_format
         else:
             fp = path + "%s" % (image_name) + "." + save_format
@@ -3963,7 +4250,7 @@ def plot1D(
     ----------
     y: column-y
     x: column-x, by default x=None, the plot will use index of y as x-axis
-    the other paramaters are defined same as plt.plot
+    the other parameters are defined same as plt.plot
     Returns
     -------
     None
@@ -4079,7 +4366,9 @@ def plot1D(
 ###
 
 
-def check_shutter_open(data_series, min_inten=0, time_edge=[0, 10], plot_=False, *argv, **kwargs):
+def check_shutter_open(
+    data_series, min_inten=0, time_edge=[0, 10], plot_=False, *argv, **kwargs
+):
     """Check the first frame with shutter open
 
     Parameters
@@ -4091,11 +4380,13 @@ def check_shutter_open(data_series, min_inten=0, time_edge=[0, 10], plot_=False,
     return:
     shutter_open_frame: a integer, the first frame number with open shutter
 
-    Usuage:
+    Usage:
     good_start = check_shutter_open( imgsa,  min_inten=5, time_edge = [0,20], plot_ = False )
 
     """
-    imgsum = np.array([np.sum(img) for img in data_series[time_edge[0] : time_edge[1] : 1]])
+    imgsum = np.array(
+        [np.sum(img) for img in data_series[time_edge[0] : time_edge[1] : 1]]
+    )
     if plot_:
         fig, ax = plt.subplots()
         ax.plot(imgsum, "bo")
@@ -4109,18 +4400,26 @@ def check_shutter_open(data_series, min_inten=0, time_edge=[0, 10], plot_=False,
 
 
 def get_each_frame_intensity(
-    data_series, sampling=50, bad_pixel_threshold=1e10, plot_=False, save=False, *argv, **kwargs
+    data_series,
+    sampling=50,
+    bad_pixel_threshold=1e10,
+    plot_=False,
+    save=False,
+    *argv,
+    **kwargs,
 ):
     """Get the total intensity of each frame by sampling every N frames
     Also get bad_frame_list by check whether above  bad_pixel_threshold
 
-    Usuage:
+    Usage:
     imgsum, bad_frame_list = get_each_frame_intensity(good_series ,sampling = 1000,
                              bad_pixel_threshold=1e10,  plot_ = True)
     """
 
     # print ( argv, kwargs )
-    imgsum = np.array([np.sum(img) for img in tqdm(data_series[::sampling], leave=True)])
+    imgsum = np.array(
+        [np.sum(img) for img in tqdm(data_series[::sampling], leave=True)]
+    )
     if plot_:
         uid = "uid"
         if "uid" in kwargs.keys():
@@ -4184,7 +4483,9 @@ def create_time_slice(N, slice_num, slice_width, edges=None):
     return np.array(time_edge)
 
 
-def show_label_array(ax, label_array, cmap=None, aspect=None, interpolation="nearest", **kwargs):
+def show_label_array(
+    ax, label_array, cmap=None, aspect=None, interpolation="nearest", **kwargs
+):
     """
     YG. Sep 26, 2017
     Modified show_label_array(ax, label_array, cmap=None, **kwargs)
@@ -4212,7 +4513,9 @@ def show_label_array(ax, label_array, cmap=None, aspect=None, interpolation="nea
     _cmap = copy.copy((mcm.get_cmap(cmap)))
     _cmap.set_under("w", 0)
     vmin = max(0.5, kwargs.pop("vmin", 0.5))
-    im = ax.imshow(label_array, cmap=cmap, interpolation=interpolation, vmin=vmin, **kwargs)
+    im = ax.imshow(
+        label_array, cmap=cmap, interpolation=interpolation, vmin=vmin, **kwargs
+    )
     if aspect == None:
         ax.set_aspect(aspect="auto")
         # ax.set_aspect('equal')
@@ -4264,10 +4567,21 @@ def show_label_array_on_image(
     # print (vmin, vmax )
     if log_img:
         im = ax.imshow(
-            image, cmap=imshow_cmap, interpolation="none", norm=LogNorm(vmin, vmax), **kwargs
+            image,
+            cmap=imshow_cmap,
+            interpolation="none",
+            norm=LogNorm(vmin, vmax),
+            **kwargs,
         )  # norm=norm,
     else:
-        im = ax.imshow(image, cmap=imshow_cmap, interpolation="none", vmin=vmin, vmax=vmax, **kwargs)  # norm=norm,
+        im = ax.imshow(
+            image,
+            cmap=imshow_cmap,
+            interpolation="none",
+            vmin=vmin,
+            vmax=vmax,
+            **kwargs,
+        )  # norm=norm,
 
     im_label = mpl_plot.show_label_array(
         ax, label_array, cmap=cmap, vmin=vmin, vmax=vmax, alpha=alpha, **kwargs
@@ -4375,10 +4689,42 @@ def show_ROI_on_image(
             # print (xval, y)
             axes.text(x_val, y_val, c, color="b", va="center", ha="center")
     if show_ang_cor:
-        axes.text(-0.0, 0.5, "-/+180" + r"$^0$", color="r", va="center", ha="center", transform=axes.transAxes)
-        axes.text(1.0, 0.5, "0" + r"$^0$", color="r", va="center", ha="center", transform=axes.transAxes)
-        axes.text(0.5, -0.0, "-90" + r"$^0$", color="r", va="center", ha="center", transform=axes.transAxes)
-        axes.text(0.5, 1.0, "90" + r"$^0$", color="r", va="center", ha="center", transform=axes.transAxes)
+        axes.text(
+            -0.0,
+            0.5,
+            "-/+180" + r"$^0$",
+            color="r",
+            va="center",
+            ha="center",
+            transform=axes.transAxes,
+        )
+        axes.text(
+            1.0,
+            0.5,
+            "0" + r"$^0$",
+            color="r",
+            va="center",
+            ha="center",
+            transform=axes.transAxes,
+        )
+        axes.text(
+            0.5,
+            -0.0,
+            "-90" + r"$^0$",
+            color="r",
+            va="center",
+            ha="center",
+            transform=axes.transAxes,
+        )
+        axes.text(
+            0.5,
+            1.0,
+            "90" + r"$^0$",
+            color="r",
+            va="center",
+            ha="center",
+            transform=axes.transAxes,
+        )
 
     axes.set_aspect(aspect)
     # fig.colorbar(im_label)
@@ -4395,7 +4741,7 @@ def show_ROI_on_image(
 
 def crop_image(image, crop_mask):
     """Crop the non_zeros pixels of an image  to a new image"""
-    from skimage.util import crop, pad
+    from skimage.util import crop
 
     pxlst = np.where(crop_mask.ravel())[0]
     dims = crop_mask.shape
@@ -4411,11 +4757,25 @@ def crop_image(image, crop_mask):
     maxpixelx = np.max(pixelx)
     maxpixely = np.max(pixely)
     crops = crop_mask * image
-    img_crop = crop(crops, ((minpixelx, imgwidthx - maxpixelx - 1), (minpixely, imgwidthy - maxpixely - 1)))
+    img_crop = crop(
+        crops,
+        (
+            (minpixelx, imgwidthx - maxpixelx - 1),
+            (minpixely, imgwidthy - maxpixely - 1),
+        ),
+    )
     return img_crop
 
 
-def get_avg_img(data_series, img_samp_index=None, sampling=100, plot_=False, save=False, *argv, **kwargs):
+def get_avg_img(
+    data_series,
+    img_samp_index=None,
+    sampling=100,
+    plot_=False,
+    save=False,
+    *argv,
+    **kwargs,
+):
     """Get average imagef from a data_series by every sampling number to save time"""
     if img_samp_index == None:
         avg_img = np.average(data_series[::sampling], axis=0)
@@ -4433,7 +4793,9 @@ def get_avg_img(data_series, img_samp_index=None, sampling=100, plot_=False, sav
         if "uid" in kwargs.keys():
             uid = kwargs["uid"]
 
-        im = ax.imshow(avg_img, cmap="viridis", origin="lower", norm=LogNorm(vmin=0.001, vmax=1e2))
+        im = ax.imshow(
+            avg_img, cmap="viridis", origin="lower", norm=LogNorm(vmin=0.001, vmax=1e2)
+        )
         # ax.set_title("Masked Averaged Image")
         ax.set_title("uid= %s--Masked Averaged Image" % uid)
         fig.colorbar(im)
@@ -4454,7 +4816,9 @@ def get_avg_img(data_series, img_samp_index=None, sampling=100, plot_=False, sav
     return avg_img
 
 
-def check_ROI_intensity(avg_img, ring_mask, ring_number=3, save=False, plot=True, *argv, **kwargs):
+def check_ROI_intensity(
+    avg_img, ring_mask, ring_number=3, save=False, plot=True, *argv, **kwargs
+):
     """plot intensity versus pixel of a ring
     Parameters
     ----------
@@ -4499,7 +4863,15 @@ def check_ROI_intensity(avg_img, ring_mask, ring_number=3, save=False, plot=True
 # from tqdm import tqdm
 
 
-def cal_g2(image_series, ring_mask, bad_image_process, bad_frame_list=None, good_start=0, num_buf=8, num_lev=None):
+def cal_g2(
+    image_series,
+    ring_mask,
+    bad_image_process,
+    bad_frame_list=None,
+    good_start=0,
+    num_buf=8,
+    num_lev=None,
+):
     """calculation g2 by using a multi-tau algorithm"""
 
     noframes = len(image_series)  # number of frames, not "no frames"
@@ -4513,20 +4885,29 @@ def cal_g2(image_series, ring_mask, bad_image_process, bad_frame_list=None, good
 
         if num_lev == None:
             num_lev = int(np.log(noframes / (num_buf - 1)) / np.log(2) + 1) + 1
-        print("In this g2 calculation, the buf and lev number are: %s--%s--" % (num_buf, num_lev))
+        print(
+            "In this g2 calculation, the buf and lev number are: %s--%s--"
+            % (num_buf, num_lev)
+        )
         print("%s frames will be processed..." % (noframes))
         print("Bad Frames involved!")
 
-        g2, lag_steps = corr.multi_tau_auto_corr(num_lev, num_buf, ring_mask, tqdm(new_imgs))
+        g2, lag_steps = corr.multi_tau_auto_corr(
+            num_lev, num_buf, ring_mask, tqdm(new_imgs)
+        )
         print("G2 calculation DONE!")
 
     else:
-
         if num_lev == None:
             num_lev = int(np.log(noframes / (num_buf - 1)) / np.log(2) + 1) + 1
-        print("In this g2 calculation, the buf and lev number are: %s--%s--" % (num_buf, num_lev))
+        print(
+            "In this g2 calculation, the buf and lev number are: %s--%s--"
+            % (num_buf, num_lev)
+        )
         print("%s frames will be processed..." % (noframes))
-        g2, lag_steps = corr.multi_tau_auto_corr(num_lev, num_buf, ring_mask, tqdm(image_series))
+        g2, lag_steps = corr.multi_tau_auto_corr(
+            num_lev, num_buf, ring_mask, tqdm(image_series)
+        )
         print("G2 calculation DONE!")
 
     return g2, lag_steps
@@ -4561,13 +4942,12 @@ def trans_data_to_pd(data, label=None, dtype="array"):
     convert data into pandas.DataFrame
     Input:
         data: list or np.array
-        label: the coloum label of the data
+        label: the column label of the data
         dtype: list or array [[NOT WORK or dict (for dict only save the scalar not arrays values)]]
     Output:
         a pandas.DataFrame
     """
     # lists a [ list1, list2...] all the list have the same length
-    import sys
 
     import pandas as pd
     from numpy import arange, array
@@ -4579,7 +4959,7 @@ def trans_data_to_pd(data, label=None, dtype="array"):
         data = array(data)
         N, M = data.shape
     else:
-        print("Wrong data type! Now only support 'list' and 'array' tpye")
+        print("Wrong data type! Now only support 'list' and 'array' type")
 
     index = arange(N)
     if label == None:
@@ -4589,7 +4969,9 @@ def trans_data_to_pd(data, label=None, dtype="array"):
     return df
 
 
-def save_lists(data, label=None, filename=None, path=None, return_res=False, verbose=False):
+def save_lists(
+    data, label=None, filename=None, path=None, return_res=False, verbose=False
+):
     """
     save_lists( data, label=None,  filename=None, path=None)
 
@@ -4650,7 +5032,15 @@ def get_pos_val_overlap(p1, v1, p2, v2, Nl):
     return v1[w1], v2[w2]
 
 
-def save_arrays(data, label=None, dtype="array", filename=None, path=None, return_res=False, verbose=False):
+def save_arrays(
+    data,
+    label=None,
+    dtype="array",
+    filename=None,
+    path=None,
+    return_res=False,
+    verbose=False,
+):
     """
     July 10, 2016, Y.G.@CHX
     save_arrays( data, label=None, dtype='array', filename=None, path=None):
@@ -4685,13 +5075,13 @@ def save_arrays(data, label=None, dtype="array", filename=None, path=None, retur
 
 def cal_particle_g2(radius, viscosity, qr, taus, beta=0.2, T=298):
     """YG Dev Nov 20, 2017@CHX
-    calculate particle g2 fucntion by giving particle radius, Q , and solution viscosity using a simple
+    calculate particle g2 function by giving particle radius, Q , and solution viscosity using a simple
     exponetional model
     Input:
         radius: m
         qr, list, in A-1
         visocity: N*s/m^2  (water at 25K = 8.9*10^(-4) )
-        T: temperture, in K
+        T: temperature, in K
         e.g., for a 250 nm sphere in glycerol/water (90:10) at RT (298K) gives:
          1.38064852*10**(-123)*298 / ( 6*np.pi * 0.20871 * 250 *10**(-9)) * 10**20 /1e5 = 4.18*10**5 A2/s
         taus: time
@@ -4704,7 +5094,9 @@ def cal_particle_g2(radius, viscosity, qr, taus, beta=0.2, T=298):
     g2_q1 = np.zeros(len(qr), dtype=object)
     for i, q1 in enumerate(qr):
         relaxation_rate = D0 * q1**2
-        g2_q1[i] = simple_exponential(taus, beta=beta, relaxation_rate=relaxation_rate, baseline=1)
+        g2_q1[i] = simple_exponential(
+            taus, beta=beta, relaxation_rate=relaxation_rate, baseline=1
+        )
     return g2_q1
 
 
@@ -4837,7 +5229,7 @@ def ring_edges(inner_radius, width, spacing=0, num_rings=None):
     # spacing_is_list = isinstance(spacing, collections.Iterable)
     if width_is_list and spacing_is_list:
         if len(width) != len(spacing) + 1:
-            raise ValueError("List of spacings must be one less than list " "of widths.")
+            raise ValueError("List of spacings must be one less than list of widths.")
     if num_rings == None:
         try:
             num_rings = len(width)
@@ -4857,7 +5249,7 @@ def ring_edges(inner_radius, width, spacing=0, num_rings=None):
         if spacing_is_list:
             if num_rings - 1 != len(spacing):
                 raise ValueError("num_rings does not match spacing list")
-    # Now regularlize the input.
+    # Now regularize the input.
     if not width_is_list:
         width = np.ones(num_rings) * width
 
@@ -4920,7 +5312,10 @@ def get_non_uniform_edges(
         width = np.ones_like(centers) * width
     for i, c in enumerate(centers):
         edges[i * number_rings : (i + 1) * number_rings, :] = ring_edges(
-            inner_radius=c - width[i] * number_rings / 2, width=width[i], spacing=spacing, num_rings=number_rings
+            inner_radius=c - width[i] * number_rings / 2,
+            width=width[i],
+            spacing=spacing,
+            num_rings=number_rings,
         )
     return edges
 
@@ -4932,7 +5327,6 @@ def trans_tf_to_td(tf, dtype="dframe"):
     from datetime import datetime
 
     import numpy as np
-    import pandas as pd
 
     """translate time.float to time.date,
        td.type dframe: a dataframe
@@ -5043,7 +5437,9 @@ def get_averaged_data_from_multi_res(
             if D != 3:
                 keystr_average[sk[i] : sk[i + 1]] /= avg_count[sk[i + 1]]
             else:
-                keystr_average[sk[i] : sk[i + 1], sk[i] : sk[i + 1], :] /= avg_count[sk[i + 1]]
+                keystr_average[sk[i] : sk[i + 1], sk[i] : sk[i + 1], :] /= avg_count[
+                    sk[i + 1]
+                ]
 
     return keystr_average
 
@@ -5082,7 +5478,9 @@ def save_g2_general(g2, taus, qr=None, qz=None, uid="uid", path=None, return_res
     # filename += '-uid=%s.csv' % (uid)
     filename1 = os.path.join(path, filename)
     df.to_csv(filename1)
-    print("The correlation function is saved in %s with filename as %s" % (path, filename))
+    print(
+        "The correlation function is saved in %s with filename as %s" % (path, filename)
+    )
     if return_res:
         return df
 
@@ -5101,17 +5499,35 @@ def simple_exponential(x, beta, relaxation_rate, baseline=1):
 
 
 def simple_exponential_with_vibration(x, beta, relaxation_rate, freq, amp, baseline=1):
-    return beta * (1 + amp * np.cos(2 * np.pi * freq * x)) * np.exp(-2 * relaxation_rate * x) + baseline
+    return (
+        beta
+        * (1 + amp * np.cos(2 * np.pi * freq * x))
+        * np.exp(-2 * relaxation_rate * x)
+        + baseline
+    )
 
 
-def stretched_auto_corr_scat_factor_with_vibration(x, beta, relaxation_rate, alpha, freq, amp, baseline=1):
-    return beta * (1 + amp * np.cos(2 * np.pi * freq * x)) * np.exp(-2 * (relaxation_rate * x) ** alpha) + baseline
+def stretched_auto_corr_scat_factor_with_vibration(
+    x, beta, relaxation_rate, alpha, freq, amp, baseline=1
+):
+    return (
+        beta
+        * (1 + amp * np.cos(2 * np.pi * freq * x))
+        * np.exp(-2 * (relaxation_rate * x) ** alpha)
+        + baseline
+    )
 
 
-def flow_para_function_with_vibration(x, beta, relaxation_rate, flow_velocity, freq, amp, baseline=1):
+def flow_para_function_with_vibration(
+    x, beta, relaxation_rate, flow_velocity, freq, amp, baseline=1
+):
     vibration_part = 1 + amp * np.cos(2 * np.pi * freq * x)
     Diff_part = np.exp(-2 * relaxation_rate * x)
-    Flow_part = np.pi**2 / (16 * x * flow_velocity) * abs(erf(np.sqrt(4 / np.pi * 1j * x * flow_velocity))) ** 2
+    Flow_part = (
+        np.pi**2
+        / (16 * x * flow_velocity)
+        * abs(erf(np.sqrt(4 / np.pi * 1j * x * flow_velocity))) ** 2
+    )
     return beta * vibration_part * Diff_part * Flow_part + baseline
 
 
@@ -5119,11 +5535,17 @@ def flow_para_function(x, beta, relaxation_rate, flow_velocity, baseline=1):
     """flow_velocity: q.v (q vector dot v vector = q*v*cos(angle) )"""
 
     Diff_part = np.exp(-2 * relaxation_rate * x)
-    Flow_part = np.pi**2 / (16 * x * flow_velocity) * abs(erf(np.sqrt(4 / np.pi * 1j * x * flow_velocity))) ** 2
+    Flow_part = (
+        np.pi**2
+        / (16 * x * flow_velocity)
+        * abs(erf(np.sqrt(4 / np.pi * 1j * x * flow_velocity))) ** 2
+    )
     return beta * Diff_part * Flow_part + baseline
 
 
-def flow_para_function_explicitq(x, beta, diffusion, flow_velocity, alpha=1, baseline=1, qr=1, q_ang=0):
+def flow_para_function_explicitq(
+    x, beta, diffusion, flow_velocity, alpha=1, baseline=1, qr=1, q_ang=0
+):
     """Nov 9, 2017 Basically, make q vector to (qr, angle),
     ###relaxation_rate is actually a diffusion rate
     flow_velocity: q.v (q vector dot v vector = q*v*cos(angle) )
@@ -5138,7 +5560,14 @@ def flow_para_function_explicitq(x, beta, diffusion, flow_velocity, alpha=1, bas
             Flow_part = (
                 np.pi**2
                 / (16 * x * flow_velocity * qr * abs(np.cos(q_ang)))
-                * abs(erf(np.sqrt(4 / np.pi * 1j * x * flow_velocity * qr * abs(np.cos(q_ang))))) ** 2
+                * abs(
+                    erf(
+                        np.sqrt(
+                            4 / np.pi * 1j * x * flow_velocity * qr * abs(np.cos(q_ang))
+                        )
+                    )
+                )
+                ** 2
             )
         else:
             Flow_part = 1
@@ -5152,32 +5581,53 @@ def get_flow_velocity(average_velocity, shape_factor):
     return average_velocity * (1 - shape_factor) / (1 + shape_factor)
 
 
-def stretched_flow_para_function(x, beta, relaxation_rate, alpha, flow_velocity, baseline=1):
+def stretched_flow_para_function(
+    x, beta, relaxation_rate, alpha, flow_velocity, baseline=1
+):
     """
     flow_velocity: q.v (q vector dot v vector = q*v*cos(angle) )
     """
     Diff_part = np.exp(-2 * (relaxation_rate * x) ** alpha)
-    Flow_part = np.pi**2 / (16 * x * flow_velocity) * abs(erf(np.sqrt(4 / np.pi * 1j * x * flow_velocity))) ** 2
+    Flow_part = (
+        np.pi**2
+        / (16 * x * flow_velocity)
+        * abs(erf(np.sqrt(4 / np.pi * 1j * x * flow_velocity))) ** 2
+    )
     return beta * Diff_part * Flow_part + baseline
 
 
 def get_g2_fit_general_two_steps(
-    g2, taus, function="simple_exponential", second_fit_range=[0, 20], sequential_fit=False, *argv, **kwargs
+    g2,
+    taus,
+    function="simple_exponential",
+    second_fit_range=[0, 20],
+    sequential_fit=False,
+    *argv,
+    **kwargs,
 ):
     """
     Fit g2 in two steps,
     i)  Using the "function" to fit whole g2 to get baseline and beta (contrast)
     ii) Then using the obtained baseline and beta to fit g2 in a "second_fit_range" by using simple_exponential function
     """
-    g2_fit_result, taus_fit, g2_fit = get_g2_fit_general(g2, taus, function, sequential_fit, *argv, **kwargs)
+    g2_fit_result, taus_fit, g2_fit = get_g2_fit_general(
+        g2, taus, function, sequential_fit, *argv, **kwargs
+    )
     guess_values = {}
     for k in list(g2_fit_result[0].params.keys()):
-        guess_values[k] = np.array([g2_fit_result[i].params[k].value for i in range(g2.shape[1])])
+        guess_values[k] = np.array(
+            [g2_fit_result[i].params[k].value for i in range(g2.shape[1])]
+        )
 
     if "guess_limits" in kwargs:
         guess_limits = kwargs["guess_limits"]
     else:
-        guess_limits = dict(baseline=[1, 1.8], alpha=[0, 2], beta=[0.0, 1], relaxation_rate=[0.001, 10000])
+        guess_limits = dict(
+            baseline=[1, 1.8],
+            alpha=[0, 2],
+            beta=[0.0, 1],
+            relaxation_rate=[0.001, 10000],
+        )
 
     g2_fit_result, taus_fit, g2_fit = get_g2_fit_general(
         g2,
@@ -5185,7 +5635,12 @@ def get_g2_fit_general_two_steps(
         function="simple_exponential",
         sequential_fit=sequential_fit,
         fit_range=second_fit_range,
-        fit_variables={"baseline": False, "beta": False, "alpha": False, "relaxation_rate": True},
+        fit_variables={
+            "baseline": False,
+            "beta": False,
+            "alpha": False,
+            "relaxation_rate": True,
+        },
         guess_values=guess_values,
         guess_limits=guess_limits,
     )
@@ -5194,7 +5649,14 @@ def get_g2_fit_general_two_steps(
 
 
 def get_g2_fit_general(
-    g2, taus, function="simple_exponential", sequential_fit=False, qval_dict=None, ang_init=90, *argv, **kwargs
+    g2,
+    taus,
+    function="simple_exponential",
+    sequential_fit=False,
+    qval_dict=None,
+    ang_init=90,
+    *argv,
+    **kwargs,
 ):
     """
     Nov 9, 2017, give qval_dict for using function of flow_para_function_explicitq
@@ -5215,9 +5677,9 @@ def get_g2_fit_general(
             supported function include:
                 'simple_exponential' (or 'simple'): fit by a simple exponential function, defined as
                         beta * np.exp(-2 * relaxation_rate * lags) + baseline
-                'streched_exponential'(or 'streched'): fit by a streched exponential function, defined as
+                'stretched_exponential'(or 'stretched'): fit by a stretched exponential function, defined as
                         beta * (   np.exp(  -2 * ( relaxation_rate * tau )**alpha ) + baseline
-                 'stretched_vibration':   fit by a streched exponential function with vibration, defined as
+                 'stretched_vibration':   fit by a stretched exponential function with vibration, defined as
                      beta * (1 + amp*np.cos(  2*np.pi*60* x) )* np.exp(-2 * (relaxation_rate * x)**alpha) + baseline
                  'flow_para_function' (or flow): fit by a flow function
 
@@ -5229,7 +5691,7 @@ def get_g2_fit_general(
                                     beta, relaxation_rate , alpha ,baseline
                                 values: a False or True, False for not vary
             'guess_values': a dict, for initial value of the fitting para,
-                            the defalut values are
+                            the default values are
                                 dict( beta=.1, alpha=1.0, relaxation_rate =0.005, baseline=1.0)
 
             'guess_limits': a dict, for the limits of the fittting para, for example:
@@ -5238,7 +5700,7 @@ def get_g2_fit_general(
                                 dict( baseline =[0.5, 2.5], alpha=[0, inf] ,beta = [0, 1], relaxation_rate= [0.0,1000]  )
     Returns
     -------
-    fit resutls: a instance in limfit
+    fit results: a instance in limfit
     tau_fit
     fit_data by the model, it has the q number of g2
 
@@ -5267,16 +5729,22 @@ def get_g2_fit_general(
         _vars = []
     if function == "simple_exponential" or function == "simple":
         _vars = np.unique(_vars + ["alpha"])
-        mod = Model(stretched_auto_corr_scat_factor)  # ,  independent_vars= list( _vars)   )
+        mod = Model(
+            stretched_auto_corr_scat_factor
+        )  # ,  independent_vars= list( _vars)   )
     elif function == "stretched_exponential" or function == "stretched":
         mod = Model(stretched_auto_corr_scat_factor)  # ,  independent_vars=  _vars)
     elif function == "stretched_vibration":
-        mod = Model(stretched_auto_corr_scat_factor_with_vibration)  # ,  independent_vars=  _vars)
+        mod = Model(
+            stretched_auto_corr_scat_factor_with_vibration
+        )  # ,  independent_vars=  _vars)
     elif function == "flow_para_function" or function == "flow_para":
         mod = Model(flow_para_function)  # ,  independent_vars=  _vars)
     elif function == "flow_para_function_explicitq" or function == "flow_para_qang":
         mod = Model(flow_para_function_explicitq)  # ,  independent_vars=  _vars)
-    elif function == "flow_para_function_with_vibration" or function == "flow_vibration":
+    elif (
+        function == "flow_para_function_with_vibration" or function == "flow_vibration"
+    ):
         mod = Model(flow_para_function_with_vibration)
 
     else:
@@ -5297,7 +5765,11 @@ def get_g2_fit_general(
         for k in list(guess_limits.keys()):
             mod.set_param_hint(k, min=guess_limits[k][0], max=guess_limits[k][1])
 
-    if function == "flow_para_function" or function == "flow_para" or function == "flow_vibration":
+    if (
+        function == "flow_para_function"
+        or function == "flow_para"
+        or function == "flow_vibration"
+    ):
         mod.set_param_hint("flow_velocity", min=0)
     if function == "flow_para_function_explicitq" or function == "flow_para_qang":
         mod.set_param_hint("flow_velocity", min=0)
@@ -5331,7 +5803,12 @@ def get_g2_fit_general(
         _alpha_ = _alpha[0]
     else:
         _alpha_ = _alpha
-    pars = mod.make_params(beta=_beta_, alpha=_alpha_, relaxation_rate=_relaxation_rate_, baseline=_baseline_)
+    pars = mod.make_params(
+        beta=_beta_,
+        alpha=_alpha_,
+        relaxation_rate=_relaxation_rate_,
+        baseline=_baseline_,
+    )
 
     if function == "flow_para_function" or function == "flow_para":
         _flow_velocity = _guess_val["flow_velocity"]
@@ -5374,7 +5851,12 @@ def get_g2_fit_general(
         _freq = _guess_val["freq"]
         _amp = _guess_val["amp"]
         pars = mod.make_params(
-            beta=_beta, alpha=_alpha, freq=_freq, amp=_amp, relaxation_rate=_relaxation_rate, baseline=_baseline
+            beta=_beta,
+            alpha=_alpha,
+            freq=_freq,
+            amp=_amp,
+            relaxation_rate=_relaxation_rate,
+            baseline=_baseline,
         )
 
     if function == "flow_vibration":
@@ -5435,9 +5917,10 @@ def get_g2_fit_general(
             # pars[k].value = _guess_val[k][i]
         if function == "flow_para_function_explicitq" or function == "flow_para_qang":
             if qval_dict == None:
-                print("Please provide qval_dict, a dict with qr and ang (in unit of degrees).")
+                print(
+                    "Please provide qval_dict, a dict with qr and ang (in unit of degrees)."
+                )
             else:
-
                 pars = mod.make_params(
                     beta=_beta_,
                     alpha=_alpha_,
@@ -5613,14 +6096,14 @@ def plot_g2_general(
     function:
         'simple_exponential': fit by a simple exponential function, defined as
                     beta * np.exp(-2 * relaxation_rate * lags) + baseline
-        'streched_exponential': fit by a streched exponential function, defined as
+        'stretched_exponential': fit by a stretched exponential function, defined as
                     beta * (np.exp(-2 * relaxation_rate * lags))**alpha + baseline
     geometry:
         'saxs':  a saxs with Qr partition
         'ang_saxs': a saxs with Qr and angular partition
         'gi_saxs': gisaxs with Qz, Qr
 
-    one_plot: if True, plot all images in one pannel
+    one_plot: if True, plot all images in one panel
     kwargs:
 
     Returns
@@ -5658,7 +6141,12 @@ def plot_g2_general(
             else:
                 fit_res_ = None
     else:
-        g2_dict_, taus_dict_, qval_dict_, fit_res_ = g2_dict, taus_dict, qval_dict, fit_res
+        g2_dict_, taus_dict_, qval_dict_, fit_res_ = (
+            g2_dict,
+            taus_dict,
+            qval_dict,
+            fit_res,
+        )
 
     (
         qr_label,
@@ -5713,12 +6201,16 @@ def plot_g2_general(
             if geometry == "ang_saxs":
                 title_short = "Angle= %.2f" % (short_ulabel[s_ind]) + r"$^\circ$"
             elif geometry == "gi_saxs":
-                title_short = r"$Q_z= $" + "%.4f" % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
+                title_short = (
+                    r"$Q_z= $" + "%.4f" % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
+                )
             else:
                 title_short = ""
         else:  # qr
             if geometry == "ang_saxs" or geometry == "gi_saxs":
-                title_short = r"$Q_r= $" + "%.5f  " % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
+                title_short = (
+                    r"$Q_r= $" + "%.5f  " % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
+                )
             else:
                 title_short = ""
         # print(geometry)
@@ -5766,35 +6258,49 @@ def plot_g2_general(
                 # ax = fig[fig_subnum].add_subplot(sx,sy, i + 1 - fig_subnum*max_plotnum_fig)
                 fig_subnum = i // max_plotnum_fig
                 # print(  i, sx,sy, fig_subnum, max_plotnum_fig, i + 1 - fig_subnum*max_plotnum_fig )
-                ax = fig[fig_subnum].add_subplot(sx, sy, i + 1 - fig_subnum * max_plotnum_fig)
+                ax = fig[fig_subnum].add_subplot(
+                    sx, sy, i + 1 - fig_subnum * max_plotnum_fig
+                )
 
             ax.set_ylabel(r"$%s$" % ylabel + "(" + r"$\tau$" + ")")
             ax.set_xlabel(r"$\tau $ $(s)$", fontsize=16)
             if master_plot == "qz" or master_plot == "angle":
                 if geometry != "gi_waxs":
-                    title_long = r"$Q_r= $" + "%.5f  " % (long_label[l_ind]) + r"$\AA^{-1}$"
+                    title_long = (
+                        r"$Q_r= $" + "%.5f  " % (long_label[l_ind]) + r"$\AA^{-1}$"
+                    )
                 else:
                     title_long = r"$Q_r= $" + "%i  " % (long_label[l_ind])
                 # print(  title_long,long_label,l_ind   )
             else:
                 if geometry == "ang_saxs":
                     # title_long = 'Ang= ' + '%.2f'%(  long_label[l_ind] ) + r'$^\circ$' + '( %d )'%(l_ind)
-                    title_long = "Ang= " + "%.2f" % (long_label[l_ind])  # + r'$^\circ$' + '( %d )'%(l_ind)
+                    title_long = (
+                        "Ang= " + "%.2f" % (long_label[l_ind])
+                    )  # + r'$^\circ$' + '( %d )'%(l_ind)
                 elif geometry == "gi_saxs":
-                    title_long = r"$Q_z= $" + "%.5f  " % (long_label[l_ind]) + r"$\AA^{-1}$"
+                    title_long = (
+                        r"$Q_z= $" + "%.5f  " % (long_label[l_ind]) + r"$\AA^{-1}$"
+                    )
                 else:
                     title_long = ""
             # print( master_plot )
             if master_plot != "qz":
                 ax.set_title(title_long + " (%s  )" % (1 + l_ind), y=1.1, fontsize=12)
             else:
-                ax.set_title(title_long + " (%s  )" % (1 + l_ind), y=1.05, fontsize=fontsize_sublabel)
+                ax.set_title(
+                    title_long + " (%s  )" % (1 + l_ind),
+                    y=1.05,
+                    fontsize=fontsize_sublabel,
+                )
                 # print( geometry )
                 # print( title_long )
                 if qth_interest != None:  # it might have a bug here, todolist!!!
                     lab = sorted(list(qval_dict_.keys()))
                     # print( lab, l_ind)
-                    ax.set_title(title_long + " (%s  )" % (lab[l_ind] + 1), y=1.05, fontsize=12)
+                    ax.set_title(
+                        title_long + " (%s  )" % (lab[l_ind] + 1), y=1.05, fontsize=12
+                    )
             for ki, k in enumerate(list(g2_dict_.keys())):
                 if ki == 0:
                     c = "b"
@@ -5836,22 +6342,46 @@ def plot_g2_general(
                             else:
                                 # print('here ki ={} nlst = {}'.format( ki, nlst ))
                                 if nlst == 0:
-                                    ax.semilogx(x, y, m, color=c, markersize=6, label=g2_labels[ki])
+                                    ax.semilogx(
+                                        x,
+                                        y,
+                                        m,
+                                        color=c,
+                                        markersize=6,
+                                        label=g2_labels[ki],
+                                    )
                                 else:
                                     ax.semilogx(x, y, m, color=c, markersize=6)
                         else:
                             yerr = g2_err_dict[k][nlst][:, l_ind]
                             if g2_labels == None:
-                                ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6)
+                                ax.errorbar(
+                                    x, y, yerr=yerr, fmt=m, color=c, markersize=6
+                                )
                             else:
                                 if nlst == 0:
-                                    ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6, label=g2_labels[ki])
+                                    ax.errorbar(
+                                        x,
+                                        y,
+                                        yerr=yerr,
+                                        fmt=m,
+                                        color=c,
+                                        markersize=6,
+                                        label=g2_labels[ki],
+                                    )
                                 else:
-                                    ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6)
+                                    ax.errorbar(
+                                        x, y, yerr=yerr, fmt=m, color=c, markersize=6
+                                    )
                             ax.set_xscale("log", nonposx="clip")
                         if nlst == 0:
                             if l_ind == 0:
-                                ax.legend(loc="best", fontsize=8, fancybox=True, framealpha=0.5)
+                                ax.legend(
+                                    loc="best",
+                                    fontsize=8,
+                                    fancybox=True,
+                                    framealpha=0.5,
+                                )
 
                 else:
                     y = g2_dict_[k][:, l_ind]
@@ -5862,7 +6392,9 @@ def plot_g2_general(
                         if g2_labels == None:
                             ax.semilogx(x, y, m, color=c, markersize=6)
                         else:
-                            ax.semilogx(x, y, m, color=c, markersize=6, label=g2_labels[ki])
+                            ax.semilogx(
+                                x, y, m, color=c, markersize=6, label=g2_labels[ki]
+                            )
                     else:
                         yerr = g2_err_dict[k][:, l_ind]
                         # print(x.shape, y.shape, yerr.shape)
@@ -5870,7 +6402,15 @@ def plot_g2_general(
                         if g2_labels == None:
                             ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6)
                         else:
-                            ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6, label=g2_labels[ki])
+                            ax.errorbar(
+                                x,
+                                y,
+                                yerr=yerr,
+                                fmt=m,
+                                color=c,
+                                markersize=6,
+                                label=g2_labels[ki],
+                            )
                         ax.set_xscale("log", nonposx="clip")
                     if l_ind == 0:
                         ax.legend(loc="best", fontsize=8, fancybox=True, framealpha=0.5)
@@ -5894,17 +6434,26 @@ def plot_g2_general(
                 elif function == "flow_vibration":
                     rate = result1.best_values["relaxation_rate"]
                     freq = result1.best_values["freq"]
-                if function == "flow_para_function" or function == "flow_para" or function == "flow_vibration":
+                if (
+                    function == "flow_para_function"
+                    or function == "flow_para"
+                    or function == "flow_vibration"
+                ):
                     rate = result1.best_values["relaxation_rate"]
                     flow = result1.best_values["flow_velocity"]
-                if function == "flow_para_function_explicitq" or function == "flow_para_qang":
+                if (
+                    function == "flow_para_function_explicitq"
+                    or function == "flow_para_qang"
+                ):
                     diff = result1.best_values["diffusion"]
                     qrr = short_ulabel[s_ind]
                     # print(qrr)
                     rate = diff * qrr**2
                     flow = result1.best_values["flow_velocity"]
                     if qval_dict_ == None:
-                        print("Please provide qval_dict, a dict with qr and ang (in unit of degrees).")
+                        print(
+                            "Please provide qval_dict, a dict with qr and ang (in unit of degrees)."
+                        )
                     else:
                         pass
 
@@ -5927,11 +6476,19 @@ def plot_g2_general(
                     txts = r"$\alpha$" + r"$ = %.3f$" % (alpha)
                     dt += 0.1
                     # txts = r'$\beta$' + r'$ = %.3f$'%(beta[i]) +  r'$ s^{-1}$'
-                    ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                    ax.text(
+                        x=x,
+                        y=y0 - dt,
+                        s=txts,
+                        fontsize=fontsize,
+                        transform=ax.transAxes,
+                    )
 
                 txts = r"$baseline$" + r"$ = %.3f$" % (baseline)
                 dt += 0.1
-                ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                ax.text(
+                    x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes
+                )
 
                 if (
                     function == "flow_para_function"
@@ -5941,15 +6498,29 @@ def plot_g2_general(
                 ):
                     txts = r"$flow_v$" + r"$ = %.3f$" % (flow)
                     dt += 0.1
-                    ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                    ax.text(
+                        x=x,
+                        y=y0 - dt,
+                        s=txts,
+                        fontsize=fontsize,
+                        transform=ax.transAxes,
+                    )
                 if function == "stretched_vibration" or function == "flow_vibration":
                     txts = r"$vibration$" + r"$ = %.1f Hz$" % (freq)
                     dt += 0.1
-                    ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                    ax.text(
+                        x=x,
+                        y=y0 - dt,
+                        s=txts,
+                        fontsize=fontsize,
+                        transform=ax.transAxes,
+                    )
 
                 txts = r"$\beta$" + r"$ = %.3f$" % (beta)
                 dt += 0.1
-                ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                ax.text(
+                    x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes
+                )
 
             if "ylim" in kwargs:
                 ax.set_ylim(kwargs["ylim"])
@@ -6008,7 +6579,9 @@ def power_func(x, D0, power=2):
     return D0 * x**power
 
 
-def get_q_rate_fit_general(qval_dict, rate, geometry="saxs", weights=None, *argv, **kwargs):
+def get_q_rate_fit_general(
+    qval_dict, rate, geometry="saxs", weights=None, *argv, **kwargs
+):
     """
     Dec 26,2016, Y.G.@CHX
 
@@ -6173,7 +6746,9 @@ def plot_q_rate_fit_general(
             if show_text:
                 txts = r"$D0: %.3e$" % D0 + r" $A^2$" + r"$s^{-1}$"
                 dy = 0.1
-                ax.text(x=0.15, y=0.65 - dy * i, s=txts, fontsize=14, transform=ax.transAxes)
+                ax.text(
+                    x=0.15, y=0.65 - dy * i, s=txts, fontsize=14, transform=ax.transAxes
+                )
         if Nqz != 1:
             legend = ax.legend(loc="best")
 
@@ -6242,7 +6817,13 @@ def is_outlier(points, thresh=3.5, verbose=False):
 
 
 def outlier_mask(
-    avg_img, mask, roi_mask, outlier_threshold=7.5, maximum_outlier_fraction=0.1, verbose=False, plot=False
+    avg_img,
+    mask,
+    roi_mask,
+    outlier_threshold=7.5,
+    maximum_outlier_fraction=0.1,
+    verbose=False,
+    plot=False,
 ):
     """
     outlier_mask(avg_img,mask,roi_mask,outlier_threshold = 7.5,maximum_outlier_fraction = .1,verbose=False,plot=False)
@@ -6250,7 +6831,7 @@ def outlier_mask(
     mask: 2D array, same size as avg_img with pixels that are already masked
     roi_mask: 2D array, same size as avg_img, ROI labels 'encoded' as mask values (i.e. all pixels belonging to ROI 5 have the value 5)
     outlier_threshold: threshold for MAD test
-    maximum_outlier_fraction: maximum fraction of pixels in an ROI that can be classifed as outliers. If the detected fraction is higher, no outliers will be masked for that ROI.
+    maximum_outlier_fraction: maximum fraction of pixels in an ROI that can be classified as outliers. If the detected fraction is higher, no outliers will be masked for that ROI.
     verbose: 'True' enables message output
     plot: 'True' enables visualization of outliers
     returns: mask (dtype=float): 0 for pixels that have been classified as outliers, 1 else
@@ -6274,7 +6855,9 @@ def outlier_mask(
             if verbose:
                 print("ROI #%s\naverage ROI intensity: %s" % (rn, ave_roi_int))
             try:
-                upper_outlier_threshold = np.nanmin((out_l * pixel[0][0])[out_l * pixel[0][0] > ave_roi_int])
+                upper_outlier_threshold = np.nanmin(
+                    (out_l * pixel[0][0])[out_l * pixel[0][0] > ave_roi_int]
+                )
                 if verbose:
                     print("upper outlier threshold: %s" % upper_outlier_threshold)
             except:
@@ -6296,7 +6879,10 @@ def outlier_mask(
         ### MAKE SURE we don't REMOVE more than x percent of the pixels in the roi
         outlier_fraction = np.sum(out_l) / len(pixel[0][0])
         if verbose:
-            print("fraction of pixel values detected as outliers: %s" % np.round(outlier_fraction, 2))
+            print(
+                "fraction of pixel values detected as outliers: %s"
+                % np.round(outlier_fraction, 2)
+            )
         if outlier_fraction > maximum_outlier_fraction:
             if verbose:
                 print(

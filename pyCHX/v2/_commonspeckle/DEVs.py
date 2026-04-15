@@ -1,7 +1,6 @@
 # simple brute force multitau
 # from pyCHX.chx_generic_functions import average_array_withNan
 import numpy as np
-import skbeam.core.roi as roi
 from numpy.fft import fft, ifft
 from tqdm import tqdm
 
@@ -18,7 +17,7 @@ def fit_one_peak_curve(x, y, fit_range):
         fwhm:  float, full width at half max intensity of the peak, 2*sigma
         fwhm_std:float, error bar of the full width at half max intensity of the peak
         xf: the x in the fit
-        out: the fitting class resutled from lmfit
+        out: the fitting class resulted from lmfit
 
     """
     from lmfit.models import LinearModel, LorentzianModel
@@ -164,7 +163,7 @@ def get_oneQ_g2_fft(time_inten_oneQ, axis=0):
     Input:
         time_inten_oneQ: 2d-array,  shape=[time, pixel number in the ROI],
                     a time dependent intensity for a list of pixels
-                     (   the equivilent pixels belongs to one Q    )
+                     (   the equivalent pixels belongs to one Q    )
     Return:
         G/(P*F)
     """
@@ -202,7 +201,7 @@ def get_g2_PF(time_inten):
 
 
 def auto_correlation_fft_padding_zeros(a, axis=-1):
-    """Y.G. Dev@CHX, 2018/10/15 Do autocorelation of ND array by fft
+    """Y.G. Dev@CHX, 2018/10/15 Do autocorelation of AND array by fft
     Math:
         Based on auto_cor(arr) = ifft(  fft( arr ) * fft(arr[::-1]) )
         In numpy form
@@ -228,7 +227,8 @@ def auto_correlation_fft_padding_zeros(a, axis=-1):
     # print(M, N, 2*N-1)
     cor = np.real(
         ifft(
-            fft(a, n=N * 2 - 1, axis=axis) * np.conjugate(fft(a, n=N * 2 - 1, axis=axis)),
+            fft(a, n=N * 2 - 1, axis=axis)
+            * np.conjugate(fft(a, n=N * 2 - 1, axis=axis)),
             n=N * 2 - 1,
             axis=axis,
         )
@@ -246,7 +246,7 @@ def auto_correlation_fft_padding_zeros(a, axis=-1):
 
 
 def auto_correlation_fft(a, axis=-1):
-    """Y.G. Dev@CHX, 2018/10/15 Do autocorelation of ND array by fft
+    """Y.G. Dev@CHX, 2018/10/15 Do autocorelation of AND array by fft
     Math:
         Based on auto_cor(arr) = ifft(  fft( arr ) * fft(arr[::-1]) )
         In numpy form
@@ -307,7 +307,7 @@ def multitau(Ipix, bind, lvl=12, nobuf=8):
             / noperbin
         )
         G2[j, :] = np.bincount(bind, np.mean(dII[j:, :] * dII[:-j, :], axis=0)) / t
-    for l in tqdm(np.arange(1, lvl), desc="Calcuate g2..."):
+    for l in tqdm(np.arange(1, lvl), desc="Calculate g2..."):
         nn = dII.shape[0] // 2 * 2  # make it even
         dII = (dII[0:nn:2, :] + dII[1:nn:2, :]) / 2.0  # sum in pairs
         nn = nn // 2
@@ -321,7 +321,9 @@ def multitau(Ipix, bind, lvl=12, nobuf=8):
                 * np.bincount(bind, np.mean(dII[:-j, :], axis=0))
                 / noperbin
             )
-            G2[ind, :] = np.bincount(bind, np.mean(dII[j:, :] * dII[:-j, :], axis=0)) / t
+            G2[ind, :] = (
+                np.bincount(bind, np.mean(dII[j:, :] * dII[:-j, :], axis=0)) / t
+            )
     # print(ind)
     # print(time.time()-t0)
     return (tt[: ind + 1], G2[: ind + 1, :])
@@ -329,10 +331,10 @@ def multitau(Ipix, bind, lvl=12, nobuf=8):
 
 def average_array_withNan(array, axis=0, mask=None):
     """YG. Jan 23, 2018
-    Average array invovling np.nan along axis
+    Average array involving np.nan along axis
 
     Input:
-        array: ND array, actually should be oneD or twoD at this stage..TODOLIST for ND
+        array: AND array, actually should be oneD or twoD at this stage..TODOLIST for AND
         axis: the average axis
         mask: bool, same shape as array, if None, will mask all the nan values
     Output:
@@ -353,7 +355,9 @@ def average_array_withNan(array, axis=0, mask=None):
     return sums / cts
 
 
-def autocor_for_pix_time(pix_time_data, dly_dict, pixel_norm=None, frame_norm=None, multi_tau_method=True):
+def autocor_for_pix_time(
+    pix_time_data, dly_dict, pixel_norm=None, frame_norm=None, multi_tau_method=True
+):
     """YG Feb 20, 2018@CHX
     Do correlation for pixel_time type data with tau as defined as dly
     Input:
@@ -373,7 +377,7 @@ def autocor_for_pix_time(pix_time_data, dly_dict, pixel_norm=None, frame_norm=No
     Gp = np.zeros([Ntau, Np])
     Gf = np.zeros([Ntau, Np])
     # mask_pix = np.isnan(pix_time_data)
-    # for tau_ind, tau in tqdm( enumerate(dly), desc= 'Calcuate g2...'  ):
+    # for tau_ind, tau in tqdm( enumerate(dly), desc= 'Calculate g2...'  ):
     tau_ind = 0
     # if multi_tau_method:
     pix_time_datac = pix_time_data.copy()
@@ -383,14 +387,18 @@ def autocor_for_pix_time(pix_time_data, dly_dict, pixel_norm=None, frame_norm=No
     if frame_norm is not None:
         pix_time_datac /= frame_norm
 
-    for tau_lev, tau_key in tqdm(enumerate(list(dly_dict.keys())), desc="Calcuate g2..."):
+    for tau_lev, tau_key in tqdm(
+        enumerate(list(dly_dict.keys())), desc="Calculate g2..."
+    ):
         # print(tau_key)
         taus = dly_dict[tau_key]
         if multi_tau_method:
             if tau_lev > 0:
                 nobuf = len(dly_dict[1])
                 nn = pix_time_datac.shape[0] // 2 * 2  # make it even
-                pix_time_datac = (pix_time_datac[0:nn:2, :] + pix_time_datac[1:nn:2, :]) / 2.0  # sum in pairs
+                pix_time_datac = (
+                    pix_time_datac[0:nn:2, :] + pix_time_datac[1:nn:2, :]
+                ) / 2.0  # sum in pairs
                 nn = nn // 2
                 if nn < nobuf:
                     break
@@ -450,7 +458,6 @@ def autocor_xytframe(self, n):
 ###################For Fit
 
 import matplotlib.pyplot as plt
-import numpy as np
 from scipy.optimize import leastsq
 
 # duplicate my curfit function from yorick, except use sigma and not w
@@ -465,7 +472,9 @@ def curfit(x, y, a, sigy=None, function_name=None, adj=None):
         function_name = funct
     # print( a, adj, a[adj] )
     # print(x,y,a)
-    afit, cv, idt, m, ie = leastsq(_residuals, a[adj], args=(x, y, sigy, a, adj, function_name), full_output=True)
+    afit, cv, idt, m, ie = leastsq(
+        _residuals, a[adj], args=(x, y, sigy, a, adj, function_name), full_output=True
+    )
     a[adj] = afit
     realcv = np.identity(afit.size)
     realcv[np.ix_(adj, adj)] = cv
@@ -497,12 +506,15 @@ def fitpr(chisq, a, sigmaa, title=None, lbl=None):
         lbl = []
         for i in xrange(a.size):
             lbl.append("A%(#)02d" % {"#": i})
-    # print resuls of a fit.
+    # print results of a fit.
     if title != None:
         print(title)
     print("   chisq=%(c).4f" % {"c": chisq})
     for i in range(a.size):
-        print("     %(lbl)8s =%(m)10.4f +/- %(s).4f" % {"lbl": lbl[i], "m": a[i], "s": sigmaa[i]})
+        print(
+            "     %(lbl)8s =%(m)10.4f +/- %(s).4f"
+            % {"lbl": lbl[i], "m": a[i], "s": sigmaa[i]}
+        )
 
 
 # easy plot for fit
@@ -525,7 +537,9 @@ def Gaussian(x, p):
 
     """
     xo, amplitude, sigma, offset = p
-    g = offset + amplitude * 1.0 / (sigma * np.sqrt(2 * np.pi)) * np.exp(-1 / 2.0 * (x - xo) ** 2 / sigma**2)
+    g = offset + amplitude * 1.0 / (sigma * np.sqrt(2 * np.pi)) * np.exp(
+        -1 / 2.0 * (x - xo) ** 2 / sigma**2
+    )
     return g
 
 
@@ -564,7 +578,8 @@ def gen_elps_sectors(a, b, r_min, r_n, th_n, c_x, c_y, th_min=0, th_max=360):
     th_list = np.linspace(th_min, th_max, th_n + 1)
     r_list = np.linspace(r_min, 1, r_n + 1)
     regions_list = [
-        [[np.array([], dtype=np.int_), np.array([], dtype=np.int_)] for _ in range(r_n)] for _ in range(th_n)
+        [[np.array([], dtype=np.int_), np.array([], dtype=np.int_)] for _ in range(r_n)]
+        for _ in range(th_n)
     ]
     w = int(np.ceil(a * 2))
     h = int(np.ceil(b * 2))
@@ -578,12 +593,18 @@ def gen_elps_sectors(a, b, r_min, r_n, th_n, c_x, c_y, th_min=0, th_max=360):
             cur_r = np.sqrt(cur_x**2 + cur_y**2)
             cur_elps_r = elps_r(a, b, cur_theta)
             cur_r_list = r_list * cur_elps_r
-            cur_theta = np.rad2deg(cur_theta)  # Convert to degrees to compare with th_list
+            cur_theta = np.rad2deg(
+                cur_theta
+            )  # Convert to degrees to compare with th_list
             r_ind = place_in_interval(cur_r, cur_r_list)
             th_ind = place_in_interval(cur_theta, th_list)
             if (r_ind != -1) and (th_ind != -1):
-                regions_list[th_ind][r_ind][0] = np.append(regions_list[th_ind][r_ind][0], ii + x_offset)
-                regions_list[th_ind][r_ind][1] = np.append(regions_list[th_ind][r_ind][1], jj + y_offset)
+                regions_list[th_ind][r_ind][0] = np.append(
+                    regions_list[th_ind][r_ind][0], ii + x_offset
+                )
+                regions_list[th_ind][r_ind][1] = np.append(
+                    regions_list[th_ind][r_ind][1], jj + y_offset
+                )
     sectors = []
     for th_reg_list in regions_list:
         for sector in th_reg_list:

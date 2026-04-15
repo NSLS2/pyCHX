@@ -5,7 +5,6 @@
 # handler registration and database instantiation should be done
 # here and only here!
 from databroker import Broker
-from databroker.assets.handlers_base import HandlerBase
 from eiger_io.fs_handler import EigerHandler as EigerHandlerPIMS
 from eiger_io.fs_handler import EigerImages as EigerImagesPIMS
 

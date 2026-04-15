@@ -4,18 +4,19 @@ yuzhang@bnl.gov
 This module is for the GiSAXS XPCS analysis
 """
 
-from skbeam.core.accumulators.binned_statistic import BinnedStatistic1D, BinnedStatistic2D
+from skbeam.core.accumulators.binned_statistic import (
+    BinnedStatistic1D,
+    BinnedStatistic2D,
+)
 
 from pyCHX.v2._commonspeckle.chx_compress import (  # common
     Multifile,
     compress_eigerdata,
     get_avg_imgc,
-    init_compress_eigerdata,
-    read_compressed_eigerdata,
 )
 from pyCHX.v2._commonspeckle.chx_correlationc import cal_g2c  # common
 from pyCHX.v2._commonspeckle.chx_generic_functions import *  # common
-from pyCHX.v2._commonspeckle.chx_libs import colors, colors_, markers, markers_  # common
+from pyCHX.v2._commonspeckle.chx_libs import colors, markers  # common
 
 
 def get_gisaxs_roi2(qr_edge, qz_edge, qr_map, qz_map, mask=None, qval_dict=None):
@@ -23,9 +24,9 @@ def get_gisaxs_roi2(qr_edge, qz_edge, qr_map, qz_map, mask=None, qval_dict=None)
     Get xpcs roi of gisaxs by giving Qr centers/edges, Qz centers/edges
     Parameters:
         qr_edge: list, e.g., [ [0.01,0.02],  [0.03,0.04] ].
-                    each elment has two values for the start and end of one qr edge
+                    each element has two values for the start and end of one qr edge
         qz_edge: list, e.g., [ [0.01,0.02],  [0.03,0.04] ]
-                   each elment has two values for the start and end of one qz edge
+                   each element has two values for the start and end of one qz edge
         qr_map: two-d array, the same shape as gisaxs frame, a qr map
         qz_map: two-d array, the same shape as gisaxs frame, a qz map
         mask: array, the scattering mask
@@ -44,14 +45,18 @@ def get_gisaxs_roi2(qr_edge, qz_edge, qr_map, qz_map, mask=None, qval_dict=None)
     qz_center = 0.5 * (qz_edge[:, 0] + qz_edge[:, 1])
     label_array_qz = get_qmap_label(qz_map, qz_edge)
     label_array_qr = get_qmap_label(qr_map, qr_edge)
-    label_array_qzr, qzc, qrc = get_qzrmap(label_array_qz, label_array_qr, qz_center, qr_center)
+    label_array_qzr, qzc, qrc = get_qzrmap(
+        label_array_qz, label_array_qr, qz_center, qr_center
+    )
     labels_qzr, indices_qzr = roi.extract_label_indices(label_array_qzr)
     labels_qz, indices_qz = roi.extract_label_indices(label_array_qz)
     labels_qr, indices_qr = roi.extract_label_indices(label_array_qr)
     if mask is None:
         mask = 1
     roi_mask = label_array_qzr * mask
-    qval_dict = get_qval_dict(np.round(qr_center, 5), np.round(qz_center, 5), qval_dict=qval_dict)
+    qval_dict = get_qval_dict(
+        np.round(qr_center, 5), np.round(qz_center, 5), qval_dict=qval_dict
+    )
     return roi_mask, qval_dict
 
 
@@ -76,14 +81,18 @@ def get_gisaxs_roi(Qr, Qz, qr_map, qz_map, mask=None, qval_dict=None):
     qz_edge, qz_center = get_qedge(*Qz)
     label_array_qz = get_qmap_label(qz_map, qz_edge)
     label_array_qr = get_qmap_label(qr_map, qr_edge)
-    label_array_qzr, qzc, qrc = get_qzrmap(label_array_qz, label_array_qr, qz_center, qr_center)
+    label_array_qzr, qzc, qrc = get_qzrmap(
+        label_array_qz, label_array_qr, qz_center, qr_center
+    )
     labels_qzr, indices_qzr = roi.extract_label_indices(label_array_qzr)
     labels_qz, indices_qz = roi.extract_label_indices(label_array_qz)
     labels_qr, indices_qr = roi.extract_label_indices(label_array_qr)
     if mask is None:
         mask = 1
     roi_mask = label_array_qzr * mask
-    qval_dict = get_qval_dict(np.round(qr_center, 5), np.round(qz_center, 5), qval_dict=qval_dict)
+    qval_dict = get_qval_dict(
+        np.round(qr_center, 5), np.round(qz_center, 5), qval_dict=qval_dict
+    )
     return roi_mask, qval_dict
 
 
@@ -116,7 +125,7 @@ def get_qr(data, Qr, Qz, qr, qz, mask=None):
         Qz=  [qz_start,   qz_end,  qz_width , qz_num ]
         new_mask[ :, 1020:1045] =0
         ticks = show_qzr_map(  qr,qz, inc_x0, data = avg_imgmr, Nzline=10,  Nrline=10   )
-        qx, qy, qr, qz = convert_gisaxs_pixel_to_q( inc_x0, inc_y0,refl_x0,refl_y0, lamda=lamda, Lsd=Lsd )
+        qx, qy, qr, qz = convert_gisaxs_pixel_to_q( inc_x0, inc_y0,refl_x0,refl_y0, lambda=lambda, Lsd=Lsd )
         qr_1d = get_qr( avg_imgr, Qr, Qz, qr, qz, new_mask)
 
     """
@@ -133,7 +142,9 @@ def get_qr(data, Qr, Qz, qr, qz, mask=None):
         # print (i,qzc_)
         label_array_qz = get_qmap_label(qz, qz_edge[i * 2 : 2 * i + 2])
         # print (qzc_, qz_edge[i*2:2*i+2])
-        label_array_qzr, qzc, qrc = get_qzrmap(label_array_qz, label_array_qr, qz_center, qr_center)
+        label_array_qzr, qzc, qrc = get_qzrmap(
+            label_array_qz, label_array_qr, qz_center, qr_center
+        )
         # print (np.unique(label_array_qzr ))
         if mask is not None:
             label_array_qzr *= mask
@@ -142,7 +153,9 @@ def get_qr(data, Qr, Qz, qr, qz, mask=None):
         data_ = data * label_array_qzr
         qr_ave = np.sum(qr_, axis=0) / roi_pixel_num
         data_ave = np.sum(data_, axis=0) / roi_pixel_num
-        qr_ave, data_ave = zip(*sorted(zip(*[qr_ave[~np.isnan(qr_ave)], data_ave[~np.isnan(data_ave)]])))
+        qr_ave, data_ave = zip(
+            *sorted(zip(*[qr_ave[~np.isnan(qr_ave)], data_ave[~np.isnan(data_ave)]]))
+        )
         if i == 0:
             N_interp = len(qr_ave)
 
@@ -150,9 +163,13 @@ def get_qr(data, Qr, Qz, qr, qz, mask=None):
         data_ave = np.interp(qr_ave_intp, qr_ave, data_ave)
         # columns.append( ['qr%s'%i, str(round(qzc_,4))] )
         if i == 0:
-            df = np.hstack([(qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)])
+            df = np.hstack(
+                [(qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)]
+            )
         else:
-            df = np.hstack([df, (qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)])
+            df = np.hstack(
+                [df, (qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)]
+            )
     # df = DataFrame( df  )
     # df.columns = np.concatenate( columns    )
 
@@ -182,7 +199,7 @@ def cal_1d_qr(
         Dec 16, 2016, Y.G.@CHX
        calculate one-d of I(q) as a function of qr for different qz
        data: a dataframe
-       Qr: info for qr, = qr_start , qr_end, qr_width, qr_num, the purpose of Qr is only for the defination of qr range (qr number does not matter)
+       Qr: info for qr, = qr_start , qr_end, qr_width, qr_num, the purpose of Qr is only for the definition of qr range (qr number does not matter)
        Qz: info for qz, = qz_start,   qz_end,  qz_width , qz_num
        qr: qr-map
        qz: qz-map
@@ -210,7 +227,7 @@ def cal_1d_qr(
         Qr = [qr_start , qr_end, qr_width, qr_num]
         Qz=  [qz_start,   qz_end,  qz_width , qz_num ]
         new_mask[ :, 1020:1045] =0
-        qx, qy, qr, qz = convert_gisaxs_pixel_to_q( inc_x0, inc_y0,refl_x0,refl_y0, lamda=lamda, Lsd=Lsd )
+        qx, qy, qr, qz = convert_gisaxs_pixel_to_q( inc_x0, inc_y0,refl_x0,refl_y0, lambda=lambda, Lsd=Lsd )
 
         qr_1d = get_1d_qr( avg_imgr, Qr, Qz, qr, qz, inc_x0,  new_mask)
 
@@ -232,7 +249,9 @@ def cal_1d_qr(
         # print (i,qzc_)
         label_array_qz = get_qmap_label(qz, qz_edge[i * 2 : 2 * i + 2])
         # print (qzc_, qz_edge[i*2:2*i+2])
-        label_array_qzr, qzc, qrc = get_qzrmap(label_array_qz, label_array_qr, qz_center, qr_center)
+        label_array_qzr, qzc, qrc = get_qzrmap(
+            label_array_qz, label_array_qr, qz_center, qr_center
+        )
         # print (np.unique(label_array_qzr ))
         if mask is not None:
             label_array_qzr *= mask
@@ -247,7 +266,9 @@ def cal_1d_qr(
 
         qr_ave = (np.sum(qr_, axis=0))[w] / roi_pixel_num[w]
         data_ave = (np.sum(data_, axis=0))[w] / roi_pixel_num[w]
-        qr_ave, data_ave = zip(*sorted(zip(*[qr_ave[~np.isnan(qr_ave)], data_ave[~np.isnan(data_ave)]])))
+        qr_ave, data_ave = zip(
+            *sorted(zip(*[qr_ave[~np.isnan(qr_ave)], data_ave[~np.isnan(data_ave)]]))
+        )
         if i == 0:
             N_interp = len(qr_ave)
             columns.append(["qr"])
@@ -257,7 +278,9 @@ def cal_1d_qr(
         # qr_1d[i]= [qr_ave_intp, data_ave]
         columns.append(["qz%s=%s" % (i, str(round(qzc_, 4)))])
         if i == 0:
-            df = np.hstack([(qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)])
+            df = np.hstack(
+                [(qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)]
+            )
         else:
             df = np.hstack([df, data_ave.reshape(N_interp, 1)])
     df = DataFrame(df)
@@ -271,11 +294,26 @@ def cal_1d_qr(
         filename = os.path.join(path, "%s_qr_1d.csv" % (uid))
         df.to_csv(filename)
         if print_save_message:
-            print("The qr_1d is saved in %s with filename as %s_qr_1d.csv" % (path, uid))
+            print(
+                "The qr_1d is saved in %s with filename as %s_qr_1d.csv" % (path, uid)
+            )
     return df
 
 
-def get_t_qrc(FD, frame_edge, Qr, Qz, qr, qz, mask=None, path=None, uid=None, save=True, *argv, **kwargs):
+def get_t_qrc(
+    FD,
+    frame_edge,
+    Qr,
+    Qz,
+    qr,
+    qz,
+    mask=None,
+    path=None,
+    uid=None,
+    save=True,
+    *argv,
+    **kwargs,
+):
     """Get t-dependent qr
 
     Parameters
@@ -327,11 +365,15 @@ def get_t_qrc(FD, frame_edge, Qr, Qz, qr, qz, mask=None, path=None, uid=None, sa
             uid = setup_pargs["uid"]
         filename = os.path.join(path, "%s_qrt_pds.csv" % (uid))
         qrt_pds.to_csv(filename)
-        print("The qr~time is saved in %s with filename as %s_qrt_pds.csv" % (path, uid))
+        print(
+            "The qr~time is saved in %s with filename as %s_qrt_pds.csv" % (path, uid)
+        )
     return qrt_pds
 
 
-def plot_qrt_pds(qrt_pds, frame_edge, qz_index=0, uid="uid", path="", fontsize=8, *argv, **kwargs):
+def plot_qrt_pds(
+    qrt_pds, frame_edge, qz_index=0, uid="uid", path="", fontsize=8, *argv, **kwargs
+):
     """Y.G. Jan 04, 2017
     plot t-dependent qr
 
@@ -388,7 +430,7 @@ def plot_t_qrc(qr_1d, frame_edge, save=False, pargs=None, fontsize=8, *argv, **k
         qr_1d: array, with shape as time length, frame_edge
         frame_edge: list, the ROI frame regions, e.g., [  [0,100], [200,400] ]
         save: save the plot
-        if save,  all the following paramters are given in argv
+        if save,  all the following parameters are given in argv
             {
             'path':
              'uid':  }
@@ -458,7 +500,9 @@ def make_gisaxs_grid(qr_w=10, qz_w=12, dim_r=100, dim_z=120):
 ###########################################
 
 
-def convert_Qmap(img, qx_map, qy_map=None, bins=None, rangeq=None, mask=None, statistic="sum"):
+def convert_Qmap(
+    img, qx_map, qy_map=None, bins=None, rangeq=None, mask=None, statistic="sum"
+):
     """Y.G. Nov 3@CHX
     Convert a scattering image to a qmap by giving qx_map and qy_map
     Return converted qmap, x-coordinates and y-coordinates
@@ -475,9 +519,18 @@ def convert_Qmap(img, qx_map, qy_map=None, bins=None, rangeq=None, mask=None, st
         else:
             m = None
         b2d = BinnedStatistic2D(
-            qx_map.ravel(), qy_map.ravel(), statistic=statistic, bins=bins, mask=m, range=rangeq
+            qx_map.ravel(),
+            qy_map.ravel(),
+            statistic=statistic,
+            bins=bins,
+            mask=m,
+            range=rangeq,
         )
-        remesh_data, xbins, ybins = b2d(img.ravel()), b2d.bin_centers[0], b2d.bin_centers[1]
+        remesh_data, xbins, ybins = (
+            b2d(img.ravel()),
+            b2d.bin_centers[0],
+            b2d.bin_centers[1],
+        )
     else:
         if rangeq is None:
             qx_min, qx_max = qx_map.min(), qx_map.max()
@@ -515,7 +568,14 @@ def get_refl_xy(inc_ang, inc_phi, inc_x0, inc_y0, pixelsize=[0.075, 0.075], Lsd=
 
 
 def get_alphaf_thetaf(
-    inc_x0, inc_y0, inc_ang, inc_phi=0, pixelsize=[0.075, 0.075], Lsd=5000, dimx=2070.0, dimy=2167.0
+    inc_x0,
+    inc_y0,
+    inc_ang,
+    inc_phi=0,
+    pixelsize=[0.075, 0.075],
+    Lsd=5000,
+    dimx=2070.0,
+    dimy=2167.0,
 ):
     """Nov 19, 2018@SMI to get alphaf and thetaf for gi scattering
     Input:
@@ -543,7 +603,7 @@ def convert_gisaxs_pixel_to_q2(
     alphaf,
     thetaf,
     phi=0,
-    lamda=1.0,
+    lambda=1.0,
     thetai=0.0,
 ):
     """
@@ -558,7 +618,7 @@ def convert_gisaxs_pixel_to_q2(
         get: q_parallel (qp), q_direction_z (qz)
 
     """
-    pref = 2 * np.pi / lamda
+    pref = 2 * np.pi / lambda
     alphai = np.radians(inc_ang)
     thetai = np.radians(thetai)
     phi = np.radians(phi)
@@ -585,7 +645,9 @@ def get_incident_angles(inc_x0, inc_y0, refl_x0, refl_y0, pixelsize=[75, 75], Ls
         Lsd = Lsd / 1000.0
 
     px, py = pixelsize
-    phi = np.arctan2((-refl_x0 + inc_x0) * px * 10 ** (-6), (refl_y0 - inc_y0) * py * 10 ** (-6))
+    phi = np.arctan2(
+        (-refl_x0 + inc_x0) * px * 10 ** (-6), (refl_y0 - inc_y0) * py * 10 ** (-6)
+    )
     alphai = np.arctan2((refl_y0 - inc_y0) * py * 10 ** (-6), Lsd) / 2.0
     # thetai = np.arctan2(  (rcenx - bcenx)*px *10**(-6), Lsd   ) /2.  #??
 
@@ -593,7 +655,15 @@ def get_incident_angles(inc_x0, inc_y0, refl_x0, refl_y0, pixelsize=[75, 75], Ls
 
 
 def get_reflected_angles(
-    inc_x0, inc_y0, refl_x0, refl_y0, thetai=0.0, pixelsize=[75, 75], Lsd=5.0, dimx=2070.0, dimy=2167.0
+    inc_x0,
+    inc_y0,
+    refl_x0,
+    refl_y0,
+    thetai=0.0,
+    pixelsize=[75, 75],
+    Lsd=5.0,
+    dimx=2070.0,
+    dimy=2167.0,
 ):
     """Dec 16, 2015, Y.G.@CHX
     giving: incident beam center: bcenx,bceny
@@ -619,7 +689,16 @@ def get_reflected_angles(
 
 
 def convert_gisaxs_pixel_to_q(
-    inc_x0, inc_y0, refl_x0, refl_y0, pixelsize=[75, 75], Lsd=5.0, dimx=2070.0, dimy=2167.0, thetai=0.0, lamda=1.0
+    inc_x0,
+    inc_y0,
+    refl_x0,
+    refl_y0,
+    pixelsize=[75, 75],
+    Lsd=5.0,
+    dimx=2070.0,
+    dimy=2167.0,
+    thetai=0.0,
+    lambda=1.0,
 ):
     """
     Dec 16, 2015, Y.G.@CHX
@@ -636,7 +715,7 @@ def convert_gisaxs_pixel_to_q(
     alphaf, thetaf, alphai, phi = get_reflected_angles(
         inc_x0, inc_y0, refl_x0, refl_y0, thetai, pixelsize, Lsd, dimx, dimy
     )
-    pref = 2 * np.pi / lamda
+    pref = 2 * np.pi / lambda
     qx = np.cos(alphaf) * np.cos(2 * thetaf) - np.cos(alphai) * np.cos(2 * thetai)
     qy_ = np.cos(alphaf) * np.sin(2 * thetaf) - np.cos(alphai) * np.sin(2 * thetai)
     qz_ = np.sin(alphaf) + np.sin(alphai)
@@ -655,7 +734,6 @@ def get_qedge(qstart, qend, qwidth, noqs, verbose=True):
     return a qedge by giving the noqs, qstart,qend,qwidth.
            a qcenter, which is center of each qedge
     KEYWORD:  None"""
-    import numpy as np
 
     if noqs != 1:
         spacing = (qend - qstart - noqs * qwidth) / (noqs - 1)  # spacing between rings
@@ -735,13 +813,23 @@ def get_qzrmap(label_array_qz, label_array_qr, qz_center, qr_center):
 
     for i, label in enumerate(uqzr):
         # print (i, label)
-        label_array_qzr_.ravel()[np.where(label_array_qzr.ravel() == label)[0]] = newl[i]
+        label_array_qzr_.ravel()[np.where(label_array_qzr.ravel() == label)[0]] = newl[
+            i
+        ]
 
     return np.int_(label_array_qzr_), np.array(qzc), np.concatenate(np.array(qrc))
 
 
 def show_label_array_on_image(
-    ax, image, label_array, cmap=None, norm=None, log_img=True, alpha=0.3, imshow_cmap="gray", **kwargs
+    ax,
+    image,
+    label_array,
+    cmap=None,
+    norm=None,
+    log_img=True,
+    alpha=0.3,
+    imshow_cmap="gray",
+    **kwargs,
 ):  # norm=LogNorm(),
     """
     This will plot the required ROI's(labeled array) on the image
@@ -771,9 +859,13 @@ def show_label_array_on_image(
     """
     ax.set_aspect("equal")
     if log_img:
-        im = ax.imshow(image, cmap=imshow_cmap, interpolation="none", norm=LogNorm(norm), **kwargs)  # norm=norm,
+        im = ax.imshow(
+            image, cmap=imshow_cmap, interpolation="none", norm=LogNorm(norm), **kwargs
+        )  # norm=norm,
     else:
-        im = ax.imshow(image, cmap=imshow_cmap, interpolation="none", norm=norm, **kwargs)  # norm=norm,
+        im = ax.imshow(
+            image, cmap=imshow_cmap, interpolation="none", norm=norm, **kwargs
+        )  # norm=norm,
 
     im_label = mpl_plot.show_label_array(
         ax, label_array, cmap=cmap, norm=norm, alpha=alpha, **kwargs
@@ -784,7 +876,7 @@ def show_label_array_on_image(
 
 def show_qz(qz):
     """Dec 16, 2015, Y.G.@CHX
-    plot qz mape
+    plot qz map
 
     """
 
@@ -797,7 +889,7 @@ def show_qz(qz):
 
 def show_qr(qr):
     """Dec 16, 2015, Y.G.@CHX
-    plot qr mape
+    plot qr map
 
     """
     fig, ax = plt.subplots()
@@ -811,12 +903,14 @@ def show_alphaf(
     alphaf,
 ):
     """Dec 16, 2015, Y.G.@CHX
-    plot alphaf mape
+    plot alphaf map
 
     """
 
     fig, ax = plt.subplots()
-    im = ax.imshow(alphaf * 180 / np.pi, origin="lower", cmap="viridis", vmin=-1, vmax=1.5)
+    im = ax.imshow(
+        alphaf * 180 / np.pi, origin="lower", cmap="viridis", vmin=-1, vmax=1.5
+    )
     # im=ax.imshow(alphaf, origin='lower' ,cmap='viridis',norm= LogNorm(vmin=0.0001,vmax=2.00))
     fig.colorbar(im)
     ax.set_title("alphaf")
@@ -877,7 +971,7 @@ def get_1d_qr(
         Qz=  [qz_start,   qz_end,  qz_width , qz_num ]
         new_mask[ :, 1020:1045] =0
         ticks = show_qzr_map(  qr,qz, inc_x0, data = avg_imgmr, Nzline=10,  Nrline=10   )
-        qx, qy, qr, qz = convert_gisaxs_pixel_to_q( inc_x0, inc_y0,refl_x0,refl_y0, lamda=lamda, Lsd=Lsd )
+        qx, qy, qr, qz = convert_gisaxs_pixel_to_q( inc_x0, inc_y0,refl_x0,refl_y0, lambda=lambda, Lsd=Lsd )
 
         qr_1d = get_1d_qr( avg_imgr, Qr, Qz, qr, qz, inc_x0,  new_mask,  True, ticks, .8)
 
@@ -898,7 +992,9 @@ def get_1d_qr(
 
     if show_roi:
         label_array_qz0 = get_qmap_label(qz, qz_edge)
-        label_array_qzr0, qzc0, qrc0 = get_qzrmap(label_array_qz0, label_array_qr, qz_center, qr_center)
+        label_array_qzr0, qzc0, qrc0 = get_qzrmap(
+            label_array_qz0, label_array_qr, qz_center, qr_center
+        )
 
         if mask is not None:
             label_array_qzr0 *= mask
@@ -912,7 +1008,9 @@ def get_1d_qr(
         # print (i,qzc_)
         label_array_qz = get_qmap_label(qz, qz_edge[i * 2 : 2 * i + 2])
         # print (qzc_, qz_edge[i*2:2*i+2])
-        label_array_qzr, qzc, qrc = get_qzrmap(label_array_qz, label_array_qr, qz_center, qr_center)
+        label_array_qzr, qzc, qrc = get_qzrmap(
+            label_array_qz, label_array_qr, qz_center, qr_center
+        )
         # print (np.unique(label_array_qzr ))
         if mask is not None:
             label_array_qzr *= mask
@@ -922,7 +1020,9 @@ def get_1d_qr(
         qr_ave = np.sum(qr_, axis=0) / roi_pixel_num
         data_ave = np.sum(data_, axis=0) / roi_pixel_num
 
-        qr_ave, data_ave = zip(*sorted(zip(*[qr_ave[~np.isnan(qr_ave)], data_ave[~np.isnan(data_ave)]])))
+        qr_ave, data_ave = zip(
+            *sorted(zip(*[qr_ave[~np.isnan(qr_ave)], data_ave[~np.isnan(data_ave)]]))
+        )
 
         if i == 0:
             N_interp = len(qr_ave)
@@ -937,9 +1037,13 @@ def get_1d_qr(
         else:
             ax.plot(qr_ave_intp, data_ave, "--o", label="qz= %f" % qzc_)
         if i == 0:
-            df = np.hstack([(qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)])
+            df = np.hstack(
+                [(qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)]
+            )
         else:
-            df = np.hstack([df, (qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)])
+            df = np.hstack(
+                [df, (qr_ave_intp).reshape(N_interp, 1), data_ave.reshape(N_interp, 1)]
+            )
 
     # ax.set_xlabel( r'$q_r$', fontsize=15)
     ax.set_xlabel(r"$q_r$" r"($\AA^{-1}$)", fontsize=18)
@@ -960,7 +1064,9 @@ def get_1d_qr(
         # filename = os.path.join(path, 'qr_1d-%s-%s.csv' % (uid,CurTime))
         filename = os.path.join(path, "uid=%s--qr_1d.csv" % (uid))
         df.to_csv(filename)
-        print("The qr_1d is saved in %s with filename as uid=%s--qr_1d.csv" % (path, uid))
+        print(
+            "The qr_1d is saved in %s with filename as uid=%s--qr_1d.csv" % (path, uid)
+        )
 
         # fp = path + 'Uid= %s--Circular Average'%uid + CurTime + '.png'
         fp = path + "uid=%s--qr_1d-" % uid + ".png"
@@ -1082,13 +1188,17 @@ def get_qr_tick_label(qr, label_array_qr, inc_x0, interp=True):
         rticks_label = np.array(rticks_label)
         try:
             w = np.where(rticks <= inc_x0)[0]
-            rticks1 = np.int_(np.interp(np.round(rticks_label[w], 3), rticks_label[w], rticks[w]))
+            rticks1 = np.int_(
+                np.interp(np.round(rticks_label[w], 3), rticks_label[w], rticks[w])
+            )
             rticks_label1 = np.round(rticks_label[w], 3)
         except:
             rticks_label1 = []
         try:
             w = np.where(rticks > inc_x0)[0]
-            rticks2 = np.int_(np.interp(np.round(rticks_label[w], 3), rticks_label[w], rticks[w]))
+            rticks2 = np.int_(
+                np.interp(np.round(rticks_label[w], 3), rticks_label[w], rticks[w])
+            )
             rticks = np.append(rticks1, rticks2)
             rticks_label2 = np.round(rticks_label[w], 3)
         except:
@@ -1134,7 +1244,17 @@ def get_qz_tick_label(qz, label_array_qz, interp=True):
     return zticks, zticks_label
 
 
-def get_qzr_map(qr, qz, inc_x0, Nzline=10, Nrline=10, interp=True, return_qrz_label=True, *argv, **kwargs):
+def get_qzr_map(
+    qr,
+    qz,
+    inc_x0,
+    Nzline=10,
+    Nrline=10,
+    interp=True,
+    return_qrz_label=True,
+    *argv,
+    **kwargs,
+):
     """
     Dec 31, 2016, Y.G.@CHX
     Calculate a qzr map of a gisaxs image (data) without plot
@@ -1154,16 +1274,20 @@ def get_qzr_map(qr, qz, inc_x0, Nzline=10, Nrline=10, interp=True, return_qrz_la
         rticks: list, r-tick positions in unit of pixel
         rticks_label: list, r-tick positions in unit of real space
     else: return the additional two below
-        label_array_qr: qr label array with the same shpae as gisaxs image
-        label_array_qz: qz label array with the same shpae as gisaxs image
+        label_array_qr: qr label array with the same shape as gisaxs image
+        label_array_qz: qz label array with the same shape as gisaxs image
 
     Examples:
         ticks = get_qzr_map(  qr, qz, inc_x0  )
     """
     qr_start, qr_end, qr_num = qr.min(), qr.max(), Nrline
     qz_start, qz_end, qz_num = qz.min(), qz.max(), Nzline
-    qr_edge, qr_center = get_qedge(qr_start, qr_end, (qr_end - qr_start) / (qr_num + 100), qr_num)
-    qz_edge, qz_center = get_qedge(qz_start, qz_end, (qz_end - qz_start) / (qz_num + 100), qz_num)
+    qr_edge, qr_center = get_qedge(
+        qr_start, qr_end, (qr_end - qr_start) / (qr_num + 100), qr_num
+    )
+    qz_edge, qz_center = get_qedge(
+        qz_start, qz_end, (qz_end - qz_start) / (qz_num + 100), qz_num
+    )
 
     label_array_qz = get_qmap_label(qz, qz_edge)
     label_array_qr = get_qmap_label(qr, qr_edge)
@@ -1175,18 +1299,41 @@ def get_qzr_map(qr, qz, inc_x0, Nzline=10, Nrline=10, interp=True, return_qrz_la
     zticks, zticks_label = get_qz_tick_label(qz, label_array_qz)
     # rticks,rticks_label  = get_qr_tick_label(label_array_qr,inc_x0)
     try:
-        rticks, rticks_label = zip(*np.sort(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp))))
+        rticks, rticks_label = zip(
+            *np.sort(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp)))
+        )
     except:
-        rticks, rticks_label = zip(*sorted(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp))))
+        rticks, rticks_label = zip(
+            *sorted(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp)))
+        )
     # stride = int(len(zticks)/10)
     ticks = [zticks, zticks_label, rticks, rticks_label]
     if return_qrz_label:
-        return zticks, zticks_label, rticks, rticks_label, label_array_qr, label_array_qz
+        return (
+            zticks,
+            zticks_label,
+            rticks,
+            rticks_label,
+            label_array_qr,
+            label_array_qz,
+        )
     else:
         return zticks, zticks_label, rticks, rticks_label
 
 
-def plot_qzr_map(qr, qz, inc_x0, ticks=None, data=None, uid="uid", path="", vmin=0.001, vmax=1e1, *argv, **kwargs):
+def plot_qzr_map(
+    qr,
+    qz,
+    inc_x0,
+    ticks=None,
+    data=None,
+    uid="uid",
+    path="",
+    vmin=0.001,
+    vmax=1e1,
+    *argv,
+    **kwargs,
+):
     """
     Dec 31, 2016, Y.G.@CHX
     plot a qzr map of a gisaxs image (data)
@@ -1201,8 +1348,8 @@ def plot_qzr_map(qr, qz, inc_x0, ticks=None, data=None, uid="uid", path="", vmin
             zticks_label: list, z-tick positions in unit of real space
             rticks: list, r-tick positions in unit of pixel
             rticks_label: list, r-tick positions in unit of real space
-            label_array_qr: qr label array with the same shpae as gisaxs image
-            label_array_qz: qz label array with the same shpae as gisaxs image
+            label_array_qr: qr label array with the same shape as gisaxs image
+            label_array_qz: qz label array with the same shape as gisaxs image
 
     inc_x0:  the incident beam center x
     Options:
@@ -1225,11 +1372,13 @@ def plot_qzr_map(qr, qz, inc_x0, ticks=None, data=None, uid="uid", path="", vmin
     import matplotlib.pyplot as plt
 
     if ticks is None:
-        zticks, zticks_label, rticks, rticks_label, label_array_qr, label_array_qz = get_qzr_map(
-            qr, qz, inc_x0, return_qrz_label=True
+        zticks, zticks_label, rticks, rticks_label, label_array_qr, label_array_qz = (
+            get_qzr_map(qr, qz, inc_x0, return_qrz_label=True)
         )
     else:
-        zticks, zticks_label, rticks, rticks_label, label_array_qr, label_array_qz = ticks
+        zticks, zticks_label, rticks, rticks_label, label_array_qr, label_array_qz = (
+            ticks
+        )
 
     cmap = "viridis"
     _cmap = copy.copy((mcm.get_cmap(cmap)))
@@ -1239,7 +1388,9 @@ def plot_qzr_map(qr, qz, inc_x0, ticks=None, data=None, uid="uid", path="", vmin
         data = qr + qz
         im = ax.imshow(data, cmap="viridis", origin="lower")
     else:
-        im = ax.imshow(data, cmap="viridis", origin="lower", norm=LogNorm(vmin=vmin, vmax=vmax))
+        im = ax.imshow(
+            data, cmap="viridis", origin="lower", norm=LogNorm(vmin=vmin, vmax=vmax)
+        )
 
     imr = ax.imshow(
         label_array_qr, origin="lower", cmap="viridis", vmin=0.5, vmax=None
@@ -1268,7 +1419,9 @@ def plot_qzr_map(qr, qz, inc_x0, ticks=None, data=None, uid="uid", path="", vmin
     fig.savefig(fp, dpi=fig.dpi)
 
 
-def show_qzr_map(qr, qz, inc_x0, data=None, Nzline=10, Nrline=10, interp=True, *argv, **kwargs):
+def show_qzr_map(
+    qr, qz, inc_x0, data=None, Nzline=10, Nrline=10, interp=True, *argv, **kwargs
+):
     """
     Dec 16, 2015, Y.G.@CHX
     plot a qzr map of a gisaxs image (data)
@@ -1308,8 +1461,12 @@ def show_qzr_map(qr, qz, inc_x0, data=None, Nzline=10, Nrline=10, interp=True, *
 
     qr_start, qr_end, qr_num = qr.min(), qr.max(), Nrline
     qz_start, qz_end, qz_num = qz.min(), qz.max(), Nzline
-    qr_edge, qr_center = get_qedge(qr_start, qr_end, (qr_end - qr_start) / (qr_num + 100), qr_num)
-    qz_edge, qz_center = get_qedge(qz_start, qz_end, (qz_end - qz_start) / (qz_num + 100), qz_num)
+    qr_edge, qr_center = get_qedge(
+        qr_start, qr_end, (qr_end - qr_start) / (qr_num + 100), qr_num
+    )
+    qz_edge, qz_center = get_qedge(
+        qz_start, qz_end, (qz_end - qz_start) / (qz_num + 100), qz_num
+    )
 
     label_array_qz = get_qmap_label(qz, qz_edge)
     label_array_qr = get_qmap_label(qr, qr_edge)
@@ -1325,7 +1482,9 @@ def show_qzr_map(qr, qz, inc_x0, data=None, Nzline=10, Nrline=10, interp=True, *
         data = qr + qz
         im = ax.imshow(data, cmap="viridis", origin="lower")
     else:
-        im = ax.imshow(data, cmap="viridis", origin="lower", norm=LogNorm(vmin=0.001, vmax=1e1))
+        im = ax.imshow(
+            data, cmap="viridis", origin="lower", norm=LogNorm(vmin=0.001, vmax=1e1)
+        )
 
     imr = ax.imshow(
         label_array_qr, origin="lower", cmap="viridis", vmin=0.5, vmax=None
@@ -1334,7 +1493,7 @@ def show_qzr_map(qr, qz, inc_x0, data=None, Nzline=10, Nrline=10, interp=True, *
         label_array_qz, origin="lower", cmap="viridis", vmin=0.5, vmax=None
     )  # ,interpolation='nearest',)
 
-    # caxr = fig.add_axes([0.88, 0.2, 0.03, .7])  #x,y, width, heigth
+    # caxr = fig.add_axes([0.88, 0.2, 0.03, .7])  #x,y, width, height
     # cba = fig.colorbar(im, cax=caxr    )
     # cba = fig.colorbar(im,  fraction=0.046, pad=0.04)
 
@@ -1351,9 +1510,13 @@ def show_qzr_map(qr, qz, inc_x0, data=None, Nzline=10, Nrline=10, interp=True, *
     zticks, zticks_label = get_qz_tick_label(qz, label_array_qz)
     # rticks,rticks_label  = get_qr_tick_label(label_array_qr,inc_x0)
     try:
-        rticks, rticks_label = zip(*np.sort(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp))))
+        rticks, rticks_label = zip(
+            *np.sort(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp)))
+        )
     except:
-        rticks, rticks_label = zip(*sorted(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp))))
+        rticks, rticks_label = zip(
+            *sorted(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp)))
+        )
     # stride = int(len(zticks)/10)
 
     stride = 1
@@ -1400,7 +1563,7 @@ def show_qzr_roi(
     save=False,
     return_fig=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Dec 16, 2015, Y.G.@CHX
@@ -1648,7 +1811,9 @@ def plot_gisaxs_g2(g2, taus, res_pargs=None, one_plot=False, *argv, **kwargs):
 # plot g2 results
 
 
-def plot_gisaxs_two_g2(g2, taus, g2b, tausb, res_pargs=None, one_plot=False, *argv, **kwargs):
+def plot_gisaxs_two_g2(
+    g2, taus, g2b, tausb, res_pargs=None, one_plot=False, *argv, **kwargs
+):
     """Dec 16, 2015, Y.G.@CHX
      plot g2 results,
     g2: one-time correlation function from a multi-tau method
@@ -1804,7 +1969,9 @@ def plot_gisaxs_two_g2(g2, taus, g2b, tausb, res_pargs=None, one_plot=False, *ar
         # plt.show()
 
 
-def save_gisaxs_g2(g2, res_pargs, time_label=False, taus=None, filename=None, *argv, **kwargs):
+def save_gisaxs_g2(
+    g2, res_pargs, time_label=False, taus=None, filename=None, *argv, **kwargs
+):
     """
     Aug 8, 2016, Y.G.@CHX
     save g2 results,
@@ -1843,14 +2010,23 @@ def save_gisaxs_g2(g2, res_pargs, time_label=False, taus=None, filename=None, *a
     if filename is None:
         if time_label:
             dt = datetime.now()
-            CurTime = "%s%02d%02d-%02d%02d-" % (dt.year, dt.month, dt.day, dt.hour, dt.minute)
+            CurTime = "%s%02d%02d-%02d%02d-" % (
+                dt.year,
+                dt.month,
+                dt.day,
+                dt.hour,
+                dt.minute,
+            )
             filename = os.path.join(path, "g2-%s-%s.csv" % (uid, CurTime))
         else:
             filename = os.path.join(path, "uid=%s--g2.csv" % (uid))
     else:
         filename = os.path.join(path, filename)
     df.to_csv(filename)
-    print("The correlation function of uid= %s is saved with filename as %s" % (uid, filename))
+    print(
+        "The correlation function of uid= %s is saved with filename as %s"
+        % (uid, filename)
+    )
 
 
 def stretched_auto_corr_scat_factor(x, beta, relaxation_rate, alpha=1.0, baseline=1):
@@ -1861,7 +2037,9 @@ def simple_exponential(x, beta, relaxation_rate, baseline=1):
     return beta * np.exp(-2 * relaxation_rate * x) + baseline
 
 
-def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, *argv, **kwargs):
+def fit_gisaxs_g2(
+    g2, res_pargs, function="simple_exponential", one_plot=False, *argv, **kwargs
+):
     """
      July 20,2016, Y.G.@CHX
      Fit one-time correlation function
@@ -1886,12 +2064,12 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
      function:
          'simple_exponential': fit by a simple exponential function, defined as
                      beta * np.exp(-2 * relaxation_rate * lags) + baseline
-         'streched_exponential': fit by a streched exponential function, defined as
+         'stretched_exponential': fit by a stretched exponential function, defined as
                      beta * (np.exp(-2 * relaxation_rate * lags))**alpha + baseline
 
      Returns
      -------
-     fit resutls:
+     fit results:
          a dict, with keys as
          'baseline':
           'beta':
@@ -1921,7 +2099,9 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
 
     if function == "simple_exponential" or function == "simple":
         _vars = np.unique(_vars + ["alpha"])
-        mod = Model(stretched_auto_corr_scat_factor)  # ,  independent_vars= list( _vars)   )
+        mod = Model(
+            stretched_auto_corr_scat_factor
+        )  # ,  independent_vars= list( _vars)   )
 
     elif function == "stretched_exponential" or function == "stretched":
         mod = Model(stretched_auto_corr_scat_factor)  # ,  independent_vars=  _vars)
@@ -1966,9 +2146,16 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
             baseline_ = kwargs["guess_values"]["baseline"]
         else:
             baseline_ = 1.0
-        pars = mod.make_params(beta=beta_, alpha=alpha_, relaxation_rate=relaxation_rate_, baseline=baseline_)
+        pars = mod.make_params(
+            beta=beta_,
+            alpha=alpha_,
+            relaxation_rate=relaxation_rate_,
+            baseline=baseline_,
+        )
     else:
-        pars = mod.make_params(beta=0.05, alpha=1.0, relaxation_rate=0.005, baseline=1.0)
+        pars = mod.make_params(
+            beta=0.05, alpha=1.0, relaxation_rate=0.005, baseline=1.0
+        )
 
     for v in _vars:
         pars["%s" % v].vary = False
@@ -2034,12 +2221,18 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
                     ax.set_xlim(kwargs["xlim"])
 
                 txts = r"$\tau$" + r"$ = %.3f$" % (1 / rate[i]) + r"$ s$"
-                ax.text(x=0.02, y=0.55 + 0.3, s=txts, fontsize=14, transform=ax.transAxes)
+                ax.text(
+                    x=0.02, y=0.55 + 0.3, s=txts, fontsize=14, transform=ax.transAxes
+                )
                 txts = r"$\alpha$" + r"$ = %.3f$" % (alpha[i])
                 # txts = r'$\beta$' + r'$ = %.3f$'%(beta[i]) +  r'$ s^{-1}$'
-                ax.text(x=0.02, y=0.45 + 0.3, s=txts, fontsize=14, transform=ax.transAxes)
+                ax.text(
+                    x=0.02, y=0.45 + 0.3, s=txts, fontsize=14, transform=ax.transAxes
+                )
                 txts = r"$baseline$" + r"$ = %.3f$" % (baseline[i])
-                ax.text(x=0.02, y=0.35 + 0.3, s=txts, fontsize=14, transform=ax.transAxes)
+                ax.text(
+                    x=0.02, y=0.35 + 0.3, s=txts, fontsize=14, transform=ax.transAxes
+                )
 
             result = dict(beta=beta, rate=rate, alpha=alpha, baseline=baseline)
             fp = path + "uid=%s--g2-qz=%s--fit" % (uid, qz_center[qz_ind]) + ".png"
@@ -2105,8 +2298,20 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
 
                 # print(  result1.best_values['relaxation_rate'],  result1.best_values['beta'] )
 
-                txts = r"$q_z$" + r"$_%s$" % qz_ind + r"$\tau$" + r"$ = %.3f$" % (1 / rate[i]) + r"$ s$"
-                ax.text(x=0.02, y=0.55 + 0.3 - 0.1 * qz_ind, s=txts, fontsize=14, transform=ax.transAxes)
+                txts = (
+                    r"$q_z$"
+                    + r"$_%s$" % qz_ind
+                    + r"$\tau$"
+                    + r"$ = %.3f$" % (1 / rate[i])
+                    + r"$ s$"
+                )
+                ax.text(
+                    x=0.02,
+                    y=0.55 + 0.3 - 0.1 * qz_ind,
+                    s=txts,
+                    fontsize=14,
+                    transform=ax.transAxes,
+                )
 
             if "ylim" in kwargs:
                 ax.set_ylim(kwargs["ylim"])
@@ -2144,14 +2349,18 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
 ###############################
 
 
-def get_each_box_mean_intensity(data_series, box_mask, sampling, timeperframe, plot_=True, *argv, **kwargs):
+def get_each_box_mean_intensity(
+    data_series, box_mask, sampling, timeperframe, plot_=True, *argv, **kwargs
+):
     """Dec 16, 2015, Y.G.@CHX
     get each box (ROI) mean intensity as a function of time
 
 
     """
 
-    mean_int_sets, index_list = roi.mean_intensity(np.array(data_series[::sampling]), box_mask)
+    mean_int_sets, index_list = roi.mean_intensity(
+        np.array(data_series[::sampling]), box_mask
+    )
     try:
         N = len(data_series)
     except:
@@ -2166,7 +2375,13 @@ def get_each_box_mean_intensity(data_series, box_mask, sampling, timeperframe, p
 
         ax.set_title("uid= %s--Mean intensity of each box" % uid)
         for i in range(num_rings):
-            ax.plot(times[::sampling], mean_int_sets[:, i], label="Box " + str(i + 1), marker="o", ls="-")
+            ax.plot(
+                times[::sampling],
+                mean_int_sets[:, i],
+                label="Box " + str(i + 1),
+                marker="o",
+                ls="-",
+            )
             ax.set_xlabel("Time")
             ax.set_ylabel("Mean Intensity")
         ax.legend()
@@ -2250,14 +2465,22 @@ def fit_qr_qz_rate(qr, qz, rate, plot_=True, *argv, **kwargs):
             ax.plot(x**power, res[i].best_fit, "-r")
             txts = r"$D0: %.3e$" % D0[i] + r" $A^2$" + r"$s^{-1}$"
             dy = 0.1
-            ax.text(x=0.15, y=0.65 - dy * i, s=txts, fontsize=14, transform=ax.transAxes)
+            ax.text(
+                x=0.15, y=0.65 - dy * i, s=txts, fontsize=14, transform=ax.transAxes
+            )
             legend = ax.legend(loc="best")
 
         ax.set_ylabel("Relaxation rate " r"$\gamma$" "($s^{-1}$)")
         ax.set_xlabel("$q^%s$" r"($\AA^{-2}$)" % power)
 
         dt = datetime.now()
-        CurTime = "%s%02d%02d-%02d%02d-" % (dt.year, dt.month, dt.day, dt.hour, dt.minute)
+        CurTime = "%s%02d%02d-%02d%02d-" % (
+            dt.year,
+            dt.month,
+            dt.day,
+            dt.hour,
+            dt.minute,
+        )
         # fp = path + 'Q%s-Rate--uid=%s'%(power,uid) + CurTime + '--Fit.png'
         fp = path + "uid=%s--Q-Rate" % (uid) + "--fit-.png"
         fig.savefig(fp, dpi=fig.dpi)
@@ -2503,7 +2726,9 @@ def multi_uids_gisaxs_xpcs_analysis(
                         md["sample"] = "sample"
 
                     dpix = md["x_pixel_size"] * 1000.0  # in mm, eiger 4m is 0.075 mm
-                    lambda_ = md["incident_wavelength"]  # wavelegth of the X-rays in Angstroms
+                    lambda_ = md[
+                        "incident_wavelength"
+                    ]  # wavelegth of the X-rays in Angstroms
                     Ldet = md["detector_distance"]
                     # detector to sample distance (mm), currently, *1000 for saxs, *1 for gisaxs
                     exposuretime = md["count_time"]
@@ -2512,7 +2737,12 @@ def multi_uids_gisaxs_xpcs_analysis(
                     # timeperframe = exposuretime#for visiblitly
                     # timeperframe = 2  ## manual overwrite!!!! we apparently writing the wrong metadata....
                     setup_pargs = dict(
-                        uid=uid, dpix=dpix, Ldet=Ldet, lambda_=lambda_, timeperframe=timeperframe, path=data_dir
+                        uid=uid,
+                        dpix=dpix,
+                        Ldet=Ldet,
+                        lambda_=lambda_,
+                        timeperframe=timeperframe,
+                        path=data_dir,
                     )
                     md["avg_img"] = avg_imgr
 
@@ -2527,17 +2757,34 @@ def multi_uids_gisaxs_xpcs_analysis(
                     else:
                         good_end_ = good_end
                     FD = Multifile(filename, good_start, good_end_)
-                    good_start = max(good_start, np.where(np.array(imgsum) > min_inten)[0][0])
-                    print("With compression, the good_start frame number is: %s " % good_start)
+                    good_start = max(
+                        good_start, np.where(np.array(imgsum) > min_inten)[0][0]
+                    )
+                    print(
+                        "With compression, the good_start frame number is: %s "
+                        % good_start
+                    )
                     print("The good_end frame number is: %s " % good_end_)
 
                     if not para_run:
                         g2, lag_steps_ = cal_g2c(
-                            FD, box_maskr, bad_frame_list, good_start, num_buf=8, imgsum=None, norm=None
+                            FD,
+                            box_maskr,
+                            bad_frame_list,
+                            good_start,
+                            num_buf=8,
+                            imgsum=None,
+                            norm=None,
                         )
                     else:
                         g2, lag_steps_ = cal_g2p(
-                            FD, box_maskr, bad_frame_list, good_start, num_buf=8, imgsum=None, norm=None
+                            FD,
+                            box_maskr,
+                            bad_frame_list,
+                            good_start,
+                            num_buf=8,
+                            imgsum=None,
+                            norm=None,
                         )
 
                     if len(lag_steps) < len(lag_steps_):
@@ -2550,7 +2797,11 @@ def multi_uids_gisaxs_xpcs_analysis(
                     good_start = 0
                     good_series = apply_mask(imgsar[good_start:], maskr)
                     imgsum, bad_frame_list = get_each_frame_intensity(
-                        good_series, sampling=sampling, bad_pixel_threshold=1.2e8, plot_=False, uid=uid
+                        good_series,
+                        sampling=sampling,
+                        bad_pixel_threshold=1.2e8,
+                        plot_=False,
+                        uid=uid,
                     )
                     bad_image_process = False
 
@@ -2559,14 +2810,25 @@ def multi_uids_gisaxs_xpcs_analysis(
                     print(bad_image_process)
 
                     g2, lag_steps_ = cal_g2(
-                        good_series, box_maskr, bad_image_process, bad_frame_list, good_start, num_buf=8
+                        good_series,
+                        box_maskr,
+                        bad_image_process,
+                        bad_frame_list,
+                        good_start,
+                        num_buf=8,
                     )
                     if len(lag_steps) < len(lag_steps_):
                         lag_steps = lag_step_
 
                 taus_ = lag_steps_ * timeperframe
                 taus = lag_steps * timeperframe
-                res_pargs = dict(taus=taus_, qz_center=qz_center, qr_center=qr_center, path=data_dir_, uid=uid)
+                res_pargs = dict(
+                    taus=taus_,
+                    qz_center=qz_center,
+                    qr_center=qr_center,
+                    path=data_dir_,
+                    uid=uid,
+                )
                 save_gisaxs_g2(g2, res_pargs)
                 # plot_gisaxs_g2( g2, taus,  vlim=[0.95, 1.1], res_pargs=res_pargs, one_plot=True)
 
@@ -2576,14 +2838,33 @@ def multi_uids_gisaxs_xpcs_analysis(
                         res_pargs,
                         function="stretched",
                         vlim=[0.95, 1.1],
-                        fit_variables={"baseline": True, "beta": True, "alpha": False, "relaxation_rate": True},
-                        guess_values={"baseline": 1.229, "beta": 0.05, "alpha": 1.0, "relaxation_rate": 0.01},
+                        fit_variables={
+                            "baseline": True,
+                            "beta": True,
+                            "alpha": False,
+                            "relaxation_rate": True,
+                        },
+                        guess_values={
+                            "baseline": 1.229,
+                            "beta": 0.05,
+                            "alpha": 1.0,
+                            "relaxation_rate": 0.01,
+                        },
                         one_plot=True,
                     )
 
-                    fit_qr_qz_rate(qr_center, qz_center, fit_result, power_variable=False, uid=uid, path=data_dir_)
+                    fit_qr_qz_rate(
+                        qr_center,
+                        qz_center,
+                        fit_result,
+                        power_variable=False,
+                        uid=uid,
+                        path=data_dir_,
+                    )
 
-                psave_obj(md, data_dir_ + "uid=%s-md" % uid)  # save the setup parameters
+                psave_obj(
+                    md, data_dir_ + "uid=%s-md" % uid
+                )  # save the setup parameters
 
                 g2s[run_seq + 1][i] = g2
 

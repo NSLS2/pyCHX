@@ -39,6 +39,7 @@
 """
 This module is for functions specific to time correlation
 """
+
 from __future__ import absolute_import, division, print_function
 
 from collections import namedtuple
@@ -272,7 +273,7 @@ def lazy_one_time(image_iterable, num_levels, num_bufs, labels, internal_state=N
     ------
     namedtuple
         A `results` object is yielded after every image has been processed.
-        This `reults` object contains, in this order:
+        This `results` object contains, in this order:
         - `g2`: the normalized correlation
           shape is (len(lag_steps), num_rois)
         - `lag_steps`: the times at which the correlation was computed
@@ -394,7 +395,7 @@ def multi_tau_auto_corr(num_levels, num_bufs, labels, images):
     author: Mark Sutton
     For parameter description, please reference the docstring for
     lazy_one_time. Note that there is an API difference between this function
-    and `lazy_one_time`. The `images` arugment is at the end of this function
+    and `lazy_one_time`. The `images` argument is at the end of this function
     signature here for backwards compatibility, but is the first argument in
     the `lazy_one_time()` function. The semantics of the variables remain
     unchanged.
@@ -463,7 +464,9 @@ def two_time_corr(labels, images, num_frames, num_bufs, num_levels=1):
     return two_time_state_to_results(result)
 
 
-def lazy_two_time(labels, images, num_frames, num_bufs, num_levels=1, two_time_internal_state=None):
+def lazy_two_time(
+    labels, images, num_frames, num_bufs, num_levels=1, two_time_internal_state=None
+):
     """Generator implementation of two-time correlation
     If you do not want multi-tau correlation, set num_levels to 1 and
     num_bufs to the number of images you wish to correlate
@@ -495,7 +498,7 @@ def lazy_two_time(labels, images, num_frames, num_bufs, num_levels=1, two_time_i
     ------
     namedtuple
         A ``results`` object is yielded after every image has been processed.
-        This `reults` object contains, in this order:
+        This `results` object contains, in this order:
         - ``g2``: the normalized correlation
           shape is (num_rois, len(lag_steps), len(lag_steps))
         - ``lag_steps``: the times at which the correlation was computed
@@ -523,7 +526,9 @@ def lazy_two_time(labels, images, num_frames, num_bufs, num_levels=1, two_time_i
        010401(1-4), 2007.
     """
     if two_time_internal_state is None:
-        two_time_internal_state = _init_state_two_time(num_levels, num_bufs, labels, num_frames)
+        two_time_internal_state = _init_state_two_time(
+            num_levels, num_bufs, labels, num_frames
+        )
     # create a shorthand reference to the results and state named tuple
     s = two_time_internal_state
 
@@ -579,7 +584,10 @@ def lazy_two_time(labels, images, num_frames, num_bufs, num_levels=1, two_time_i
 
                 t1_idx = (s.count_level[level] - 1) * 2
 
-                current_img_time = ((s.time_ind[level - 1])[t1_idx] + (s.time_ind[level - 1])[t1_idx + 1]) / 2.0
+                current_img_time = (
+                    (s.time_ind[level - 1])[t1_idx]
+                    + (s.time_ind[level - 1])[t1_idx + 1]
+                ) / 2.0
 
                 # time frame for each level
                 s.time_ind[level].append(current_img_time)
@@ -699,7 +707,9 @@ def _two_time_process(
         if not isinstance(current_img_time, int):
             nshift = 2 ** (level - 1)
             for i in range(-nshift + 1, nshift + 1):
-                g2[:, int(tind1 + i), int(tind2 + i)] = (tmp_binned / (pi_binned * fi_binned)) * num_pixels
+                g2[:, int(tind1 + i), int(tind2 + i)] = (
+                    tmp_binned / (pi_binned * fi_binned)
+                ) * num_pixels
         else:
             g2[:, tind1, tind2] = tmp_binned / (pi_binned * fi_binned) * num_pixels
 
@@ -805,7 +815,9 @@ def _validate_and_transform_inputs(num_bufs, num_levels, labels):
         length of each levels
     """
     if num_bufs % 2 != 0:
-        raise ValueError("There must be an even number of `num_bufs`. You " "provided %s" % num_bufs)
+        raise ValueError(
+            "There must be an even number of `num_bufs`. You provided %s" % num_bufs
+        )
     label_array, pixel_list = extract_label_indices(labels)
 
     # map the indices onto a sequential list of integers starting at 1
@@ -1051,22 +1063,32 @@ class CrossCorrelator:
             self.tmpimgs[i].ravel()[self.subpxlsts[i]] = img1.ravel()[self.pxlsts[i]]
             if not self_correlation:
                 self.tmpimgs2[i] *= 0
-                self.tmpimgs2[i].ravel()[self.subpxlsts[i]] = img2.ravel()[self.pxlsts[i]]
+                self.tmpimgs2[i].ravel()[self.subpxlsts[i]] = img2.ravel()[
+                    self.pxlsts[i]
+                ]
 
             # multiply by maskcorrs > 0 to ignore invalid regions
             if self_correlation:
                 ccorr = _cross_corr(self.tmpimgs[i]) * (self.maskcorrs[i] > 0)
             else:
-                ccorr = _cross_corr(self.tmpimgs[i], self.tmpimgs2[i]) * (self.maskcorrs[i] > 0)
+                ccorr = _cross_corr(self.tmpimgs[i], self.tmpimgs2[i]) * (
+                    self.maskcorrs[i] > 0
+                )
 
             # now handle the normalizations
             if "symavg" in normalization:
                 # do symmetric averaging
-                Icorr = _cross_corr(self.tmpimgs[i] * self.submasks[i], self.submasks[i])
+                Icorr = _cross_corr(
+                    self.tmpimgs[i] * self.submasks[i], self.submasks[i]
+                )
                 if self_correlation:
-                    Icorr2 = _cross_corr(self.submasks[i], self.tmpimgs[i] * self.submasks[i])
+                    Icorr2 = _cross_corr(
+                        self.submasks[i], self.tmpimgs[i] * self.submasks[i]
+                    )
                 else:
-                    Icorr2 = _cross_corr(self.submasks[i], self.tmpimgs2[i] * self.submasks[i])
+                    Icorr2 = _cross_corr(
+                        self.submasks[i], self.tmpimgs2[i] * self.submasks[i]
+                    )
                 # there is an extra condition that Icorr*Icorr2 != 0
                 w = np.where(np.abs(Icorr * Icorr2) > 0)
                 ccorr[w] *= self.maskcorrs[i][w] / Icorr[w] / Icorr2[w]
@@ -1074,7 +1096,10 @@ class CrossCorrelator:
             if "regular" in normalization:
                 # only run on overlapping regions for correlation
                 w = self.pxlst_maskcorrs[i]
-                ccorr[w] /= self.maskcorrs[i][w] * np.average(self.tmpimgs[i].ravel()[self.subpxlsts[i]]) ** 2
+                ccorr[w] /= (
+                    self.maskcorrs[i][w]
+                    * np.average(self.tmpimgs[i].ravel()[self.subpxlsts[i]]) ** 2
+                )
 
             ccorrs.append(ccorr)
 

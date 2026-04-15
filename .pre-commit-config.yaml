@@ -1,23 +1,96 @@
-exclude: '(v2)/.*'
-default_language_version:
-    python: python3
+ci:
+  autoupdate_commit_msg: "chore(deps): update pre-commit hooks"
+  autofix_commit_msg: "style: pre-commit fixes"
+  autoupdate_schedule: "quarterly"
+
+exclude: "^({{cookiecutter\\.project_name}}|hooks/pre_gen_project.py$)"
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: "v6.0.0"
     hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-symlinks
       - id: check-yaml
+      - id: debug-statements
       - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: name-tests-test
+        args: ["--pytest-test-first"]
+      - id: requirements-txt-fixer
       - id: trailing-whitespace
-  - repo: https://github.com/ambv/black
-    rev: 24.4.2
+
+  - repo: https://github.com/adamchainz/blacken-docs
+    rev: "1.20.0"
     hooks:
-      - id: black
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+      - id: blacken-docs
+        additional_dependencies: [black==24.*]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.15.6"
     hooks:
-      - id: isort
-        args: ["--profile", "black"]
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.7.1
+      - id: ruff-check
+        args: ["--fix", "--show-fixes"]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: "v1.10.0"
     hooks:
-      - id: nbstripout
+      - id: rst-backticks
+      - id: rst-directive-colons
+      - id: rst-inline-touching-normal
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: "v1.19.1"
+    hooks:
+      - id: mypy
+        files: "(src|tests|noxfile.py)"
+        args: []
+        additional_dependencies:
+          - click
+          - markdown-it-py
+          - pytest
+          - nox
+          - orjson
+          - repo-review>=0.10.6
+          - rich
+          - tomli>=2.0.2
+          - types-PyYAML
+
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: "v3.8.1"
+    hooks:
+      - id: prettier
+        types_or: [yaml, markdown, html, css, scss, javascript, json]
+        args: [--prose-wrap=always]
+
+  - repo: https://github.com/crate-ci/typos
+    rev: "v1.44.0"
+    hooks:
+      - id: typos
+        exclude: ^Gemfile\.lock$
+
+  - repo: local
+    hooks:
+      - id: disallow-caps
+        name: Disallow improper capitalization
+        language: pygrep
+        entry: PyBind|Numpy|Cmake|CCache|Github|PyTest|RST|PyLint
+        exclude: (.pre-commit-config.yaml|docs/pages/guides/style\.md)$
+      - id: disallow-words
+        name: Disallow certain words
+        language: pygrep
+        entry: "[Ff]alsey"
+        exclude: .pre-commit-config.yaml$
+      - id: disallow-bad-permalinks
+        name: Disallow _ in permalinks
+        language: pygrep
+        entry: "^permalink:.*_.*"
+      - id: cog
+        name: Cog the pages
+        language: python
+        entry: cog -P -r -I ./helpers
+        files: "^docs/pages/guides/(packaging_compiled|docs|tasks|gha_basic).md|^copier.yml|^docs/_includes/pyproject.md"
+        additional_dependencies: [cogapp, cookiecutter, tomlkit]

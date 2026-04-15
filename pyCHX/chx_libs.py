@@ -6,58 +6,38 @@ This module is for the necessary packages for the XPCS analysis
 
 ## Import all the required packages for  Data Analysis
 from databroker import Broker
-from databroker.assets.path_only_handlers import RawHandler
 
 # edit handlers here to switch to PIMS or dask
 # this does the databroker import
 # from chxtools.handlers import EigerHandler
-from eiger_io.fs_handler import EigerHandler
-from IPython.core.magics.display import Javascript
-from modest_image import imshow
-from skbeam.core.utils import multi_tau_lags
-from skimage.draw import disk, ellipse, line, line_aa, polygon
 
 db = Broker.named("chx")
-import collections
-import copy
-import getpass
 import itertools
-import os
-import pickle
-import random
-import sys
-import time
-import warnings
-from datetime import datetime
 
-import h5py
 import matplotlib as mpl
-import matplotlib.cm as mcm
 import matplotlib.pyplot as plt
 import numpy as np
-import pims
-import skbeam.core.correlation as corr
-import skbeam.core.roi as roi
-import skbeam.core.utils as utils
 
 # * scikit-beam - data analysis tools for X-ray science
 #    - https://github.com/scikit-beam/scikit-beam
 # * xray-vision - plotting helper functions for X-ray science
 #    - https://github.com/Nikea/xray-vision
-import xray_vision
-import xray_vision.mpl_plotting as mpl_plot
-from lmfit import Model, Parameter, Parameters, minimize, report_fit
-from matplotlib import gridspec
-from matplotlib.colors import LogNorm
-from matplotlib.figure import Figure
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from pandas import DataFrame
-from PIL import Image
-from tqdm import tqdm
-from xray_vision.mask.manual_mask import ManualMask
-from xray_vision.mpl_plotting import speckle
 
-mcolors = itertools.cycle(["b", "g", "r", "c", "m", "y", "k", "darkgoldenrod", "oldlace", "brown", "dodgerblue"])
+mcolors = itertools.cycle(
+    [
+        "b",
+        "g",
+        "r",
+        "c",
+        "m",
+        "y",
+        "k",
+        "darkgoldenrod",
+        "oldlace",
+        "brown",
+        "dodgerblue",
+    ]
+)
 markers = itertools.cycle(list(plt.Line2D.filled_markers))
 lstyles = itertools.cycle(["-", "--", "-.", ".", ":"])
 colors = itertools.cycle(
@@ -389,7 +369,9 @@ color_list_jet_extended = [
     [1, 0, 0],
     [0.5, 0.0, 0.0],
 ]
-cmap_jet_extended = mpl.colors.LinearSegmentedColormap.from_list("cmap_jet_extended", color_list_jet_extended)
+cmap_jet_extended = mpl.colors.LinearSegmentedColormap.from_list(
+    "cmap_jet_extended", color_list_jet_extended
+)
 
 # Tweaked version of "view.gtk" default color scale
 color_list_vge = [
@@ -412,9 +394,11 @@ color_list_vge_hdr = [
     [254.0 / 255.0, 254.0 / 255.0, 0.0 / 255.0],
     [254.0 / 255.0, 254.0 / 255.0, 254.0 / 255.0],
 ]
-cmap_vge_hdr = mpl.colors.LinearSegmentedColormap.from_list("cmap_vge_hdr", color_list_vge_hdr)
+cmap_vge_hdr = mpl.colors.LinearSegmentedColormap.from_list(
+    "cmap_vge_hdr", color_list_vge_hdr
+)
 
-# Simliar to Dectris ALBULA default color-scale
+# Similar to Dectris ALBULA default color-scale
 color_list_hdr_albula = [
     [255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0],
     [0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0],
@@ -422,9 +406,13 @@ color_list_hdr_albula = [
     [255.0 / 255.0, 255.0 / 255.0, 0.0 / 255.0],
     # [ 255.0/255.0, 255.0/255.0, 255.0/255.0],
 ]
-cmap_hdr_albula = mpl.colors.LinearSegmentedColormap.from_list("cmap_hdr_albula", color_list_hdr_albula)
+cmap_hdr_albula = mpl.colors.LinearSegmentedColormap.from_list(
+    "cmap_hdr_albula", color_list_hdr_albula
+)
 cmap_albula = cmap_hdr_albula
-cmap_albula_r = mpl.colors.LinearSegmentedColormap.from_list("cmap_hdr_r", color_list_hdr_albula[::-1])
+cmap_albula_r = mpl.colors.LinearSegmentedColormap.from_list(
+    "cmap_hdr_r", color_list_hdr_albula[::-1]
+)
 
 # Ugly color-scale, but good for highlighting many features in HDR data
 color_list_cur_hdr_goldish = [
@@ -438,4 +426,6 @@ color_list_cur_hdr_goldish = [
     [200.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0],  # red
     [255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0],  # white
 ]
-cmap_hdr_goldish = mpl.colors.LinearSegmentedColormap.from_list("cmap_hdr_goldish", color_list_cur_hdr_goldish)
+cmap_hdr_goldish = mpl.colors.LinearSegmentedColormap.from_list(
+    "cmap_hdr_goldish", color_list_cur_hdr_goldish
+)

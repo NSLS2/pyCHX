@@ -23,7 +23,7 @@ def select_regoin(
      defined by
      verts e.g. xs,xe,ys,ye = vert #x_start, x_end, y_start,y_end
      (dimy, dimx,) = img.shape
-    Giving cut postion, start, end, width"""
+    Giving cut position, start, end, width"""
     import numpy as np
 
     xs, xe, ys, ye = vert
@@ -67,7 +67,6 @@ def save_png_series(
     dpi=100,
 ):
     import matplotlib.pyplot as plt
-    import numpy as np
     from matplotlib.colors import LogNorm
 
     """
@@ -154,7 +153,6 @@ def movie_maker(
 ):
     import matplotlib.animation as animation
     import matplotlib.pyplot as plt
-    import numpy as np
     from matplotlib.colors import LogNorm
 
     """
@@ -219,7 +217,9 @@ def movie_maker(
     # print( cmap, vmin, vmax )
 
     if not logs:
-        im = ax.imshow(i0, origin="lower", cmap=cmap, interpolation="nearest", vmin=vmin, vmax=vmax)
+        im = ax.imshow(
+            i0, origin="lower", cmap=cmap, interpolation="nearest", vmin=vmin, vmax=vmax
+        )
     else:
         im = ax.imshow(
             i0,
@@ -230,7 +230,9 @@ def movie_maker(
         )
 
     # ttl = ax.text(.75, .2, '', transform = ax.transAxes, va='center', color='white', fontsize=18)
-    ttl = ax.text(0.75, 0.2, "", transform=ax.transAxes, va="center", color="black", fontsize=18)
+    ttl = ax.text(
+        0.75, 0.2, "", transform=ax.transAxes, va="center", color="black", fontsize=18
+    )
     # print asp
     # fig.set_size_inches( [5., 5 * asp] )
 
