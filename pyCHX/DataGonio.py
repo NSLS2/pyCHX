@@ -12,6 +12,7 @@ from skbeam.core.accumulators.binned_statistic import (
 )
 
 from pyCHX.chx_generic_functions import average_array_withNan
+import h5py
 
 
 def convert_Qmap(
@@ -246,7 +247,7 @@ class Mask(object):
     def load(self, infile, format="auto", invert=False):
         """Loads a mask from a a file. If this object already has some masking
         defined, then the new mask is 'added' to it. Thus, one can load multiple
-        masks to exlude various pixels."""
+        masks to exclude various pixels."""
 
         if format == "png" or infile[-4:] == ".png":
             self.load_png(infile, invert=invert)
@@ -258,14 +259,14 @@ class Mask(object):
             print("Couldn't identify mask format for %s." % (infile))
 
     def load_blank(self, width, height):
-        """Creates a null mask; i.e. one that doesn't exlude any pixels."""
+        """Creates a null mask; i.e. one that doesn't exclude any pixels."""
 
         # TODO: Confirm that this is the correct order for x and y.
         self.data = np.ones((height, width))
 
     def load_png(self, infile, threshold=127, invert=False):
         """Load a mask from a PNG image file. High values (white) are included,
-        low values (black) are exluded."""
+        low values (black) are excluded."""
 
         # Image should be black (0) for excluded pixels, white (255) for included pixels
         img = PIL.Image.open(infile).convert("L")  # black-and-white
@@ -526,7 +527,7 @@ class Calibration(object):
         x = np.arange(self.width) - self.x0
         y = np.arange(self.height) - self.y0
         X, Y = np.meshgrid(x, y)
-        R = np.sqrt(X**2 + Y**2)
+        # R = np.sqrt(X**2 + Y**2)
 
         # twotheta = np.arctan(self.r_map()*c) # radians
         theta_f = np.arctan2(X * c, 1)  # radians
@@ -722,7 +723,7 @@ class CalibrationGonio(Calibration):
         )
         qz_c = -1 * k_over_Dprime * (d * np.sin(theta_g) + Y_c * np.cos(theta_g))
 
-        qr_c = np.sqrt(np.square(qx_c) + np.square(qy_c))
+        # qr_c = np.sqrt(np.square(qx_c) + np.square(qy_c))
         q_c = np.sqrt(np.square(qx_c) + np.square(qy_c) + np.square(qz_c))
 
         # Conversion factor for pixel coordinates
@@ -732,7 +733,7 @@ class CalibrationGonio(Calibration):
         x = np.arange(self.width) - self.x0
         y = np.arange(self.height) - self.y0
         X, Y = np.meshgrid(x, y)
-        R = np.sqrt(X**2 + Y**2)
+        # R = np.sqrt(X**2 + Y**2)
 
         # twotheta = np.arctan(self.r_map()*c) # radians
         theta_f = np.arctan2(X * c, 1)  # radians
@@ -818,27 +819,27 @@ class CalibrationGonio(Calibration):
         self.q_map_data = q_c
         self.qr_map_data = qr_c
 
-        if False:  # True:
-            # Conversion factor for pixel coordinates
-            # (where sample-detector distance is set to d = 1)
-            c = (self.pixel_size_um / 1e6) / self.distance_m
+        # if False:  # True:
+        #     # Conversion factor for pixel coordinates
+        #     # (where sample-detector distance is set to d = 1)
+        #     c = (self.pixel_size_um / 1e6) / self.distance_m
 
-            x = np.arange(self.width) - self.x0
-            y = np.arange(self.height) - self.y0
-            X, Y = np.meshgrid(x, y)
-            R = np.sqrt(X**2 + Y**2)
+        #     x = np.arange(self.width) - self.x0
+        #     y = np.arange(self.height) - self.y0
+        #     X, Y = np.meshgrid(x, y)
+        #     R = np.sqrt(X**2 + Y**2)
 
-            # twotheta = np.arctan(self.r_map()*c) # radians
-            theta_f = np.arctan2(X * c, 1)  # radians
-            # alpha_f_prime = np.arctan2( Y*c, 1 ) # radians
-            alpha_f = np.arctan2(Y * c * np.cos(theta_f), 1)  # radians
+        #     # twotheta = np.arctan(self.r_map()*c) # radians
+        #     theta_f = np.arctan2(X * c, 1)  # radians
+        #     # alpha_f_prime = np.arctan2( Y*c, 1 ) # radians
+        #     alpha_f = np.arctan2(Y * c * np.cos(theta_f), 1)  # radians
 
-            self.qx_map_data1 = self.get_k() * np.sin(theta_f) * np.cos(alpha_f)
-            self.qy_map_data1 = self.get_k() * (
-                np.cos(theta_f) * np.cos(alpha_f) - 1
-            )  # TODO: Check sign
-            self.qz_map_data1 = -1.0 * self.get_k() * np.sin(alpha_f)
+        #     self.qx_map_data1 = self.get_k() * np.sin(theta_f) * np.cos(alpha_f)
+        #     self.qy_map_data1 = self.get_k() * (
+        #         np.cos(theta_f) * np.cos(alpha_f) - 1
+        #     )  # TODO: Check sign
+        #     self.qz_map_data1 = -1.0 * self.get_k() * np.sin(alpha_f)
 
-            self.qr_map_data1 = np.sign(self.qx_map_data1) * np.sqrt(
-                np.square(self.qx_map_data1) + np.square(self.qy_map_data1)
-            )
+        #     self.qr_map_data1 = np.sign(self.qx_map_data1) * np.sqrt(
+        #         np.square(self.qx_map_data1) + np.square(self.qy_map_data1)
+        #     )
