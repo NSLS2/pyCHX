@@ -52,7 +52,7 @@ def get_timepixel_data(data_dir, filename, time_unit=1):
                 np.array(data["#Row"]),
                 np.array(data["#ToA"]) * time_unit,
             )
-        except:
+        except KeyError:
             x, y, t = (
                 np.array(data["#Col"]),
                 np.array(data[" #Row"]),
@@ -65,7 +65,7 @@ def get_timepixel_data(data_dir, filename, time_unit=1):
                 np.array(data["#Row"]),
                 np.array(data["#ToA"]),
             )
-        except:
+        except KeyError:
             x, y, t = (
                 np.array(data["#Col"]),
                 np.array(data[" #Row"]),
@@ -149,7 +149,7 @@ def get_FD_end_num(FD, maxend=1e10):
     for i in range(0, int(maxend)):
         try:
             FD.seekimg(i)
-        except:
+        except KeyError:
             N = i
             break
     FD.seekimg(0)
@@ -502,7 +502,7 @@ def compress_timepix_data_old(data_pixel, filename, rois=None, md=None, nobytes=
 
 class Get_TimePixel_Arrayc(object):
     """
-    a class to get intested pixels from a images sequence,
+    a class to get interested pixels from a images sequence,
     load ROI of all images into memory
     get_data: to get a 2-D array, shape as (len(images), len(pixellist))
 
@@ -550,7 +550,7 @@ class Get_TimePixel_Arrayc(object):
 
     def get_data(self):
         """
-        To get intested pixels array
+        To get interested pixels array
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
         norm = self.norm
@@ -632,7 +632,7 @@ def get_timepixel_avg_image(x, y, t, det_shape=[256, 256], delta_time=None):
 
 
     """
-    t0 = t.min()
+    t0 = t.min()  # noqa F821
     tm = t.max()
 
     if delta_time is not None:
@@ -713,7 +713,7 @@ T = True
 F = False
 
 
-def read_xyt_frame(n=1):
+def read_xyt_frame(DATA_DIR, DataPref, n=1):
     """Load the xyt txt files:
     x,y is the detector (x,y) coordinates
     t is the time-encoder (when hitting the detector at that (x,y))
@@ -758,11 +758,11 @@ class xpcs(object):
         """
 
         if nolevs is None:
-            nolevs = nolev  # defined by the set-up file
+            nolevs = nolev  # noqa F821 # defined by the set-up file
         if nobufs is None:
-            nobufs = nobuf  # defined by the set-up file
+            nobufs = nobuf  # noqa F821 # defined by the set-up file
         if tmaxs is None:
-            tmaxs = tmax  # defined by the set-up file
+            tmaxs = tmax  # noqa F821 # defined by the set-up file
         if nobufs % 2 != 0:
             print("nobuf must be even!!!")
         dly = zeros((nolevs + 1) * nobufs / 2 + 1)
@@ -790,14 +790,14 @@ class xpcs(object):
                qlist: a list of q centered at qradi with qwidth.
         KEYWORD:  noqs, qstart,qend,qwidth::defined by the set-up file
         """
-        qradi = linspace(qstart, qend, noqs)
-        qlist = zeros(2 * noqs)
-        qlist[::2] = round(qradi - qwidth / 2)  # render  even value
-        qlist[1::2] = round(qradi + (1 + qwidth) / 2)  # render odd value
-        qlist[::2] = int_(qradi - qwidth / 2)  # render  even value
-        qlist[1::2] = int_(qradi + (1 + qwidth) / 2)  # render odd value
-        if qlist_ != None:
-            qlist = qlist_
+        qradi = linspace(qstart, qend, noqs)  # noqa F821
+        qlist = zeros(2 * noqs)  # noqa F821
+        qlist[::2] = round(qradi - qwidth / 2)  # noqa F821 # render  even value
+        qlist[1::2] = round(qradi + (1 + qwidth) / 2)  # noqa F821 # render odd value
+        qlist[::2] = int_(qradi - qwidth / 2)  # noqa F821 # render  even value
+        qlist[1::2] = int_(qradi + (1 + qwidth) / 2)  # noqa F821 # render odd value
+        if qlist_ != None:  # noqa F821
+            qlist = qlist_  # noqa F821
         return qlist, qradi
 
     def calqlist(self, qmask=None, shape="circle"):
@@ -817,10 +817,10 @@ class xpcs(object):
         """
 
         qlist, qradi = self.make_qlist()
-        y, x = indices([dimy, dimx])
+        y, x = indices([dimy, dimx])  # noqa F821
         if shape == "circle":
-            y_ = y - ceny + 1
-            x_ = x - cenx + 1
+            y_ = y - ceny + 1  # noqa F821
+            x_ = x - cenx + 1  # noqa F821
             r = int_(hypot(x_, y_) + 0.5)
         elif shape == "column":
             r = x
@@ -829,18 +829,18 @@ class xpcs(object):
         else:
             pass
         r = r.flatten()
-        noqrs = len(qlist)
+        _ = len(qlist)
         qind = digitize(r, qlist)
         if qmask is None:
             w_ = where((qind) % 2)  # qind should be odd;print 'Yes'
             w = w_[0]
         else:
             a = where((qind) % 2)[0]
-            b = where(mask.flatten() == False)[0]
+            b = where(not mask.flatten())[0]  # noqa F821
             w = intersect1d(a, b)
         nopixels = len(w)
         qind = qind[w] / 2
-        pixellist = (y * dimx + x).flatten()[w]
+        pixellist = (y * dimx + x).flatten()[w]  # noqa F821
         nopr, bins = histogram(qind, bins=range(len(qradi) + 1))
         return qind, pixellist, nopr, nopixels
 
@@ -850,7 +850,7 @@ class xpcs(object):
 
     def autocor_xytframe(self, n):
         """Do correlation for one xyt frame--with data name as n"""
-        dly_ = xp.dly_
+        dly_ = xp.dly_  # noqa F821
         # cal=0
         gg2 = zeros(len(dly_))
         data = read_xyt_frame(n)  # load data
@@ -893,12 +893,12 @@ class xpcs(object):
         if len(g2.shape) == 1:
             g2 = g2.reshape([len(g2), 1])
         tn, qn = g2.shape
-        tindex = xrange(tn)
+        tindex = range(tn)
         qcolumns = ["t"] + ["g2"]
         if tscale is None:
             tscale = 1.0
         g2t = hstack([dly[:tn].reshape(tn, 1) * tscale, g2])
-        g2p = pd.DataFrame(data=g2t, index=tindex, columns=qcolumns)
+        g2p = pds.DataFrame(data=g2t, index=tindex, columns=qcolumns)
         return g2p
 
     def show(self, g2p, title):
@@ -908,7 +908,7 @@ class xpcs(object):
         g2p.plot(x=t, y="g2", marker="o", ls="--", logx=T, ylim=ylim)
         plt.xlabel("time delay, ns", fontsize=12)
         plt.title(title)
-        plt.savefig(RES_DIR + title + ".png")
+        plt.savefig(RES_DIR + title + ".png")  # noqa F821
         plt.show()
 
 
@@ -922,7 +922,7 @@ if False:
         fnum = 100
         g2 = xp.autocor(fnum)
         filename = "g2_-%s-" % (fnum)
-        save(RES_DIR + FOUT + filename, g2)
+        save(RES_DIR + FOUT + filename, g2)  # noqa F821
         ##g2= load(RES_DIR + FOUT + filename +'.npy')
         g2p = xp.g2_to_pds(dly, g2, tscale=20)
         xp.show(g2p, "g2_run_%s" % fnum)
