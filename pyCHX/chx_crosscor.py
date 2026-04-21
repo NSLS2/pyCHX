@@ -351,12 +351,11 @@ from numpy import (
     asarray,
 )
 from numpy.fft import irfftn, rfftn
-from numpy.lib import NumpyVersion
 from scipy.fftpack import fftn, ifftn
 
 # from ._arraytools import axis_slice, axis_reverse, odd_ext, even_ext, const_ext
 
-_rfft_mt_safe = NumpyVersion(np.__version__) >= "1.9.0.dev-e24486e"
+_rfft_mt_safe = np.__version__
 
 _rfft_lock = threading.Lock()
 

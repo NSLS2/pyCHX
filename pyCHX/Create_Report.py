@@ -1865,9 +1865,9 @@ def save_res_h5(full_uid, data_dir, save_two_time=False):
         taus_h5 = hf.create_dataset("taus", data=taus)
 
         if save_two_time:
-            g12b_h5 = hf.create_dataset("g12b", data=g12b)
-        g2b_h5 = hf.create_dataset("g2b", data=g2b)
-        taus2_h5 = hf.create_dataset("taus2", data=taus2)
+            g12b_h5 = hf.create_dataset("g12b", data=g12b)  # noqa F821
+        g2b_h5 = hf.create_dataset("g2b", data=g2b)  # noqa F821
+        taus2_h5 = hf.create_dataset("taus2", data=taus2)  # noqa F821
 
 
 def printname(name):
@@ -1909,7 +1909,7 @@ def load_res_h5(full_uid, data_dir):
             taus_h5,
             g2b_h5,
             taus2_h5,
-            g12b,
+            g12b_h5,
         )
     else:
         return meta_data, avg_h5, mask_h5, roi_h5, g2_h5, taus_h5, g2b_h5, taus2_h5
@@ -2073,7 +2073,7 @@ def recursively_save_dict_contents_to_group(h5file, path, dic):
         elif isinstance(item, np.ndarray):
             try:
                 h5file[path + key] = item
-            except:
+            except Exception:
                 item = np.array(item).astype("|S9")
                 h5file[path + key] = item
             if not np.array_equal(h5file[path + key].value, item):
@@ -2128,7 +2128,7 @@ def export_xpcs_results_to_h5(filename, export_dir, export_dict):
                 for key_ in md.keys():
                     try:
                         meta_data.attrs[str(key_)] = md[key_]
-                    except:
+                    except Exception:
                         pass
             elif key in dict_nest:
                 # print(key)
@@ -2136,7 +2136,7 @@ def export_xpcs_results_to_h5(filename, export_dir, export_dict):
                     recursively_save_dict_contents_to_group(
                         hf, "/%s/" % key, export_dict[key]
                     )
-                except:
+                except Exception:
                     print("Can't export the key: %s in this dataset." % key)
 
             elif key in [
@@ -2152,7 +2152,7 @@ def export_xpcs_results_to_h5(filename, export_dir, export_dict):
                         key=key,
                         mode="a",
                     )
-                except:
+                except Exception:
                     flag = True
             else:
                 data = hf.create_dataset(key, data=export_dict[key])
@@ -2190,7 +2190,7 @@ def extract_xpcs_results_from_h5_debug(
     import_dir: the imported file folder
     onekey: string, if not None, only extract that key
     return:
-        extact_dict: dict, with keys as md, g2, g4 et.al.
+        extract_dict: dict, with keys as md, g2, g4 et.al.
     """
 
     import numpy as np
@@ -2244,8 +2244,8 @@ def extract_xpcs_results_from_h5_debug(
             try:
                 with h5py.File(fp, "r") as hf:
                     extract_dict[onekey] = np.array(hf.get(onekey))
-            except:
-                print("The %s dosen't have this %s value" % (fp, onekey))
+            except Exception:
+                print("The %s doesn't have this %s value" % (fp, onekey))
     return extract_dict
 
 
@@ -2272,13 +2272,13 @@ def export_xpcs_results_to_h5_old(filename, export_dir, export_dict):
                 for key_ in md.keys():
                     try:
                         meta_data.attrs[str(key_)] = md[key_]
-                    except:
+                    except Exception:
                         pass
             elif key in dict_nest:
                 k1 = export_dict[key]
-                v1 = hf.create_dataset(key, (1,), dtype="i")
+                _ = hf.create_dataset(key, (1,), dtype="i")
                 for k2 in k1.keys():
-                    v2 = hf.create_dataset(k1, (1,), dtype="i")
+                    _ = hf.create_dataset(k1, (1,), dtype="i")
 
             elif key in [
                 "g2_fit_paras",
@@ -2293,7 +2293,7 @@ def export_xpcs_results_to_h5_old(filename, export_dir, export_dict):
                     mode="a",
                 )
             else:
-                data = hf.create_dataset(key, data=export_dict[key])
+                _ = hf.create_dataset(key, data=export_dict[key])
     print(
         "The xpcs analysis results are exported to %s with filename as %s"
         % (export_dir, filename)
@@ -2311,7 +2311,7 @@ def extract_xpcs_results_from_h5(
     import_dir: the imported file folder
     onekey: string, if not None, only extract that key
     return:
-        extact_dict: dict, with keys as md, g2, g4 et.al.
+        extract_dict: dict, with keys as md, g2, g4 et.al.
     """
 
     import pandas as pds
@@ -2385,8 +2385,8 @@ def extract_xpcs_results_from_h5(
                     else:
                         extract_dict[key] = hf.get(key)[:]  # np.array( hf.get( key  ))
                     # extract_dict[onekey] = hf.get( key  )[:] #np.array( hf.get( onekey  ))
-            except:
-                print("The %s dosen't have this %s value" % (fp, onekey))
+            except Exception:
+                print("The %s doesn't have this %s value" % (fp, onekey))
     return extract_dict
 
 

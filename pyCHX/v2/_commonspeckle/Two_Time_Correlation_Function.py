@@ -15,7 +15,7 @@ from matplotlib.colors import LogNorm
 from tqdm import tqdm
 
 # from pyCHX.chx_libs import  colors_ as mcolors,  markers_ as markers
-from pyCHX.v2._commonspeckle.chx_libs import colors  # common
+from pyCHX.v2._commonspeckle.chx_libs import colors
 from pyCHX.v2._commonspeckle.chx_libs import RUN_GUI, Figure  # common
 from pyCHX.v2._commonspeckle.chx_libs import markers
 from pyCHX.v2._commonspeckle.chx_libs import markers as markers_array
@@ -49,7 +49,7 @@ def delays(num_lev=3, num_buf=4, time=1):
 class Get_Pixel_Array(object):
     """
     Dec 16, 2015, Y.G.@CHX
-    a class to get intested pixels from a images sequence,
+    a class to get interested pixels from a images sequence,
     load ROI of all images into memory
     get_data: to get a 2-D array, shape as (len(images), len(pixellist))
 
@@ -67,12 +67,12 @@ class Get_Pixel_Array(object):
         # self.shape = indexable.shape
         try:
             self.length = len(indexable)
-        except:
+        except Exception:
             self.length = indexable.length
 
     def get_data(self):
         """
-        To get intested pixels array
+        To get interested pixels array
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
 
@@ -91,7 +91,7 @@ class Reverse_Coordinate(object):
         self.mask = mask
         try:
             self.shape = indexable.shape
-        except:
+        except Exception:
             # if
             self.shape = [len(indexable), indexable[0].shape[0], indexable[0].shape[1]]
         # self.shape = indexable.shape
@@ -162,7 +162,13 @@ def run_time(t0):
 
 
 def get_each_frame_ROI_intensity(
-    data_pixel, bad_pixel_threshold=1e10, plot_=False, *argv, **kwargs
+    data_pixel,
+    sampling,
+    save=False,
+    bad_pixel_threshold=1e10,
+    plot_=False,
+    *argv,
+    **kwargs,
 ):
     """
     Dec 16, 2015, Y.G.@CHX
@@ -175,9 +181,7 @@ def get_each_frame_ROI_intensity(
     """
 
     # print ( argv, kwargs )
-    imgsum = np.array(
-        [np.sum(img) for img in tqdm(data_series[::sampling], leave=True)]
-    )
+    imgsum = np.array([np.sum(img) for img in tqdm(data_pixel[::sampling], leave=True)])
     if plot_:
         uid = "uid"
         if "uid" in kwargs.keys():
@@ -239,8 +243,6 @@ def auto_two_Array(data, rois, data_pixel=None):
 
     noframes = data_pixel.shape[0]
     g12b = np.zeros([noframes, noframes, noqs])
-    Unitq = noqs / 10
-    proi = 0
 
     for qi in tqdm(range(1, noqs + 1)):
         pixelist_qi = np.where(qind == qi)[0]
@@ -582,7 +584,7 @@ def show_g12q_aged_g2(
     # gs = gridspec.GridSpec(1, 2, width_ratios=[10, 8],height_ratios=[8,8]   )
     gs = gridspec.GridSpec(1, 2)
     ax = plt.subplot(gs[0])
-    im = imshow(
+    im = plt.imshow(
         ax,
         g12q,
         origin="lower",
@@ -609,7 +611,7 @@ def show_g12q_aged_g2(
 
     for i in range(len(age_center)):
         ps = linS1[1][i]
-        pe = linE1[0][i]
+        _ = linE1[0][i]
         if ps >= N:
             s0 = ps - N
             s1 = N
@@ -622,7 +624,7 @@ def show_g12q_aged_g2(
         # else:e0=pe;e1=0
 
         ps = linS2[1][i]
-        pe = linE2[0][i]
+        _ = linE2[0][i]
         if ps >= N:
             S0 = ps - N
             S1 = N
@@ -659,7 +661,7 @@ def show_g12q_aged_g2(
             linewidth=linewidth,
             ls="--",
             alpha=1,
-            color=colors_array[i],
+            color=colors[i],
         )
         ax.plot(
             [S0, E0],
@@ -667,16 +669,16 @@ def show_g12q_aged_g2(
             linewidth=linewidth,
             ls="--",
             alpha=1,
-            color=colors_array[i],
+            color=colors[i],
         )
-        # print( i, [s0,e0],[s1,e1], [S0,E0],[S1,E1], colors_array[i]   )
+        # print( i, [s0,e0],[s1,e1], [S0,E0],[S1,E1], colors[i]   )
         ax.plot(
             [C0, D0],
             [C1, D1],
             linewidth=linewidthc,
             ls="-",
             alpha=0.0,
-            color=colors_array[i],
+            color=colors[i],
         )
 
     # ax.set_title(  '%s_frames'%(N)    )
@@ -700,10 +702,10 @@ def show_g12q_aged_g2(
             g2_aged[i],
             marker="%s" % markers_array[ki],
             ls="-",
-            color=colors_array[ki],
+            color=colors[ki],
             label=r"$t_a= %.1f s$" % i,
         )
-        # print( i, ki, colors_array[ki]  )
+        # print( i, ki, colors[ki]  )
         ki += 1
         ax1.set_ylim(vmin, vmax)
         ax1.set_xlabel(r"$\tau $ $(s)$", fontsize=18)
@@ -721,7 +723,7 @@ def show_g12q_aged_g2(
 
 def plot_aged_g2(g2_aged, tau=None, timeperframe=1, ylim=None, xlim=None):
     """'A plot of g2 calculated from two-time"""
-    fig = plt.figure(figsize=(8, 10))
+    _ = plt.figure(figsize=(8, 10))
     age_center = list(sorted(g2_aged.keys()))
     gs = gridspec.GridSpec(len(age_center), 1)
     for n, i in enumerate(age_center):
@@ -845,7 +847,7 @@ def show_g12q_taus(g12q, taus, slice_width=10, timeperframe=1, vmin=1, vmax=1.25
     gs = gridspec.GridSpec(1, 2, width_ratios=[10, 8], height_ratios=[8, 8])
     ax = plt.subplot(gs[0])
     ax1 = plt.subplot(gs[1])
-    im = imshow(
+    im = plt.imshow(
         ax,
         g12q,
         origin="lower",
@@ -1221,7 +1223,7 @@ def show_one_C12(
             fig, ax = plt.subplots()
     else:
         fig, ax = fig_ax
-    im = imshow(
+    im = plt.imshow(
         ax,
         data,
         origin="lower",
@@ -1257,6 +1259,7 @@ def show_one_C12(
 
 def show_C12(
     C12,
+    num_qr=1,
     fig_ax=None,
     q_ind=1,
     return_fig=False,
@@ -1357,7 +1360,7 @@ def show_C12(
     )  ### added timeoffset to extend
 
     if logs:
-        im = imshow(
+        im = plt.imshow(
             ax,
             data,
             origin="lower",
@@ -1367,7 +1370,7 @@ def show_C12(
             extent=extent,
         )
     else:
-        im = imshow(
+        im = plt.imshow(
             ax,
             data,
             origin="lower",

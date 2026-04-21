@@ -14,6 +14,23 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from scipy.signal import fftconvolve
 
+import threading
+
+# from . import sigtools
+from numpy import (
+    array,
+    asarray,
+)
+from numpy.fft import irfftn, rfftn
+from scipy.fftpack import fftn, ifftn
+
+##for parallel
+from multiprocessing import Pool
+
+
+from pyCHX.chx_compress import apply_async
+
+
 # from __future__ import absolute_import, division, print_function
 
 # for a convenient status bar
@@ -40,7 +57,7 @@ def get_cor_region(cor, cij, qid, fitw):
     return cij[qid][x1:x2, y1:y2]
 
 
-def direct_corss_cor(im1, im2):
+def direct_cross_cor(im1, im2):
     """YG developed@CHX July/2019, directly calculate the cross correlation of two images
     Input:
         im1: the first image
@@ -259,7 +276,7 @@ class CrossCorrelator2:
                 # ccorr = np.fft.fftshift(ccorr)
                 ccorr = _centered(ccorr, self.sizes[reg, :])
             else:
-                ndim = img1.ndim
+                _ = img1.ndim
                 tmpimg2 = np.zeros_like(tmpimg)
                 tmpimg2[i, j] = img2[ii, jj]
                 im2 = np.fft.rfftn(tmpimg2, fshape)  # image 2
@@ -343,20 +360,9 @@ def _centered(img, sz):
 # 1999 -- 2002
 
 
-import threading
-
-# from . import sigtools
-from numpy import (
-    array,
-    asarray,
-)
-from numpy.fft import irfftn, rfftn
-from scipy._lib._version import NumpyVersion
-from scipy.fftpack import fftn, ifftn
-
 # from ._arraytools import axis_slice, axis_reverse, odd_ext, even_ext, const_ext
 
-_rfft_mt_safe = NumpyVersion(np.__version__) >= "1.9.0.dev-e24486e"
+_rfft_mt_safe = np.__version__ >= "1.9.0.dev-e24486e"
 
 _rfft_lock = threading.Lock()
 
@@ -457,11 +463,11 @@ def fftconvolve_new(in1, in2, mode="full"):
     shape = s1 + s2 - 1
 
     if mode == "valid":
-        _check_valid_mode_shapes(s1, s2)
+        _check_valid_mode_shapes(s1, s2)  # noqa F821
 
     # Speed up FFT by padding to optimal size for FFTPACK
     # expand by at least twice+1
-    fshape = [_next_regular(int(d)) for d in shape]
+    fshape = [_next_regular(int(d)) for d in shape]  # noqa F821
     fslice = tuple([slice(0, int(sz)) for sz in shape])
     # Pre-1.9 NumPy FFT routines are not threadsafe.  For older NumPys, make
     # sure we only call rfftn/irfftn from one thread at a time.
@@ -748,13 +754,6 @@ class CrossCorrelator1:
             ccorrs = ccorrs[0]
 
         return ccorrs
-
-
-##for parallel
-from multiprocessing import Pool
-
-
-from pyCHX.chx_compress import apply_async
 
 
 def run_para_ccorr_sym(ccorr_sym, FD, nstart=0, nend=None, imgsum=None, img_norm=None):
