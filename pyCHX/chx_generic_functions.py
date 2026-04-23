@@ -5,6 +5,7 @@ from os import listdir
 import matplotlib.cm as mcm
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+from matplotlib.colors import LogNorm
 import numpy as np
 import PIL
 import pytz
@@ -19,13 +20,27 @@ from skimage.filters import prewitt
 from pandas import DataFrame
 from lmfit import Model
 import time
+import pickle
+import pims
+from PIL import Image
+import warnings
+import h5py
+import getpass
 
 # from tqdm import *
 import tqdm
-from pyCHX.chx_libs import *
+from pyCHX.chx_libs import db
 from pyCHX.chx_libs import colors, markers
+from pyCHX.XPCS_SAXS import (
+    get_ring_mask,
+    get_angular_mask,
+    combine_two_roi_mask,
+    get_avg_imgc,
+    get_circular_average,
+)
+from pyCHX.v2._commonspeckle.chx_libs import multi_tau_lags
 
-markers = [
+markers_ = [
     "o",
     "D",
     "v",
@@ -50,15 +65,16 @@ markers = [
     ",",
     "1",
 ]
-markers = np.array(markers * 100)
+# markers = np.array(markers_ * 100)
 RUN_GUI = False
 
 
-flatten_nestlist = lambda l: [item for sublist in l for item in sublist]
-"""a function to flatten a nest list
-e.g., flatten( [ ['sg','tt'],'ll' ]   )
-gives ['sg', 'tt', 'l', 'l']
-"""
+def flatten_nestlist(some_list):
+    """a function to flatten a nest list
+    e.g., flatten( [ ['sg','tt'],'ll' ]   )
+    gives ['sg', 'tt', 'l', 'l']
+    """
+    return [item for sublist in some_list for item in sublist]
 
 
 def get_frames_from_dscan(uid, detector="eiger4m_single_image"):
@@ -554,7 +570,7 @@ def plot_q_g2fitpara_general(
         if qphi_analysis:
             geometry = "ang_saxs"
 
-    qval_dict_, fit_res_ = g2_dict, g2_fitpara
+    qval_dict_, _ = g2_dict, g2_fitpara
 
     (
         qr_label,
@@ -595,6 +611,7 @@ def plot_q_g2fitpara_general(
         qi = long_ulabel
         # print(s_ind, qi, np.array( betai) )
 
+        figsize = (10, 20)
         if RUN_GUI:
             fig = Figure(figsize=(10, 12))
         else:
@@ -708,6 +725,7 @@ def plot_q_rate_general(
     rate,
     geometry="saxs",
     ylim=None,
+    power=2,
     logq=True,
     lograte=True,
     plot_all_range=True,
@@ -882,7 +900,7 @@ def save_oavs_tifs(
     """save oavs as png"""
     tifs = list(db[uid].data("OAV_image"))[0]
     try:
-        pixel_scalebar = np.ceil(scalebar_size / md["OAV resolution um_pixel"])
+        pixel_scalebar = np.ceil(scalebar_size / md["OAV resolution um_pixel"])  # noqa F821
     except ValueError:
         pixel_scalebar = None
         print("No OAVS resolution is available.")
@@ -906,7 +924,7 @@ def save_oavs_tifs(
     oav_times = []
     for i in range(len(oavs)):
         oav_times.append(oav_expt + i * oav_period)
-    fig = plt.subplots(
+    _ = plt.subplots(
         int(np.ceil(len(oavs) / 3)),
         3,
         figsize=(3 * 5.08, int(np.ceil(len(oavs) / 3)) * 4),
@@ -916,13 +934,13 @@ def save_oavs_tifs(
         # plt.subplots(figsize=(5.2,4))
         img = oavs[m]
         try:
-            ind = np.flipud(img * scale)[:, :, 2] < threshold
+            _ = np.flipud(img * scale)[:, :, 2] < threshold
         except ValueError:
-            ind = np.flipud(img * scale) < threshold
+            _ = np.flipud(img * scale) < threshold
         rgb_cont_img = np.copy(np.flipud(img))
         # rgb_cont_img[ind,0]=1000
-        if brightness_scale != 1:
-            rgb_cont_img = scale_rgb(rgb_cont_img, scale=brightness_scale)
+        # if brightness_scale != 1:
+        #     rgb_cont_img = scale_rgb(rgb_cont_img, scale=brightness_scale)
 
         plt.imshow(rgb_cont_img, interpolation="none", resample=True, cmap="gray")
         plt.axis("equal")
@@ -1089,7 +1107,7 @@ def lin2log_g2(lin_tau, lin_g2, num_points=False):
     lin_g2 = lin_g2[np.isfinite(lin_tau)]
     lin_tau = lin_tau[np.isfinite(lin_tau)]
     # print('from lin-to-log-g2_sampling: ',lin_tau)
-    if num_points == False:
+    if not num_points:
         # automatically decide how many log-points (8/decade)
         dec = int(np.ceil((np.log10(lin_tau.max()) - np.log10(lin_tau.min())) * 8))
     else:
@@ -1182,7 +1200,7 @@ def show_tif_series(
     w=50,
     vmin=None,
     vmax=None,
-    cmap=cmap_vge_hdr,
+    cmap="viridis",
     logs=False,
     figsize=[10, 16],
 ):
@@ -1252,7 +1270,6 @@ def ps(y, shift=0.5, replot=True, logplot="off", x=None):
     y = np.array(y)
 
     PEAK = x[np.argmax(y)]
-    PEAK_y = np.max(y)
     COM = np.sum(x * y) / np.sum(y)
 
     ### from Maksim: assume this is a peak profile:
@@ -1364,7 +1381,7 @@ def create_seg_ring(ring_edges, ang_edges, mask, setup_pargs):
 
     """
 
-    roi_mask_qr, qr, qr_edge = get_ring_mask(
+    roi_mask_qr, qr, _ = get_ring_mask(
         mask,
         inner_radius=None,
         outer_radius=None,
@@ -1375,14 +1392,14 @@ def create_seg_ring(ring_edges, ang_edges, mask, setup_pargs):
         pargs=setup_pargs,
     )
 
-    roi_mask_ang, ang_center, ang_edge = get_angular_mask(
+    roi_mask_ang, ang_center, _ = get_angular_mask(
         mask,
         inner_angle=None,
         outer_angle=None,
         width=None,
         edges=np.array(ang_edges),
         num_angles=None,
-        center=center,
+        center=None,
         flow_geometry=False,
     )
 
@@ -1439,8 +1456,6 @@ def get_q_iq_using_dynamic_mask(FD, mask, setup_pargs, bin_number=1, threshold=1
        q_saxs:  q in A-1
     """
     beg = FD.beg
-    end = FD.end
-    shape = FD.rdframe(beg).shape
     Nimg_ = FD.end - FD.beg
     # Nimg_ = 100
     Nimg = Nimg_ // bin_number
@@ -1529,7 +1544,6 @@ def average_array_withNan(array, axis=0, mask=None):
     Output:
         avg: averaged array along axis
     """
-    shape = array.shape
     if mask is None:
         mask = np.isnan(array)
         # mask = np.ma.masked_invalid(array).mask
@@ -1573,8 +1587,8 @@ def refine_roi_mask(roi, roi_mask, pixel_num_thres=10):
     noqs = len(np.unique(qind))
     nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
     good_ind = np.where(nopr >= pixel_num_thres)[0] + 1
-    l = len(good_ind)
-    new_ind = np.arange(1, l + 1)
+    ind_len = len(good_ind)
+    new_ind = np.arange(1, ind_len + 1)
     for i, gi in enumerate(good_ind):
         new_mask.ravel()[np.where(roi_mask.ravel() == gi)[0]] = new_ind[i]
     return new_mask, good_ind - 1
@@ -1642,8 +1656,8 @@ def get_echos(dat_arr, min_distance=10):
         )
     # unfortunately, skimage function fu$$s up the format: max_ind is an array of a list of lists...fix this:
     mmax_ind = []
-    for l in max_ind:
-        mmax_ind.append(l[0])
+    for ind in max_ind:
+        mmax_ind.append(ind[0])
     # return [mmax_ind,min_ind]
     return [list(reversed(mmax_ind)), list(reversed(min_ind))]
 
@@ -1662,10 +1676,10 @@ def pad_length(arr, pad_val=np.nan):
     for i in range(len(arr)):
         max_len.append([len(arr[i])])
     max_len = np.max(max_len)
-    for l in range(len(arr)):
-        arr[l] = np.pad(
-            arr[l] * 1.0,
-            (0, max_len - np.size(arr[l])),
+    for ln in range(len(arr)):
+        arr[ln] = np.pad(
+            arr[ln] * 1.0,
+            (0, max_len - np.size(arr[ln])),
             mode="constant",
             constant_values=pad_val,
         )
@@ -1831,7 +1845,7 @@ def get_roi_nr(
         qslist,
         phislist,
     ]  # -> this is the original
-    if silent == False:
+    if not silent:
         print("list of available Qs:")
         print(qslist)
         print("list of available phis:")
@@ -1942,8 +1956,6 @@ def find_index(x, x0, tolerance=None):
     #find the position of P in a list (plist) with tolerance
     """
 
-    N = len(x)
-    i = 0
     if x0 > max(x):
         position = len(x) - 1
     elif x0 < min(x):
@@ -1959,7 +1971,6 @@ def find_index_old(x, x0, tolerance=None):
     #find the position of P in a list (plist) with tolerance
     """
 
-    N = len(x)
     i = 0
     position = None
     if tolerance is None:
@@ -2358,8 +2369,8 @@ def validate_uid_dict(uid_dict):
     """
     badn = 0
     badlist = []
-    for k in list(uids.keys()):
-        for uid in uids[k]:
+    for k in list(uid_dict.keys()):
+        for uid in uid_dict[k]:
             flag = validate_uid(uid)
             if not flag:
                 badn += 1
@@ -3032,6 +3043,7 @@ def check_bad_data_points(
         )
 
         if path is not None:
+            uid = "uid"
             fp = path + "%s" % (uid) + "_find_bad_points" + ".png"
             plt.savefig(fp, dpi=fig.dpi)
     bd2 = list(np.where(np.abs(d - d.mean()) > scale * d.std())[0] + good_start)
@@ -3595,7 +3607,7 @@ def export_scan_scalar(
 def get_flatfield(uid, reverse=False):
     import h5py
 
-    detector = get_detector(db[uid])
+    _ = get_detector(db[uid])
     sud = get_sid_filenames(db[uid])
     master_path = "%s_master.h5" % (sud[2][0])
     print(master_path)
@@ -4178,7 +4190,7 @@ def show_img(
                 extent=extent,
             )
     if label_array is not None:
-        im2 = show_label_array(
+        _ = show_label_array(
             ax, label_array, alpha=alpha, cmap=cmap, interpolation=interpolation
         )
 
@@ -4291,7 +4303,7 @@ def plot1D(
     except KeyError:
         logxy = False
 
-    if logx == True and logy == True:
+    if logx and logy:
         logxy = True
 
     try:
@@ -4307,7 +4319,7 @@ def plot1D(
         try:
             color = kwargs["c"]
         except KeyError:
-            color = next(colors_)
+            color = next(colors)
 
     if x is None:
         x = range(len(y))
@@ -4398,7 +4410,8 @@ def check_shutter_open(
         [np.sum(img) for img in data_series[time_edge[0] : time_edge[1] : 1]]
     )
     if plot_:
-        fig, ax = plt.subplots()
+        uid = "uid"
+        _, ax = plt.subplots()
         ax.plot(imgsum, "bo")
         ax.set_title("uid=%s--imgsum" % uid)
         ax.set_xlabel("Frame")
@@ -4593,7 +4606,7 @@ def show_label_array_on_image(
             **kwargs,
         )  # norm=norm,
 
-    im_label = mpl_plot.show_label_array(
+    im_label = plt.show_label_array(
         ax, label_array, cmap=cmap, vmin=vmin, vmax=vmax, alpha=alpha, **kwargs
     )  # norm=norm,
 
@@ -4614,7 +4627,7 @@ def show_ROI_on_image(
     vmin=0.01,
     vmax=5,
     show_ang_cor=False,
-    cmap=cmap_albula,
+    cmap="viridis",
     fig_ax=None,
     uid="uid",
     path="",
@@ -4664,7 +4677,7 @@ def show_ROI_on_image(
             origin="lower",
         )
     else:
-        edg = get_image_edge(ROI)
+        _ = get_image_edge(ROI)
         image_ = get_image_with_roi(image, ROI, scale_factor=2)
         # fig, axes = plt.subplots( )
         show_img(
@@ -6672,6 +6685,7 @@ def plot_q_rate_fit_general(
     qval_dict,
     rate,
     qrate_fit_res,
+    power=2,
     geometry="saxs",
     ylim=None,
     plot_all_range=True,
