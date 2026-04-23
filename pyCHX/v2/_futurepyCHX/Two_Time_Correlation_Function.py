@@ -49,7 +49,7 @@ def delays(num_lev=3, num_buf=4, time=1):
 class Get_Pixel_Array(object):
     """
     Dec 16, 2015, Y.G.@CHX
-    a class to get intested pixels from a images sequence,
+    a class to get interested pixels from a images sequence,
     load ROI of all images into memory
     get_data: to get a 2-D array, shape as (len(images), len(pixellist))
 
@@ -72,7 +72,7 @@ class Get_Pixel_Array(object):
 
     def get_data(self):
         """
-        To get intested pixels array
+        To get interested pixels array
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
 

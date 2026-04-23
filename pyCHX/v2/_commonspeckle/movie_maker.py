@@ -13,7 +13,7 @@ def read_imgs(inDir):
     return Images(inDir)
 
 
-def select_regoin(
+def select_region(
     img,
     vert,
     keep_shape=True,
@@ -100,7 +100,7 @@ def save_png_series(
             i0 = img
             asp = 1.0
         else:
-            i0 = select_regoin(
+            i0 = select_region(
                 img,
                 ROI,
                 keep_shape=False,
@@ -205,7 +205,7 @@ def movie_maker(
         asp = 1.0
 
     else:
-        i0 = select_regoin(
+        i0 = select_region(
             imgs[0],
             ROI,
             keep_shape=False,
@@ -245,7 +245,7 @@ def movie_maker(
         if ROI is None:
             ign = imgs[n]
         else:
-            ign = select_regoin(
+            ign = select_region(
                 imgs[n],
                 ROI,
                 keep_shape=False,

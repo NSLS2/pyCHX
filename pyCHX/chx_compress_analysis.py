@@ -7,8 +7,6 @@ from tqdm import tqdm
 
 from pyCHX.chx_generic_functions import save_arrays
 
-# from pyCHX.chx_generic_functions import (get_circular_average)
-# from pyCHX.XPCS_SAXS import (get_circular_average)
 from pyCHX.chx_libs import (
     RUN_GUI,
     Figure,
@@ -17,8 +15,6 @@ from pyCHX.chx_libs import (
     np,
     roi,
 )
-
-logger = logging.getLogger(__name__)
 
 from modest_image import imshow
 
@@ -29,6 +25,8 @@ from pyCHX.chx_compress import (
 from pyCHX.chx_generic_functions import find_bad_pixels_FD
 
 # from pyCHX.chx_compress import *
+
+logger = logging.getLogger(__name__)
 
 
 def get_time_edge_avg_img(
@@ -86,7 +84,7 @@ def get_time_edge_avg_img(
 def plot_imgs(imgs, image_name=None, *argv, **kwargs):
     # NOT WORKing NOW....
     N = len(imgs)
-    sx = np.ceil(np.sqrt(N))
+    _ = np.ceil(np.sqrt(N))
     pass
 
 
@@ -155,7 +153,7 @@ def cal_waterfallc(
     timg[pixelist] = np.arange(1, len(pixelist) + 1)
 
     # maxqind = max(qind)
-    norm = np.bincount(qind)[1:]
+    _ = np.bincount(qind)[1:]
     n = 0
     # for  i in tqdm(range( FD.beg , FD.end )):
     for i in tqdm(
@@ -311,7 +309,7 @@ def cal_each_ring_mean_intensityc(
         times = np.arange(FD.end - FD.beg) + FD.beg  # get the time for each frame
     else:
         times = (FD.beg + np.arange(FD.end - FD.beg)) * timeperframe
-    num_rings = len(np.unique(ring_mask)[1:])
+    _ = len(np.unique(ring_mask)[1:])
     return times, mean_int_sets
 
 

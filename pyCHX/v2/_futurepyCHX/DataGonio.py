@@ -246,7 +246,7 @@ class Mask(object):
     def load(self, infile, format="auto", invert=False):
         """Loads a mask from a a file. If this object already has some masking
         defined, then the new mask is 'added' to it. Thus, one can load multiple
-        masks to exlude various pixels."""
+        masks to exclude various pixels."""
 
         if format == "png" or infile[-4:] == ".png":
             self.load_png(infile, invert=invert)
@@ -258,14 +258,14 @@ class Mask(object):
             print("Couldn't identify mask format for %s." % (infile))
 
     def load_blank(self, width, height):
-        """Creates a null mask; i.e. one that doesn't exlude any pixels."""
+        """Creates a null mask; i.e. one that doesn't exclude any pixels."""
 
         # TODO: Confirm that this is the correct order for x and y.
         self.data = np.ones((height, width))
 
     def load_png(self, infile, threshold=127, invert=False):
         """Load a mask from a PNG image file. High values (white) are included,
-        low values (black) are exluded."""
+        low values (black) are excluded."""
 
         # Image should be black (0) for excluded pixels, white (255) for included pixels
         img = PIL.Image.open(infile).convert("L")  # black-and-white

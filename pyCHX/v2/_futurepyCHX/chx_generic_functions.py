@@ -68,7 +68,7 @@ def get_roi_intensity(img, roi_mask):
 
 
 def generate_h5_list(inDir, filename):
-    """YG DEV at 9/19/2019@CHX generate a lst file containing all h5 fiels in inDir
+    """YG DEV at 9/19/2019@CHX generate a lst file containing all h5 fields in inDir
     Input:
         inDir: the input direction
         filename: the filename for output (have to lst as extension)
@@ -1549,7 +1549,7 @@ def deviation_array_withNan(array, axis=0, mask=None):
 
 def refine_roi_mask(roi_mask, pixel_num_thres=10):
     """YG Dev Jan20,2018
-    remove bad roi which pixel numbe is lower pixel_num_thres
+    remove bad roi which pixel number is lower pixel_num_thres
     roi_mask: array,
     pixel_num_thres: integer, the low limit pixel number in each roi of the combined mask,
                         i.e., if the pixel number in one roi of the combined mask smaller than pixel_num_thres,
@@ -2344,7 +2344,7 @@ def validate_uid(uid):
 def validate_uid_dict(uid_dict):
     """Y.G. developed July 17, 2017 @CHX
     Check each uid in a dict can load data or not
-    uids: dict, val: meaningful decription, key: a list of uids
+    uids: dict, val: meaningful description, key: a list of uids
 
     """
     badn = 0
@@ -2575,7 +2575,7 @@ def get_fra_num_by_dose(exp_dose, exp_time, att=1, dead_time=2):
     Calculate the frame number to be correlated by giving a X-ray exposure dose
 
     Parameters:
-        exp_dose: a list, the exposed dose, e.g., in unit of exp_time(ms)*N(fram num)*att( attenuation)
+        exp_dose: a list, the exposed dose, e.g., in unit of exp_time(ms)*N(frame num)*att( attenuation)
         exp_time: float, the exposure time for a xpcs time sereies
         dead_time: dead time for the fast shutter response time, CHX = 2ms
     Return:
@@ -2614,7 +2614,7 @@ def get_series_g2_taus(
     """
     Get taus for dose dependent analysis
     Parameters:
-        fra_max_list: a list, a lsit of largest available frame number
+        fra_max_list: a list, a list of largest available frame number
         acq_time: acquisition time for each frame
         log_taus: if true, will use the multi-tau defined taus bu using buf_num (default=8),
                otherwise, use deltau =1
@@ -3231,10 +3231,10 @@ def get_meta_data(uid, default_dec="eiger", *argv, **kwargs):
     if len(devices) > 1:
         if verbose:  # added: mute output
             print(
-                "More than one device. This would have unintented consequences.Currently, only the device contains 'default_dec=%s'."
+                "More than one device. This would have unintended consequences.Currently, only the device contains 'default_dec=%s'."
                 % default_dec
             )
-        # raise ValueError("More than one device. This would have unintented consequences.")
+        # raise ValueError("More than one device. This would have unintended consequences.")
     dec = devices[0]
     for dec_ in devices:
         if default_dec in dec_:
@@ -3244,7 +3244,7 @@ def get_meta_data(uid, default_dec="eiger", *argv, **kwargs):
     # detector_names = sorted( header.start['detectors'] )
     detector_names = sorted(get_detectors(db[uid]))
     # if len(detector_names) > 1:
-    #    raise ValueError("More than one det. This would have unintented consequences.")
+    #    raise ValueError("More than one det. This would have unintended consequences.")
     detector_name = detector_names[0]
     # md['detector'] = detector_name
     md["detector"] = get_detector(header)
@@ -3342,10 +3342,10 @@ def get_max_countc(FD, labeled_array):
 
 def create_polygon_mask(image, xcorners, ycorners):
     """
-    Give image and x/y coners to create a polygon mask
+    Give image and x/y corners to create a polygon mask
     image: 2d array
-    xcorners, list, points of x coners
-    ycorners, list, points of y coners
+    xcorners, list, points of x corners
+    ycorners, list, points of y corners
     Return:
     the polygon mask: 2d array, the polygon pixels with values 1 and others with 0
 
@@ -3365,10 +3365,10 @@ def create_polygon_mask(image, xcorners, ycorners):
 
 def create_rectangle_mask(image, xcorners, ycorners):
     """
-    Give image and x/y coners to create a rectangle mask
+    Give image and x/y corners to create a rectangle mask
     image: 2d array
-    xcorners, list, points of x coners
-    ycorners, list, points of y coners
+    xcorners, list, points of x corners
+    ycorners, list, points of y corners
     Return:
     the polygon mask: 2d array, the polygon pixels with values 1 and others with 0
 

@@ -16,7 +16,7 @@ from pyCHX.chx_packages import *
 
 
 def get_t_iqc_uids(uid_list, setup_pargs, slice_num=10, slice_width=1):
-    """Get Iq at different time edge (difined by slice_num and slice_width) for a list of uids
+    """Get Iq at different time edge (defined by slice_num and slice_width) for a list of uids
     Input:
         uid_list: list of string (uid)
         setup_pargs: dict, for calculation of Iq, the key of this dict should include
@@ -394,7 +394,7 @@ def plot_entries_from_uids(
 def get_iq_from_uids(uids, mask, setup_pargs):
     """Y.G. developed July 17, 2017 @CHX
     Get q-Iq of a uids dict, each uid could correspond one frame or a time seriers
-    uids: dict, val: meaningful decription, key: a list of uids
+    uids: dict, val: meaningful description, key: a list of uids
     mask: bool-type 2D array
     setup_pargs: dict, at least should contains, the following parameters for calculation of I(q)
 
@@ -913,7 +913,7 @@ def get_fra_num_by_dose(exp_dose, exp_time, att=1, dead_time=2):
     Calculate the frame number to be correlated by giving a X-ray exposure dose
 
     Parameters:
-        exp_dose: a list, the exposed dose, e.g., in unit of exp_time(ms)*N(fram num)*att( attenuation)
+        exp_dose: a list, the exposed dose, e.g., in unit of exp_time(ms)*N(frame num)*att( attenuation)
         exp_time: float, the exposure time for a xpcs time sereies
         dead_time: dead time for the fast shutter response time, CHX = 2ms
     Return:
@@ -948,7 +948,7 @@ def get_series_one_time_multi_uids(
         trans: list, same length as uids, the transmission list
         exposure_dose: list, a list x-ray exposure dose;
                 by default is None, namely,  = [ max_frame_number ],
-                can be [3.34  334, 3340] in unit of ms,  in unit of exp_time(ms)*N(fram num)*att( attenuation)
+                can be [3.34  334, 3340] in unit of ms,  in unit of exp_time(ms)*N(frame num)*att( attenuation)
         path: string, where to load the two time, if None, ask for it
                     the real g12 path is two_time_path + uid + '/'
         qval_dict: the dictionary for q values
@@ -1192,7 +1192,7 @@ def run_xpcs_xsvs_single(
                     number_rings= 1,
                     #qcenters = [ 0.00235,0.00379,0.00508,0.00636,0.00773, 0.00902] #in A-1
                     #width = 0.0002
-                    qth_interest = 1, #the intested single qth
+                    qth_interest = 1, #the interested single qth
                     use_sqnorm = False,
                     use_imgsum_norm = True,
 

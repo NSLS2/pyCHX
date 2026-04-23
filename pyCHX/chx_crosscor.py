@@ -40,7 +40,7 @@ def get_cor_region(cor, cij, qid, fitw):
     return cij[qid][x1:x2, y1:y2]
 
 
-def direct_corss_cor(im1, im2):
+def direct_cross_cor(im1, im2):
     """YG developed@CHX July/2019, directly calculate the cross correlation of two images
     Input:
         im1: the first image

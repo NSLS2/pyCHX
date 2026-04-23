@@ -1500,7 +1500,7 @@ def get_pixelist_interp_iq(qp, iq, ring_mask, center):
 
 class Get_Pixel_Arrayc_todo(object):
     """
-    a class to get intested pixels from a images sequence,
+    a class to get interested pixels from a images sequence,
     load ROI of all images into memory
     get_data: to get a 2-D array, shape as (len(images), len(pixellist))
 
@@ -1552,7 +1552,7 @@ class Get_Pixel_Arrayc_todo(object):
 
     def get_data(self):
         """
-        To get intested pixels array
+        To get interested pixels array
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
 
@@ -1621,7 +1621,7 @@ class Get_Pixel_Arrayc_todo(object):
 
 class Get_Pixel_Arrayc(object):
     """
-    a class to get intested pixels from a images sequence,
+    a class to get interested pixels from a images sequence,
     load ROI of all images into memory
     get_data: to get a 2-D array, shape as (len(images), len(pixellist))
 
@@ -1673,7 +1673,7 @@ class Get_Pixel_Arrayc(object):
 
     def get_data(self):
         """
-        To get intested pixels array
+        To get interested pixels array
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
 

@@ -1,4 +1,3 @@
-import os
 import pickle as pkl
 import shutil
 import struct
@@ -7,6 +6,7 @@ from multiprocessing import Pool
 
 import dill
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 # imports handler from CHX
 # this is where the decision is made whether or not to use dask
@@ -47,7 +47,7 @@ def pass_FD(FD, n):
     # FD.rdframe(n)
     try:
         FD.seekimg(n)
-    except:
+    except Exception:
         pass
         return False
 
@@ -77,6 +77,7 @@ def compress_eigerdata(
     dtypes="uid",
     reverse=True,
     rot90=False,
+    uid=None,
     num_max_para_process=500,
     with_pickle=False,
     direct_load_data=True,
@@ -247,7 +248,7 @@ def read_compressed_eigerdata(
             mask, avg_img, imgsum, bad_frame_list_ = pkl.load(
                 open(filename + ".pkl", "rb")
             )
-        except:
+        except Exception:
             CAL = True
     if CAL:
         FD = Multifile(filename, beg, end)
@@ -488,7 +489,7 @@ def para_segment_compress_eigerdata(
             inputs = range(num_max_para_process * nr, Nf)
         else:
             inputs = range(num_max_para_process * nr, num_max_para_process * (nr + 1))
-        fns = [filename + "_temp-%i.tmp" % i for i in inputs]
+        # fns = [filename + "_temp-%i.tmp" % i for i in inputs]
         # print( nr, inputs, )
         pool = Pool(processes=len(inputs))  # , maxtasksperchild=1000 )
         # print( inputs )
@@ -563,7 +564,7 @@ def segment_compress_eigerdata(
     Nimg_ = len(images)
     M, N = images[0].shape
     avg_img = np.zeros([M, N], dtype=np.float64)
-    Nopix = float(avg_img.size)
+    # Nopix = float(avg_img.size)
     n = 0
     good_count = 0
     # frac = 0.0
@@ -965,7 +966,7 @@ class Multifile:
             "cols_end",
         ]
 
-        magic = struct.unpack("@16s", br[:16])
+        # magic = struct.unpack("@16s", br[:16])
         md_temp = struct.unpack("@8d7I916x", br[16:])
         self.md = dict(zip(ms_keys, md_temp))
 
@@ -1209,7 +1210,7 @@ class MultifileBNL:
             "cols_begin",
             "cols_end",
         ]
-        magic = struct.unpack("@16s", header_raw[:16])
+        # magic = struct.unpack("@16s", header_raw[:16])
         md_temp = struct.unpack("@8d7I916x", header_raw[16:])
         self.md = dict(zip(ms_keys, md_temp))
         return self.md
@@ -1275,6 +1276,7 @@ def get_avg_imgc(
     plot_=False,
     bad_frame_list=None,
     show_progress=True,
+    save=False,
     *argv,
     **kwargs,
 ):
@@ -1459,7 +1461,7 @@ def _get_mean_intensity_one_q(FD, sampling, labels):
     n = 0
     qind, pixelist = roi.extract_label_indices(labels)
     # iterate over the images to compute multi-tau correlation
-    fra_pix = np.zeros_like(pixelist, dtype=np.float64)
+    #  = np.zeros_like(pixelist, dtype=np.float64)
     timg = np.zeros(FD.md["ncols"] * FD.md["nrows"], dtype=np.int32)
     timg[pixelist] = np.arange(1, len(pixelist) + 1)
     for i in range(FD.beg, FD.end, sampling):

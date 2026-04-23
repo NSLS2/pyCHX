@@ -81,7 +81,7 @@ def Correct_Overlap_Images_Intensities(
      from scipy.signal import savgol_filter as sf
 
      Return: data: array, stitched image with corrected intensity
-            dataM: dict, each value is the image with correted intensity
+            dataM: dict, each value is the image with correlated intensity
             scale: scale for each image, the first scale=1 by definition
             scale_smooth: smoothed scale
 

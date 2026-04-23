@@ -651,7 +651,7 @@ if False:
         qr_end=0.07,
         qr_num=14,
         gap_qr_num=5,
-        definde_second_roi=True,
+        defined_second_roi=True,
         qz_start2=0.04,
         qz_end2=0.050,
         qz_num2=1,
@@ -662,7 +662,7 @@ if False:
         gap_qr_num2=5,
         # qcenters = [ 0.00235,0.00379,0.00508,0.00636,0.00773, 0.00902] #in A-1
         # width = 0.0002
-        qth_interest=1,  # the intested single qth
+        qth_interest=1,  # the interested single qth
         use_sqnorm=False,
         use_imgsum_norm=True,
         pdf_version="_1",  # for pdf report name

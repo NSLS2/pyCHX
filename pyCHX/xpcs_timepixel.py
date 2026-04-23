@@ -504,7 +504,7 @@ def compress_timepix_data_old(data_pixel, filename, rois=None, md=None, nobytes=
 
 class Get_TimePixel_Arrayc(object):
     """
-    a class to get intested pixels from a images sequence,
+    a class to get interested pixels from a images sequence,
     load ROI of all images into memory
     get_data: to get a 2-D array, shape as (len(images), len(pixellist))
 
@@ -552,7 +552,7 @@ class Get_TimePixel_Arrayc(object):
 
     def get_data(self):
         """
-        To get intested pixels array
+        To get interested pixels array
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
         norm = self.norm

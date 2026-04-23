@@ -469,7 +469,7 @@ def plot_t_qrc(qr_1d, frame_edge, save=False, pargs=None, fontsize=8, *argv, **k
 
         save_arrays(
             np.vstack([q, np.array(iqs)]).T,
-            label=["q_A-1"] + ["Fram-%s-%s" % (t[0], t[1]) for t in frame_edge],
+            label=["q_A-1"] + ["Frame-%s-%s" % (t[0], t[1]) for t in frame_edge],
             filename="uid=%s-q-Iqt" % uid,
             path=path,
         )
@@ -941,7 +941,7 @@ def get_1d_qr(
        qz: qz-map
        inc_x0: x-center of incident beam
        mask: a mask for qr-1d integration
-       show_roi: boolean, if ture, show the interest ROI
+       show_roi: boolean, if True, show the interest ROI
        ticks: ticks for the plot, = zticks, zticks_label, rticks, rticks_label
        alpha: transparency of ROI
        loglog: if True, plot in log-log scale
@@ -2055,7 +2055,7 @@ def fit_gisaxs_g2(
      kwargs:
          variables: if exist, should be a dict, like
                  { 'lags': True,  #always True
-                    'beta', Ture, # usually True
+                    'beta', True, # usually True
                     'relaxation_rate': False, #always False
                     'alpha':False, #False for simple exponential, True for stretched/compressed
                     'baseline': True #sometimes be False, keep as 1

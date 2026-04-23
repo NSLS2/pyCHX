@@ -394,7 +394,7 @@ def circular_average(
     radial_val = utils.radial_grid(calibrated_center, image.shape, pixel_size)
 
     if mask is not None:
-        # maks = np.ones_like(  image )
+        # mask = np.ones_like(  image )
         mask = np.array(mask, dtype=bool)
         binr = radial_val[mask]
         image_mask = np.array(image)[mask]
@@ -741,7 +741,7 @@ def angular_average(
     r_mask = make_ring_mask(calibrated_center, image.shape, min_r, max_r)
 
     if mask is not None:
-        # maks = np.ones_like(  image )
+        # mask = np.ones_like(  image )
         mask = np.array(mask * r_mask, dtype=bool)
 
         bina = angle_val[mask]
@@ -838,7 +838,7 @@ def get_t_iqc(
 
             save_arrays(
                 np.vstack([q, np.array(iqs)]).T,
-                label=["q_A-1"] + ["Fram-%s-%s" % (t[0], t[1]) for t in frame_edge],
+                label=["q_A-1"] + ["Frame-%s-%s" % (t[0], t[1]) for t in frame_edge],
                 filename="uid=%s-q-Iqt.csv" % uid,
                 path=path,
             )
@@ -907,7 +907,7 @@ def plot_t_iqc(
 
         save_arrays(
             np.vstack([q, np.array(iqs)]).T,
-            label=["q_A-1"] + ["Fram-%s-%s" % (t[0], t[1]) for t in frame_edge],
+            label=["q_A-1"] + ["Frame-%s-%s" % (t[0], t[1]) for t in frame_edge],
             filename="%s_q_Iqt" % uid,
             path=path,
         )
@@ -1907,7 +1907,7 @@ def fit_saxs_rad_ang_g2(
                     beta * (np.exp(-2 * relaxation_rate * lags))**alpha + baseline
 
     #fit_vibration:
-    #    if True, will fit the g2 by a dumped sin function due to beamline mechnical oscillation
+    #    if True, will fit the g2 by a dumped sin function due to beamline mechanical oscillation
 
     Returns
     -------
@@ -2921,7 +2921,7 @@ def plot_mul_g2(g2s, md):
 
 
 def get_QrQw_From_RoiMask(roi_mask, setup_pargs):
-    """YG Dev Feb 4@CHX Get Q-center and Q-width fo transmission SAXS
+    """YG Dev Feb 4@CHX Get Q-center and Q-width of transmission SAXS
     Input:
         roi_mask: int-type array, 2D roi mask, with q-index starting from 1
         setup_pargs: dict, at least with keys as

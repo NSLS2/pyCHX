@@ -2186,7 +2186,7 @@ def extract_xpcs_results_from_h5_debug(
     import_dir: the imported file folder
     onekey: string, if not None, only extract that key
     return:
-        extact_dict: dict, with keys as md, g2, g4 et.al.
+        extract_dict: dict, with keys as md, g2, g4 et.al.
     """
 
     import numpy as np
@@ -2241,7 +2241,7 @@ def extract_xpcs_results_from_h5_debug(
                 with h5py.File(fp, "r") as hf:
                     extract_dict[onekey] = np.array(hf.get(onekey))
             except:
-                print("The %s dosen't have this %s value" % (fp, onekey))
+                print("The %s doesn't have this %s value" % (fp, onekey))
     return extract_dict
 
 
@@ -2307,7 +2307,7 @@ def extract_xpcs_results_from_h5(
     import_dir: the imported file folder
     onekey: string, if not None, only extract that key
     return:
-        extact_dict: dict, with keys as md, g2, g4 et.al.
+        extract_dict: dict, with keys as md, g2, g4 et.al.
     """
 
     import pandas as pds
@@ -2382,7 +2382,7 @@ def extract_xpcs_results_from_h5(
                         extract_dict[key] = hf.get(key)[:]  # np.array( hf.get( key  ))
                     # extract_dict[onekey] = hf.get( key  )[:] #np.array( hf.get( onekey  ))
             except:
-                print("The %s dosen't have this %s value" % (fp, onekey))
+                print("The %s doesn't have this %s value" % (fp, onekey))
     return extract_dict
 
 
