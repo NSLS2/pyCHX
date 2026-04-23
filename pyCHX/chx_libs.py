@@ -6,22 +6,14 @@ This module is for the necessary packages for the XPCS analysis
 
 ## Import all the required packages for  Data Analysis
 from databroker import Broker
-
-# edit handlers here to switch to PIMS or dask
-# this does the databroker import
-# from chxtools.handlers import EigerHandler
-
-db = Broker.named("chx")
 import itertools
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
-# * scikit-beam - data analysis tools for X-ray science
-#    - https://github.com/scikit-beam/scikit-beam
-# * xray-vision - plotting helper functions for X-ray science
-#    - https://github.com/Nikea/xray-vision
+
+db = Broker.named("chx")
 
 mcolors = itertools.cycle(
     [

@@ -11,9 +11,6 @@ import logging
 
 from skbeam.core import roi
 from skbeam.core.utils import bin_edges_to_centers, geometric_series
-
-logger = logging.getLogger(__name__)
-
 import os
 from datetime import datetime
 from multiprocessing import Pool
@@ -26,6 +23,10 @@ from tqdm import tqdm
 
 from pyCHX.chx_compress import apply_async, pass_FD
 from pyCHX.chx_generic_functions import trans_data_to_pd
+from scipy.special import gamma, gammaln
+
+
+logger = logging.getLogger(__name__)
 
 
 def xsvsp(
@@ -152,9 +153,9 @@ def xsvsp_single(
             norm[
                 np.in1d(
                     pixelist,
-                    extract_label_indices(np.array(label_array == i, dtype=np.int64))[
-                        1
-                    ],
+                    roi.extract_label_indices(
+                        np.array(label_array == i, dtype=np.int64)
+                    )[1],
                 )
             ]
             for i in np.unique(label_array)[1:]
@@ -429,7 +430,7 @@ def xsvsc_single(
     # number of times in the time bin
     num_times = len(time_bin)
     # number of pixels per ROI
-    num_pixels = np.bincount(labels, minlength=(num_roi + 1))[1:]
+    # num_pixels = np.bincount(labels, minlength=(num_roi + 1))[1:]
     # probability density of detecting photons
     prob_k = np.zeros([num_times, num_roi], dtype=np.object)
     his_sum = np.zeros([num_times, num_roi])
@@ -497,7 +498,7 @@ def xsvsc_single(
         # fra_pix[:]=0
         if threshold is not None:
             if img_.max() >= threshold:
-                print("bad image: %s here!" % n)
+                print("bad image: %s here!" % threshold)
                 img_[:] = np.nan
         buf[0, cur[0] - 1] = img_
         _process(
@@ -753,12 +754,12 @@ def save_bin_his_std(spec_bins, spec_his, spec_std, filename, path):
         for j in range(nstd):
             spec_data[:max_m, 1 + mhis * ql + i * ql + j] = spec_std[i, j]
     label = ["count"]
-    for l in range(mhis):
+    for idx in range(mhis):
         for q in range(nhis):
-            label += ["his_level_%s_q_%s" % (l, q)]
-    for l in range(mstd):
+            label += ["his_level_%s_q_%s" % (idx, q)]
+    for idx in range(mstd):
         for q in range(nstd):
-            label += ["std_level_%s_q_%s" % (l, q)]
+            label += ["std_level_%s_q_%s" % (idx, q)]
     spec_pds = trans_data_to_pd(spec_data, label, "array")
     filename_ = os.path.join(path, filename)
     spec_pds.to_csv(filename_)
@@ -887,17 +888,6 @@ def get_bin_edges(num_times, num_rois, mean_roi, max_cts):
             norm_bin_centers[i, j] = bin_edges_to_centers(norm_bin_edges[i, j])
 
     return bin_edges, bin_centers, norm_bin_edges, norm_bin_centers
-
-
-#################
-##for fit
-###################
-
-from scipy.special import gamma, gammaln
-
-###########################3
-##Dev at Nov 18, 2016
-#
 
 
 def nbinomres_old(p, hist, x, hist_err=None, N=1):
@@ -1059,13 +1049,13 @@ def get_xsvs_fit(
             kmean_guess = K_mean[j, i]
             N = spec_sum[j, i]
             if spec_bins is None:
-                x_, x, y = (
+                x_, _, y = (
                     bin_edges[j, i][:-1],
                     Knorm_bin_edges[j, i][:-1],
                     spe_cts_all[j, i],
                 )
             else:
-                x_, x, y = bin_edges[j], bin_edges[j] / kmean_guess, spe_cts_all[j, i]
+                x_, _, y = bin_edges[j], bin_edges[j] / kmean_guess, spe_cts_all[j, i]
 
             if spec_std is not None:
                 yerr = spec_std[j, i]
@@ -1341,14 +1331,14 @@ def save_KM(K_mean, KL_val, ML_val, qs=None, level_time=None, uid=None, path=Non
     m2, m1 = K_mean.shape
     # print(L,n,m2,m1)
     if level_time is None:
-        l = (
+        level = (
             ["K_mean_%d" % i for i in range(m2)]
             + ["K_fit_Bin_%i" % s for s in range(1, n + 1)]
             + ["M_Fit_Bin_%i" % s for s in range(1, n + 1)]
             + ["Contrast_Fit_Bin_%i" % s for s in range(1, n + 1)]
         )
     else:
-        l = (
+        level = (
             ["K_mean_%s" % i for i in level_time]
             + ["K_fit_%s" % s for s in level_time]
             + ["M_Fit_%s" % s for s in level_time]
@@ -1359,7 +1349,7 @@ def save_KM(K_mean, KL_val, ML_val, qs=None, level_time=None, uid=None, path=Non
     )
     if qs is not None:
         qs = np.array(qs)
-        l = ["q"] + l
+        level = ["q"] + level
         # print(   (K_mean).T,  (K_mean).T.shape )
         # print(  qs )
         data = np.hstack(
@@ -1373,7 +1363,7 @@ def save_KM(K_mean, KL_val, ML_val, qs=None, level_time=None, uid=None, path=Non
         )
 
     df = DataFrame(data)
-    df.columns = (x for x in l)
+    df.columns = (x for x in level)
     filename = "%s_xsvs_fitted_KM.csv" % (uid)
     filename1 = os.path.join(path, filename)
     print("The K-M values are saved as %s in %s." % (filename, path))
@@ -1432,7 +1422,6 @@ def plot_g2_contrast(
         range_ = range(qth, qth + 1)
     else:
         range_ = range(nq)
-    num_times = nt
     nr = len(range_)
     sx = int(round(np.sqrt(nr)))
     if nr % sx == 0:
@@ -1531,7 +1520,7 @@ def get_xsvs_fit_old(
             mi_g2 = 1 / (g2c[:, i] - 1)
             m_ = np.interp(times, taus, mi_g2)
         for j in range(num_times):
-            x_, x, y = (
+            x_, _, y = (
                 bin_edges[j, i][:-1],
                 Knorm_bin_edges[j, i][:-1],
                 spe_cts_all[j, i],
@@ -1673,7 +1662,7 @@ def poisson(x, K):
     the probability density of photon, P(x), satisfy this poisson function.
     """
     K = float(K)
-    Pk = np.exp(-K) * power(K, x) / gamma(x + 1)
+    Pk = np.exp(-K) * np.power(K, x) / gamma(x + 1)
     return Pk
 
 
@@ -1914,19 +1903,19 @@ def fit_xsvs1(
                 pass
 
             if j == 0:
-                (art,) = axes.plot(fitx_, fity, "-b", label=label)
+                (_,) = axes.plot(fitx_, fity, "-b", label=label)
             else:
-                (art,) = axes.plot(fitx_, fity, "-b")
+                (_,) = axes.plot(fitx_, fity, "-b")
 
             if i == 0:
-                (art,) = axes.plot(
+                (_,) = axes.plot(
                     Knorm_bin_edges[j, i][:-1],
                     spe_cts_all[j, i],
                     "o",
                     label=str(time_steps[j]) + " ms",
                 )
             else:
-                (art,) = axes.plot(
+                (_,) = axes.plot(
                     Knorm_bin_edges[j, i][:-1],
                     spe_cts_all[j, i],
                     "o",
@@ -2080,7 +2069,7 @@ def get_xsvs_fit_old1(
             mi_g2 = 1 / (g2c[:, i] - 1)
             m_ = np.interp(times, taus, mi_g2)
         for j in range(num_times):
-            x_, x, y = (
+            x_, _, y = (
                 bin_edges[j, i][:-1],
                 Knorm_bin_edges[j, i][:-1],
                 spe_cts_all[j, i],

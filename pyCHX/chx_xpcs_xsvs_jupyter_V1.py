@@ -1,7 +1,23 @@
 import pandas as pds
 
 from pyCHX.chx_libs import colors, markers
-from pyCHX.chx_packages import *
+
+# from pyCHX.chx_packages import *
+import matplotlib.pyplot as plt
+import os
+from pyOlog import Attachment
+from pyCHX.chx_olog import update_olog_uid
+from pyCHX.chx_generic_functions import save_arrays, save_dict_csv, psave_obj, run_time
+from pyCHX.Create_Report import export_xpcs_results_to_h5, make_pdf_report
+from pyCHX.chx_speckle import (
+    plot_g2_contrast,
+    get_contrast,
+    plot_xsvs_fit,
+    get_xsvs_fit,
+)
+from pyCHX.chx_specklecp import save_KM, save_bin_his_std, get_binned_his_std, xsvsp
+from pyCHX.chx_compress_analysis import cal_each_ring_mean_intensityc
+import numpy as np
 
 # from pyCHX.chx_generic_functions import get_short_long_labels_from_qval_dict
 # RUN_GUI = False
@@ -513,7 +529,7 @@ def wait_data_acquisition_finish(uid, wait_time=2, max_try_num=3):
             FINISH = True
             print("The data acquisition finished.")
             print("Starting to do something here...")
-        except:
+        except Exception:
             wait_func(wait_time=wait_time)
             w += 1
             print("Try number: %s" % w)
@@ -611,7 +627,7 @@ def do_compress_on_line(
                             text="Data are on-line sparsified!",
                             attachments=None,
                         )
-                    except:
+                    except Exception:
                         print("There are something wrong with this data: %s..." % uid)
             print("*" * 50)
     return time.time() - t0
@@ -680,7 +696,7 @@ def realtime_xpcs_analysis(
                                 clear_plot=clear_plot,
                             )
                         # update_olog_uid( uid= md['uid'], text='Data are on-line sparsified!',attachments=None)
-                    except:
+                    except Exception:
                         print("There are something wrong with this data: %s..." % uid)
             else:
                 print("\nThis is not a XPCS series. We will simply ignore it.")
@@ -1000,17 +1016,17 @@ def get_series_one_time_multi_uids(
             try:
                 g2_path = path + uid + "/"
                 g12b = np.load(g2_path + "uid=%s_g12b.npy" % uid)
-            except:
+            except Exception:
                 g2_path = path + md["uid"] + "/"
                 g12b = np.load(g2_path + "uid=%s_g12b.npy" % uid)
             try:
                 exp_time = float(md["cam_acquire_time"])  # *1000 #from second to ms
-            except:
+            except KeyError:
                 exp_time = float(md["exposure time"])  # * 1000  #from second to ms
             if trans is None:
                 try:
                     transi = md["transmission"]
-                except:
+                except KeyError:
                     transi = [1]
             else:
                 transi = trans[i]
@@ -1218,7 +1234,7 @@ def run_xpcs_xsvs_single(
     run_xsvs = run_pargs["run_xsvs"]
     try:
         run_dose = run_pargs["run_dose"]
-    except:
+    except KeyError:
         run_dose = False
     ###############################################################
     if scat_geometry == "gi_saxs":  # to be done for other types
@@ -1250,12 +1266,12 @@ def run_xpcs_xsvs_single(
     use_imgsum_norm = run_pargs["use_imgsum_norm"]
     try:
         use_sqnorm = run_pargs["use_sqnorm"]
-    except:
+    except KeyError:
         use_sqnorm = False
     try:
         inc_x0 = run_pargs["inc_x0"]
         inc_y0 = run_pargs["inc_y0"]
-    except:
+    except KeyError:
         inc_x0 = None
         inc_y0 = None
 
@@ -1298,7 +1314,7 @@ def run_xpcs_xsvs_single(
 
     try:
         username = run_pargs["username"]
-    except:
+    except KeyError:
         username = getpass.getuser()
 
     data_dir0 = os.path.join("/XF11ID/analysis/", CYCLE, username, "Results/")
@@ -2182,7 +2198,7 @@ def run_xpcs_xsvs_single(
             N = len(imgs)
             try:
                 tr = md["transmission"]
-            except:
+            except KeyError:
                 tr = 1
             if "dose_frame" in list(run_pargs.keys()):
                 dose_frame = run_pargs["dose_frame"]
@@ -2597,7 +2613,7 @@ def run_xpcs_xsvs_single(
                 update_olog_uid(
                     uid=md["uid"], text="Add XPCS Analysis PDF Report", attachments=atch
                 )
-            except:
+            except Exception:
                 print(
                     "I can't attach this PDF: %s due to a duplicated filename. Please give a different PDF file."
                     % pname

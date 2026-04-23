@@ -12,9 +12,6 @@ import time
 
 from skbeam.core import roi
 from skbeam.core.utils import bin_edges_to_centers, geometric_series
-
-logger = logging.getLogger(__name__)
-
 import sys
 from datetime import datetime
 
@@ -22,6 +19,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats as st
 from scipy.optimize import leastsq
+import tqdm
+from scipy.special import gamma, gammaln
+
+logger = logging.getLogger(__name__)
 
 
 def xsvs(
@@ -106,7 +107,7 @@ def xsvs(
     num_times = len(time_bin)
 
     # number of pixels per ROI
-    num_pixels = np.bincount(labels, minlength=(num_roi + 1))[1:]
+    # num_pixels = np.bincount(labels, minlength=(num_roi + 1))[1:]
 
     # probability density of detecting photons
     prob_k_all = np.zeros([num_times, num_roi], dtype=np.object)
@@ -147,7 +148,7 @@ def xsvs(
 
         try:
             noframes = len(images)
-        except:
+        except Exception:
             noframes = images.length
 
         # Num= { key: [0]* len(  dict_dly[key] ) for key in list(dict_dly.keys())  }
@@ -415,8 +416,6 @@ def get_bin_edges(num_times, num_rois, mean_roi, max_cts):
 ##for fit
 ###################
 
-from scipy.special import gamma, gammaln
-
 
 def gammaDist(x, params):
     """Gamma distribution function
@@ -510,7 +509,7 @@ def poisson(x, K):
     the probability density of photon, P(x), satisfy this poisson function.
     """
     K = float(K)
-    Pk = np.exp(-K) * power(K, x) / gamma(x + 1)
+    Pk = np.exp(-K) * np.power(K, x) / gamma(x + 1)
     return Pk
 
 
@@ -975,7 +974,7 @@ def get_xsvs_fit(
             mi_g2 = 1 / (g2c[:, i] - 1)
             m_ = np.interp(times, taus, mi_g2)
         for j in range(num_times):
-            x_, x, y = (
+            x_, _, y = (
                 bin_edges[j, i][:-1],
                 Knorm_bin_edges[j, i][:-1],
                 spe_cts_all[j, i],
@@ -1072,8 +1071,7 @@ def plot_xsvs_fit(
         axes.set_ylabel("P(K)")
         n += 1
         for j in range(num_times):
-            # print( i, j )
-            x_, x, y = (
+            _, x, y = (
                 bin_edges[j, i][:-1],
                 Knorm_bin_edges[j, i][:-1],
                 spe_cts_all[j, i],
@@ -1189,7 +1187,6 @@ def plot_g2_contrast(
         range_ = range(qth, qth + 1)
     else:
         range_ = range(nq)
-    num_times = nt
     nr = len(range_)
     sx = int(round(np.sqrt(nr)))
     if nr % sx == 0:

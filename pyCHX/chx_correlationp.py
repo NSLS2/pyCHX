@@ -871,8 +871,6 @@ def cal_GPF(
         np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[qstart:]
     ]
     qind, pixelist = roi.extract_label_indices(ring_mask)
-    noqs = len(np.unique(qind))
-    nopr = np.bincount(qind, minlength=(noqs + 1))[qstart:]
     if norm is not None:
         norms = [
             norm[
@@ -932,9 +930,6 @@ def cal_GPF(
     g2_G = np.zeros((int((num_lev + 1) * num_buf / 2), len(pixelist)))
     g2_P = np.zeros_like(g2_G)
     g2_F = np.zeros_like(g2_G)
-    Gmax = 0
-    lag_steps_err = res[0][1]
-    # print('Here')
     for i in inputs:
         g2_G[:, qind == 1 + i] = res[i][2]  # [:len_lag]
         g2_P[:, qind == 1 + i] = res[i][3]  # [:len_lag]

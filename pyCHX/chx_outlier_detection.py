@@ -1,3 +1,7 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+
 def is_outlier(points, thresh=3.5, verbose=False):
     """MAD test"""
     points.tolist()
@@ -18,6 +22,7 @@ def outlier_mask(
     avg_img,
     mask,
     roi_mask,
+    roi=None,
     outlier_threshold=7.5,
     maximum_outlier_fraction=0.1,
     verbose=False,
@@ -58,7 +63,7 @@ def outlier_mask(
                 )
                 if verbose:
                     print("upper outlier threshold: %s" % upper_outlier_threshold)
-            except:
+            except ValueError:
                 upper_outlier_threshold = False
                 if verbose:
                     print("no upper outlier threshold found")
@@ -66,7 +71,7 @@ def outlier_mask(
             ind2 = (out_l * pixel[0][0]) < ave_roi_int
             try:
                 lower_outlier_threshold = np.nanmax((out_l * pixel[0][0])[ind1 * ind2])
-            except:
+            except ValueError:
                 lower_outlier_threshold = False
                 if verbose:
                     print("no lower outlier threshold found")
