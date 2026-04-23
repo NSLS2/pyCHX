@@ -2,7 +2,6 @@
 
 
 from pyCHX.chx_packages import *
-from pyCHX.chx_xpcs_xsvs_jupyter import run_xpcs_xsvs_single
 
 
 def XPCS_XSVS_SAXS_Multi(
@@ -50,7 +49,9 @@ def XPCS_XSVS_SAXS_Multi(
     mask_load = mask.copy()
 
     username = getpass.getuser()
-    data_dir0 = os.path.join("/XF11ID/analysis/", run_pargs["CYCLE"], username, "Results/")
+    data_dir0 = os.path.join(
+        "/XF11ID/analysis/", run_pargs["CYCLE"], username, "Results/"
+    )
     os.makedirs(data_dir0, exist_ok=True)
     print("Results from this analysis will be stashed in the directory %s" % data_dir0)
     data_dir = os.path.join(data_dir0, uid_average + "/")
@@ -92,7 +93,9 @@ def XPCS_XSVS_SAXS_Multi(
         wat = get_averaged_data_from_multi_res(multi_res, keystr="wat")
     if run_t_ROI_Inten:
         times_roi = get_averaged_data_from_multi_res(multi_res, keystr="times_roi")
-        mean_int_sets = get_averaged_data_from_multi_res(multi_res, keystr="mean_int_sets")
+        mean_int_sets = get_averaged_data_from_multi_res(
+            multi_res, keystr="mean_int_sets"
+        )
 
     if run_one_time:
         g2 = get_averaged_data_from_multi_res(multi_res, keystr="g2")
@@ -124,10 +127,14 @@ def XPCS_XSVS_SAXS_Multi(
                 "relaxation_rate": 0.01,
             },
         )
-        g2_fit_paras = save_g2_fit_para_tocsv(g2_fit_result, filename=uid + "_g2_fit_paras.csv", path=data_dir)
+        g2_fit_paras = save_g2_fit_para_tocsv(
+            g2_fit_result, filename=uid + "_g2_fit_paras.csv", path=data_dir
+        )
 
     if run_two_time:
-        g12b = get_averaged_data_from_multi_res(multi_res, keystr="g12b", different_length=True)
+        g12b = get_averaged_data_from_multi_res(
+            multi_res, keystr="g12b", different_length=True
+        )
         g2b = get_averaged_data_from_multi_res(multi_res, keystr="g2b")
         tausb = get_averaged_data_from_multi_res(multi_res, keystr="tausb")
 
@@ -160,7 +167,9 @@ def XPCS_XSVS_SAXS_Multi(
             },
         )
 
-        g2b_fit_paras = save_g2_fit_para_tocsv(g2_fit_resultb, filename=uid + "_g2b_fit_paras.csv", path=data_dir)
+        g2b_fit_paras = save_g2_fit_para_tocsv(
+            g2_fit_resultb, filename=uid + "_g2b_fit_paras.csv", path=data_dir
+        )
 
     if run_four_time:
         g4 = get_averaged_data_from_multi_res(multi_res, keystr="g4")
@@ -179,7 +188,9 @@ def XPCS_XSVS_SAXS_Multi(
         contrast_factorL = get_averaged_data_from_multi_res(
             multi_res, keystr="contrast_factorL", different_length=False
         )
-        times_xsvs = get_averaged_data_from_multi_res(multi_res, keystr="times_xsvs", different_length=False)
+        times_xsvs = get_averaged_data_from_multi_res(
+            multi_res, keystr="times_xsvs", different_length=False
+        )
         cont_pds = save_arrays(
             contrast_factorL,
             label=times_xsvs,
@@ -188,9 +199,15 @@ def XPCS_XSVS_SAXS_Multi(
             return_res=True,
         )
         if False:
-            spec_kmean = get_averaged_data_from_multi_res(multi_res, keystr="spec_kmean")
-            spec_pds = get_averaged_data_from_multi_res(multi_res, keystr="spec_pds", different_length=False)
-            times_xsvs = get_averaged_data_from_multi_res(multi_res, keystr="times_xsvs", different_length=False)
+            spec_kmean = get_averaged_data_from_multi_res(
+                multi_res, keystr="spec_kmean"
+            )
+            spec_pds = get_averaged_data_from_multi_res(
+                multi_res, keystr="spec_pds", different_length=False
+            )
+            times_xsvs = get_averaged_data_from_multi_res(
+                multi_res, keystr="times_xsvs", different_length=False
+            )
             spec_his, spec_std = get_his_std_from_pds(spec_pds, his_shapes=None)
             ML_val, KL_val, K_ = get_xsvs_fit(
                 spec_his,
@@ -329,7 +346,9 @@ def XPCS_XSVS_SAXS_Multi(
             beg=good_start,
         )
     if run_t_ROI_Inten:
-        plot_each_ring_mean_intensityc(times_roi, mean_int_sets, uid=uid, save=True, path=data_dir)
+        plot_each_ring_mean_intensityc(
+            times_roi, mean_int_sets, uid=uid, save=True, path=data_dir
+        )
 
     if run_one_time:
         plot_g2_general(
@@ -504,7 +523,9 @@ def XPCS_XSVS_SAXS_Multi(
         for k, v in zip(["taus", "g2", "g2_fit_paras"], [taus, g2, g2_fit_paras]):
             Exdt[k] = v
     if run_two_time:
-        for k, v in zip(["tausb", "g2b", "g2b_fit_paras", "g12b"], [tausb, g2b, g2b_fit_paras, g12b]):
+        for k, v in zip(
+            ["tausb", "g2b", "g2b_fit_paras", "g12b"], [tausb, g2b, g2b_fit_paras, g12b]
+        ):
             Exdt[k] = v
     if run_four_time:
         for k, v in zip(["taus4", "g4"], [taus4, g4]):
@@ -630,7 +651,7 @@ if False:
         qr_end=0.07,
         qr_num=14,
         gap_qr_num=5,
-        definde_second_roi=True,
+        defined_second_roi=True,
         qz_start2=0.04,
         qz_end2=0.050,
         qz_num2=1,
@@ -641,7 +662,7 @@ if False:
         gap_qr_num2=5,
         # qcenters = [ 0.00235,0.00379,0.00508,0.00636,0.00773, 0.00902] #in A-1
         # width = 0.0002
-        qth_interest=1,  # the intested single qth
+        qth_interest=1,  # the interested single qth
         use_sqnorm=False,
         use_imgsum_norm=True,
         pdf_version="_1",  # for pdf report name
@@ -656,6 +677,8 @@ if False:
             suf_ids[1][i * step : (i + 1) * step],
             suf_ids[2][i * step : (i + 1) * step],
         )
-        XPCS_XSVS_SAXS_Multi(0, 0, run_pargs=run_pargs, suf_ids=suf_idsi, uid_average=uid_averages[i])
+        XPCS_XSVS_SAXS_Multi(
+            0, 0, run_pargs=run_pargs, suf_ids=suf_idsi, uid_average=uid_averages[i]
+        )
 
     run_time(t0)

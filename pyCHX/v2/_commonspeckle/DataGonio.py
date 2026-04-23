@@ -1,21 +1,19 @@
 # import sys
-import os
-import re  # Regular expressions
-import sys
 
-import matplotlib as mpl
 import numpy as np
 
 # from scipy.optimize import leastsq
 # import scipy.special
 import PIL  # Python Image Library (for opening PNG, etc.)
-import pylab as plt
-import skbeam.core.correlation as corr
-import skbeam.core.roi as roi
 import skbeam.core.utils as utils
-from skbeam.core.accumulators.binned_statistic import BinnedStatistic1D, BinnedStatistic2D
+from skbeam.core.accumulators.binned_statistic import (
+    BinnedStatistic1D,
+    BinnedStatistic2D,
+)
 
-from pyCHX.v2._commonspeckle.chx_generic_functions import average_array_withNan  # common
+from pyCHX.v2._commonspeckle.chx_generic_functions import (
+    average_array_withNan,
+)  # common
 
 
 def convert_Qmap(
@@ -151,7 +149,9 @@ def get_QPhiMap(img_shape, center):
     return q_map, phi_map
 
 
-def get_img_qphimap(img, q_map, phi_map, mask, bins, center, qang_range=None, statistic="mean"):
+def get_img_qphimap(
+    img, q_map, phi_map, mask, bins, center, qang_range=None, statistic="mean"
+):
     """Y.G., Dev Nov 10, 2018 Get phi_map by giving image
     e.g.,
         q_map, phi_map = get_QPhiMap( mask.shape, center[::-1])
@@ -248,7 +248,7 @@ class Mask(object):
     def load(self, infile, format="auto", invert=False):
         """Loads a mask from a a file. If this object already has some masking
         defined, then the new mask is 'added' to it. Thus, one can load multiple
-        masks to exlude various pixels."""
+        masks to exclude various pixels."""
 
         if format == "png" or infile[-4:] == ".png":
             self.load_png(infile, invert=invert)
@@ -260,14 +260,14 @@ class Mask(object):
             print("Couldn't identify mask format for %s." % (infile))
 
     def load_blank(self, width, height):
-        """Creates a null mask; i.e. one that doesn't exlude any pixels."""
+        """Creates a null mask; i.e. one that doesn't exclude any pixels."""
 
         # TODO: Confirm that this is the correct order for x and y.
         self.data = np.ones((height, width))
 
     def load_png(self, infile, threshold=127, invert=False):
         """Load a mask from a PNG image file. High values (white) are included,
-        low values (black) are exluded."""
+        low values (black) are excluded."""
 
         # Image should be black (0) for excluded pixels, white (255) for included pixels
         img = PIL.Image.open(infile).convert("L")  # black-and-white
@@ -536,7 +536,9 @@ class Calibration(object):
         alpha_f = np.arctan2(Y * c * np.cos(theta_f), 1)  # radians
 
         self.qx_map_data = self.get_k() * np.sin(theta_f) * np.cos(alpha_f)
-        self.qy_map_data = self.get_k() * (np.cos(theta_f) * np.cos(alpha_f) - 1)  # TODO: Check sign
+        self.qy_map_data = self.get_k() * (
+            np.cos(theta_f) * np.cos(alpha_f) - 1
+        )  # TODO: Check sign
         self.qz_map_data = -1.0 * self.get_k() * np.sin(alpha_f)
 
         self.qr_map_data = np.sign(self.qx_map_data) * np.sqrt(
@@ -551,7 +553,7 @@ class Calibration(object):
 ################################################################################
 class CalibrationGonio(Calibration):
     """
-    The geometric claculations used here are described:
+    The geometric calculations used here are described:
     http://gisaxs.com/index.php/Geometry:WAXS_3D
 
     """
@@ -596,7 +598,7 @@ class CalibrationGonio(Calibration):
         self.sam_chi = sam_chi
         self.sam_theta = sam_theta
 
-    def rotation_matix(self, sam_phi, sam_theta, sam_chi, degrees=True):
+    def rotation_matrix(self, sam_phi, sam_theta, sam_chi, degrees=True):
         """
         sam_phi, rotate along lab-frame x, CHX phi
         sam_chi, rotate along lab-frame z, CHX chi
@@ -636,11 +638,13 @@ class CalibrationGonio(Calibration):
         Rxy = np.dot(Rx, Ry)
         return np.dot(Rxy, Rz)
 
-    def _generate_qxyz_map_SF_from_Lab(self, qx, qy, qz, sam_phi, sam_theta, sam_chi, degrees=True):
+    def _generate_qxyz_map_SF_from_Lab(
+        self, qx, qy, qz, sam_phi, sam_theta, sam_chi, degrees=True
+    ):
         """
         Convert qmap from Lab frame to sample frame
         """
-        self.Rot = self.rotation_matix(sam_phi, sam_theta, sam_chi, degrees=degrees)
+        self.Rot = self.rotation_matrix(sam_phi, sam_theta, sam_chi, degrees=degrees)
         qsx, qsy, qsz = np.dot(self.Rot, [np.ravel(qx), np.ravel(qy), np.ravel(qz)])
         return qsx.reshape(qx.shape), qsy.reshape(qy.shape), qsz.reshape(qz.shape)
 
@@ -662,10 +666,14 @@ class CalibrationGonio(Calibration):
             self.sam_chi,
             degrees=degrees,
         )
-        self.qr_map_lab_data = np.sqrt(np.square(self.qx_map_lab_data) + np.square(self.qy_map_lab_data))
+        self.qr_map_lab_data = np.sqrt(
+            np.square(self.qx_map_lab_data) + np.square(self.qy_map_lab_data)
+        )
 
         self.q_map_lab_data = np.sqrt(
-            np.square(self.qx_map_lab_data) + np.square(self.qy_map_lab_data) + np.square(self.qz_map_lab_data)
+            np.square(self.qx_map_lab_data)
+            + np.square(self.qy_map_lab_data)
+            + np.square(self.qz_map_lab_data)
         )
 
     def get_ratioDw(self):
@@ -687,9 +695,9 @@ class CalibrationGonio(Calibration):
 
         return self.angle_map_data
 
-    def _generate_qxyz_maps_no_offest(self):
+    def _generate_qxyz_maps_no_offset(self):
         """
-        The geometric claculations used here are described:
+        The geometric calculations used here are described:
         http://gisaxs.com/index.php/Geometry:WAXS_3D
 
         """
@@ -708,10 +716,13 @@ class CalibrationGonio(Calibration):
         k_over_Dprime = self.get_k() / Dprime
 
         qx_c = k_over_Dprime * (
-            X_c * np.cos(phi_g) - np.sin(phi_g) * (d * np.cos(theta_g) - Y_c * np.sin(theta_g))
+            X_c * np.cos(phi_g)
+            - np.sin(phi_g) * (d * np.cos(theta_g) - Y_c * np.sin(theta_g))
         )
         qy_c = k_over_Dprime * (
-            X_c * np.sin(phi_g) + np.cos(phi_g) * (d * np.cos(theta_g) - Y_c * np.sin(theta_g)) - Dprime
+            X_c * np.sin(phi_g)
+            + np.cos(phi_g) * (d * np.cos(theta_g) - Y_c * np.sin(theta_g))
+            - Dprime
         )
         qz_c = -1 * k_over_Dprime * (d * np.sin(theta_g) + Y_c * np.cos(theta_g))
 
@@ -733,7 +744,9 @@ class CalibrationGonio(Calibration):
         alpha_f = np.arctan2(Y * c * np.cos(theta_f), 1)  # radians
 
         self.qx_map_data = self.get_k() * np.sin(theta_f) * np.cos(alpha_f)
-        self.qy_map_data = self.get_k() * (np.cos(theta_f) * np.cos(alpha_f) - 1)  # TODO: Check sign
+        self.qy_map_data = self.get_k() * (
+            np.cos(theta_f) * np.cos(alpha_f) - 1
+        )  # TODO: Check sign
         self.qz_map_data = -1.0 * self.get_k() * np.sin(alpha_f)
 
         self.qr_map_data = np.sign(self.qx_map_data) * np.sqrt(
@@ -747,7 +760,7 @@ class CalibrationGonio(Calibration):
 
     def _generate_qxyz_maps(self):
         """
-        The geometric claculations used here are described:
+        The geometric calculations used here are described:
         http://gisaxs.com/index.php/Geometry:WAXS_3D
 
         YG add offset corrections at Sep 21, 2017
@@ -791,8 +804,14 @@ class CalibrationGonio(Calibration):
         k_over_Dprime = self.get_k() / Dprime
 
         qx_c = k_over_Dprime * (X_c * np.cos(phi_g) - np.sin(phi_g) * yprime + offset_x)
-        qy_c = k_over_Dprime * (X_c * np.sin(phi_g) + np.cos(phi_g) * yprime + offset_y - Dprime)
-        qz_c = -1 * k_over_Dprime * (dprime * np.sin(theta_g) + Y_c * np.cos(theta_g) + offset_z)
+        qy_c = k_over_Dprime * (
+            X_c * np.sin(phi_g) + np.cos(phi_g) * yprime + offset_y - Dprime
+        )
+        qz_c = (
+            -1
+            * k_over_Dprime
+            * (dprime * np.sin(theta_g) + Y_c * np.cos(theta_g) + offset_z)
+        )
 
         qr_c = np.sqrt(np.square(qx_c) + np.square(qy_c))
         q_c = np.sqrt(np.square(qx_c) + np.square(qy_c) + np.square(qz_c))
@@ -819,7 +838,9 @@ class CalibrationGonio(Calibration):
             alpha_f = np.arctan2(Y * c * np.cos(theta_f), 1)  # radians
 
             self.qx_map_data1 = self.get_k() * np.sin(theta_f) * np.cos(alpha_f)
-            self.qy_map_data1 = self.get_k() * (np.cos(theta_f) * np.cos(alpha_f) - 1)  # TODO: Check sign
+            self.qy_map_data1 = self.get_k() * (
+                np.cos(theta_f) * np.cos(alpha_f) - 1
+            )  # TODO: Check sign
             self.qz_map_data1 = -1.0 * self.get_k() * np.sin(alpha_f)
 
             self.qr_map_data1 = np.sign(self.qx_map_data1) * np.sqrt(

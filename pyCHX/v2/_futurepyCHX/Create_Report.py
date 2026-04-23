@@ -20,18 +20,15 @@ def check_dict_keys(dicts, key):
 
 
 import os
-import sys
 from datetime import datetime
-from time import time
 
 import h5py
 import numpy as np
 import pandas as pds
 from PIL import Image
-from reportlab.lib.colors import black, blue, brown, green, pink, red, white
-from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.colors import black, blue, red
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import cm, inch, mm
 from reportlab.pdfgen import canvas
 
 from pyCHX.chx_generic_functions import pload_obj
@@ -88,7 +85,6 @@ def add_image_string(
 
 
 class create_pdf_report(object):
-
     """Aug 16, YG@CHX-NSLS-II
      Create a pdf report by giving data_dir, uid, out_dir
      data_dir: the input data directory, including all necessary images
@@ -379,7 +375,9 @@ class create_pdf_report(object):
         c.setFont("Helvetica", 20)
         ds = 230
         self.sub_title_num += 1
-        c.drawString(10, top, "%s. I(q) Invariant Analysis" % self.sub_title_num)  # add title
+        c.drawString(
+            10, top, "%s. I(q) Invariant Analysis" % self.sub_title_num
+        )  # add title
         # add q2Iq
         c.setFont("Helvetica", 14)
         imgf = self.q2Iq_file
@@ -543,7 +541,7 @@ class create_pdf_report(object):
                 round(float(exposuretime) * 1000, 4),
                 round(float(acquisition_period) * 1000, 4),
             )
-        )  ####line 5 'lamda...
+        )  ####line 5 'lambda...
 
         s.append(
             "Detector-Sample Distance: %s m| FeedBack Mode: x -> %s & y -> %s| Shutter Mode: %s"
@@ -561,9 +559,11 @@ class create_pdf_report(object):
             )
         elif self.report_type == "gi_saxs":
             s7 = (
-                "Incident Center: [%s, %s] (pixel)" % (md["beam_center_x"], md["beam_center_y"])
+                "Incident Center: [%s, %s] (pixel)"
+                % (md["beam_center_x"], md["beam_center_y"])
                 + "   ||   "
-                + "Reflect Center: [%s, %s] (pixel)" % (md["beam_refl_center_x"], md["beam_refl_center_y"])
+                + "Reflect Center: [%s, %s] (pixel)"
+                % (md["beam_refl_center_x"], md["beam_refl_center_y"])
             )
         elif self.report_type == "ang_saxs" or self.report_type == "gi_waxs":
             s7 = "Beam Center: [%s, %s] (pixel)" % (
@@ -576,7 +576,11 @@ class create_pdf_report(object):
         s7 += " || " + "BadLen: %s" % len(md["bad_frame_list"])
         s7 += " || " + "Transmission: %s" % md["transmission"]
         s.append(s7)  ####line 7 'Beam center...
-        m = "Mask file: %s" % md["mask_file"] + " || " + "ROI mask file: %s" % md["roi_mask_file"]
+        m = (
+            "Mask file: %s" % md["mask_file"]
+            + " || "
+            + "ROI mask file: %s" % md["roi_mask_file"]
+        )
         # s.append(   'Mask file: %s'%md['mask_file'] )  ####line 8 mask filename
         # s.append(    )  ####line 8 mask filename
         s.append(m)
@@ -587,9 +591,13 @@ class create_pdf_report(object):
             self.data_dir_ = self.data_dir
         s.append("Analysis Results Dir: %s" % self.data_dir_)  ####line 9 results folder
 
-        s.append("Metadata Dir: %s.csv-&.pkl" % self.metafile)  ####line 10 metadata folder
+        s.append(
+            "Metadata Dir: %s.csv-&.pkl" % self.metafile
+        )  ####line 10 metadata folder
         try:
-            s.append("Pipeline notebook: %s" % md["NOTEBOOK_FULL_PATH"])  ####line 11 notebook folder
+            s.append(
+                "Pipeline notebook: %s" % md["NOTEBOOK_FULL_PATH"]
+            )  ####line 11 notebook folder
         except:
             pass
         # print( 'here' )
@@ -730,7 +738,11 @@ class create_pdf_report(object):
         )
 
         # add q_Iq
-        if self.report_type == "saxs" or self.report_type == "gi_saxs" or self.report_type == "ang_saxs":
+        if (
+            self.report_type == "saxs"
+            or self.report_type == "gi_saxs"
+            or self.report_type == "ang_saxs"
+        ):
             imgf = self.ROI_on_Iq_file
             img_height = 180
             img_left, img_top = 320, top - ds
@@ -772,7 +784,9 @@ class create_pdf_report(object):
         top1 = top
         ds = 20
         self.sub_title_num += 1
-        c.drawString(10, top, "%s. Time Dependent Plot" % self.sub_title_num)  # add title
+        c.drawString(
+            10, top, "%s. Time Dependent Plot" % self.sub_title_num
+        )  # add title
         c.setFont("Helvetica", 14)
 
         top = top1 - 160
@@ -943,7 +957,9 @@ class create_pdf_report(object):
         # print( imgf,self.data_dir )
         print(img_width, img_height)
 
-    def report_one_time(self, top=350, g2_fit_file=None, q_rate_file=None, new_page=False):
+    def report_one_time(
+        self, top=350, g2_fit_file=None, q_rate_file=None, new_page=False
+    ):
         """create the one time correlation function report
         Two images:
             One Time Correlation Function with fit
@@ -957,7 +973,9 @@ class create_pdf_report(object):
         c.setFont("Helvetica", 20)
         ds = 20
         self.sub_title_num += 1
-        c.drawString(10, top, "%s. One Time Correlation Function" % self.sub_title_num)  # add title
+        c.drawString(
+            10, top, "%s. One Time Correlation Function" % self.sub_title_num
+        )  # add title
         c.setFont("Helvetica", 14)
         # add g2 plot
         if g2_fit_file is None:
@@ -974,7 +992,7 @@ class create_pdf_report(object):
             img_height = 550
             top = top - 600
             str2_left, str2_top = 80, top - 400
-        # add one_time caculation
+        # add one_time calculation
         img_left, img_top = 1, top
         if self.g2_fit_new_page or self.g2_new_page:
             img_height = 550
@@ -1129,8 +1147,8 @@ class create_pdf_report(object):
             c.showPage()
             c.save()
 
-    def report_mulit_one_time(self, top=720, new_page=False):
-        """create the mulit one time correlation function report
+    def report_multi_one_time(self, top=720, new_page=False):
+        """create the multi one time correlation function report
         Two images:
             One Time Correlation Function with fit
             q-rate fit
@@ -1142,7 +1160,9 @@ class create_pdf_report(object):
         c.setFont("Helvetica", 20)
         ds = 20
         self.sub_title_num += 1
-        c.drawString(10, top, "%s. One Time Correlation Function" % self.sub_title_num)  # add title
+        c.drawString(
+            10, top, "%s. One Time Correlation Function" % self.sub_title_num
+        )  # add title
         c.setFont("Helvetica", 14)
         # add g2 plot
         top = top - 320
@@ -1172,7 +1192,9 @@ class create_pdf_report(object):
             im = Image.open(image)
             ratio = float(im.size[1]) / im.size[0]
             height = 180
-            c.drawImage(image, 350, top, width=height / ratio, height=height, mask="auto")
+            c.drawImage(
+                image, 350, top, width=height / ratio, height=height, mask="auto"
+            )
 
             c.setFont("Helvetica", 16)
             c.setFillColor(blue)
@@ -1198,7 +1220,9 @@ class create_pdf_report(object):
 
         ds = 20
         self.sub_title_num += 1
-        c.drawString(10, top, "%s. Two Time Correlation Function" % self.sub_title_num)  # add title
+        c.drawString(
+            10, top, "%s. Two Time Correlation Function" % self.sub_title_num
+        )  # add title
         c.setFont("Helvetica", 14)
 
         top1 = top
@@ -1304,7 +1328,9 @@ class create_pdf_report(object):
 
         ds = 20
         self.sub_title_num += 1
-        c.drawString(10, top, "%s. Four Time Correlation Function" % self.sub_title_num)  # add title
+        c.drawString(
+            10, top, "%s. Four Time Correlation Function" % self.sub_title_num
+        )  # add title
         c.setFont("Helvetica", 14)
 
         top1 = top
@@ -1411,7 +1437,9 @@ class create_pdf_report(object):
 
         ds = 20
         self.sub_title_num += 1
-        c.drawString(10, top, "%s. Flow One Time Analysis" % self.sub_title_num)  # add title
+        c.drawString(
+            10, top, "%s. Flow One Time Analysis" % self.sub_title_num
+        )  # add title
         c.setFont("Helvetica", 14)
 
         top1 = top
@@ -1515,7 +1543,9 @@ class create_pdf_report(object):
 
         ds = 20
         self.sub_title_num += 1
-        c.drawString(10, top, "%s. Flow One &Two Time Comparison" % self.sub_title_num)  # add title
+        c.drawString(
+            10, top, "%s. Flow One &Two Time Comparison" % self.sub_title_num
+        )  # add title
         c.setFont("Helvetica", 14)
 
         top1 = top
@@ -1640,7 +1670,9 @@ class create_pdf_report(object):
 
         ds = 20
         self.sub_title_num += 1
-        c.drawString(10, top, "%s. Visibility Analysis" % self.sub_title_num)  # add title
+        c.drawString(
+            10, top, "%s. Visibility Analysis" % self.sub_title_num
+        )  # add title
         c.setFont("Helvetica", 14)
         top = top - 330
         # add xsvs fit
@@ -1654,7 +1686,7 @@ class create_pdf_report(object):
             img_height=300,
             str1_left=210,
             str1_top=top + 300,
-            str1="XSVS_Fit_by_Negtive_Binomal Function",
+            str1="XSVS_Fit_by_Negative_Binomal Function",
             str2_left=180,
             str2_top=top - 10,
         )
@@ -1688,7 +1720,7 @@ class create_pdf_report(object):
             c.drawImage(image, 100, top, width=height / ratio, height=height, mask=None)
             c.setFont("Helvetica", 16)
             c.setFillColor(blue)
-            c.drawString(210, top + 300, "XSVS_Fit_by_Negtive_Binomal Function")
+            c.drawString(210, top + 300, "XSVS_Fit_by_Negative_Binomal Function")
             c.setFont("Helvetica", 12)
             c.setFillColor(red)
             c.drawString(180, top - 10, "filename: %s" % imgf)
@@ -1730,7 +1762,9 @@ class create_pdf_report(object):
         print("*" * 40)
 
 
-def create_multi_pdf_reports_for_uids(uids, g2, data_dir, report_type="saxs", append_name=""):
+def create_multi_pdf_reports_for_uids(
+    uids, g2, data_dir, report_type="saxs", append_name=""
+):
     """Aug 16, YG@CHX-NSLS-II
     Create multi pdf reports for each uid in uids
     uids: a list of uids to be reported
@@ -1765,7 +1799,9 @@ def create_multi_pdf_reports_for_uids(uids, g2, data_dir, report_type="saxs", ap
             c.done()
 
 
-def create_one_pdf_reports_for_uids(uids, g2, data_dir, filename="all_in_one", report_type="saxs"):
+def create_one_pdf_reports_for_uids(
+    uids, g2, data_dir, filename="all_in_one", report_type="saxs"
+):
     """Aug 16, YG@CHX-NSLS-II
     Create one pdf reports for each uid in uids
     uids: a list of uids to be reported
@@ -1773,7 +1809,9 @@ def create_one_pdf_reports_for_uids(uids, g2, data_dir, filename="all_in_one", r
     data_dir:
     Save pdf report in data dir
     """
-    c = create_pdf_report(data_dir, uid=filename, out_dir=data_dir, load=False, report_type=report_type)
+    c = create_pdf_report(
+        data_dir, uid=filename, out_dir=data_dir, load=False, report_type=report_type
+    )
     page = 1
 
     for key in list(g2.keys()):
@@ -1802,9 +1840,9 @@ def save_res_h5(full_uid, data_dir, save_two_time=False):
     YG. Nov 10, 2016
     save the results to a h5 file
     will save meta data/avg_img/mask/roi (ring_mask or box_mask)/
-    will aslo save multi-tau calculated one-time correlation function g2/taus
+    will also save multi-tau calculated one-time correlation function g2/taus
     will also save two-time derived one-time correlation function /g2b/taus2
-    if save_two_time if True, will save two-time correaltion function
+    if save_two_time if True, will save two-time correlation function
     """
     with h5py.File(data_dir + "%s.h5" % full_uid, "w") as hf:
         # write meta data
@@ -1838,9 +1876,9 @@ def load_res_h5(full_uid, data_dir):
     """YG. Nov 10, 2016
     load results from a h5 file
     will load meta data/avg_img/mask/roi (ring_mask or box_mask)/
-    will aslo load multi-tau calculated one-time correlation function g2/taus
+    will also load multi-tau calculated one-time correlation function g2/taus
     will also load two-time derived one-time correlation function /g2b/taus2
-    if save_two_time if True, will load two-time correaltion function
+    if save_two_time if True, will load two-time correlation function
 
     """
     with h5py.File(data_dir + "%s.h5" % full_uid, "r") as hf:
@@ -2018,11 +2056,15 @@ def recursively_save_dict_contents_to_group(h5file, path, dic):
         if not isinstance(key, str):
             raise ValueError("dict keys must be strings to save to hdf5")
         # save strings, numpy.int64, and numpy.float64 types
-        if isinstance(item, (np.int64, np.float64, str, np.float, float, np.float32, int)):
+        if isinstance(
+            item, (np.int64, np.float64, str, np.float, float, np.float32, int)
+        ):
             # print( 'here' )
             h5file[path + key] = item
             if not h5file[path + key].value == item:
-                raise ValueError("The data representation in the HDF5 file does not match the original dict.")
+                raise ValueError(
+                    "The data representation in the HDF5 file does not match the original dict."
+                )
         # save numpy arrays
         elif isinstance(item, np.ndarray):
             try:
@@ -2031,7 +2073,9 @@ def recursively_save_dict_contents_to_group(h5file, path, dic):
                 item = np.array(item).astype("|S9")
                 h5file[path + key] = item
             if not np.array_equal(h5file[path + key].value, item):
-                raise ValueError("The data representation in the HDF5 file does not match the original dict.")
+                raise ValueError(
+                    "The data representation in the HDF5 file does not match the original dict."
+                )
         # save dictionaries
         elif isinstance(item, dict):
             recursively_save_dict_contents_to_group(h5file, path + key + "/", item)
@@ -2048,7 +2092,9 @@ def recursively_load_dict_contents_from_group(h5file, path):
         if isinstance(item, h5py._hl.dataset.Dataset):
             ans[key] = item.value
         elif isinstance(item, h5py._hl.group.Group):
-            ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + "/")
+            ans[key] = recursively_load_dict_contents_from_group(
+                h5file, path + key + "/"
+            )
     return ans
 
 
@@ -2083,7 +2129,9 @@ def export_xpcs_results_to_h5(filename, export_dir, export_dict):
             elif key in dict_nest:
                 # print(key)
                 try:
-                    recursively_save_dict_contents_to_group(hf, "/%s/" % key, export_dict[key])
+                    recursively_save_dict_contents_to_group(
+                        hf, "/%s/" % key, export_dict[key]
+                    )
                 except:
                     print("Can't export the key: %s in this dataset." % key)
 
@@ -2121,10 +2169,15 @@ def export_xpcs_results_to_h5(filename, export_dir, export_dict):
                     mode="a",
                 )
 
-    print("The xpcs analysis results are exported to %s with filename as %s" % (export_dir, filename))
+    print(
+        "The xpcs analysis results are exported to %s with filename as %s"
+        % (export_dir, filename)
+    )
 
 
-def extract_xpcs_results_from_h5_debug(filename, import_dir, onekey=None, exclude_keys=None):
+def extract_xpcs_results_from_h5_debug(
+    filename, import_dir, onekey=None, exclude_keys=None
+):
     """
     YG. Dec 22, 2016
     extract data from a h5 file
@@ -2133,7 +2186,7 @@ def extract_xpcs_results_from_h5_debug(filename, import_dir, onekey=None, exclud
     import_dir: the imported file folder
     onekey: string, if not None, only extract that key
     return:
-        extact_dict: dict, with keys as md, g2, g4 et.al.
+        extract_dict: dict, with keys as md, g2, g4 et.al.
     """
 
     import numpy as np
@@ -2153,7 +2206,9 @@ def extract_xpcs_results_from_h5_debug(filename, import_dir, onekey=None, exclud
             for key in list(hf.keys()):
                 if key not in exclude_keys:
                     if key in dicts:
-                        extract_dict[key] = recursively_load_dict_contents_from_group(hf, "/" + key + "/")
+                        extract_dict[key] = recursively_load_dict_contents_from_group(
+                            hf, "/" + key + "/"
+                        )
                     elif key in [
                         "g2_fit_paras",
                         "g2b_fit_paras",
@@ -2186,7 +2241,7 @@ def extract_xpcs_results_from_h5_debug(filename, import_dir, onekey=None, exclud
                 with h5py.File(fp, "r") as hf:
                     extract_dict[onekey] = np.array(hf.get(onekey))
             except:
-                print("The %s dosen't have this %s value" % (fp, onekey))
+                print("The %s doesn't have this %s value" % (fp, onekey))
     return extract_dict
 
 
@@ -2235,10 +2290,15 @@ def export_xpcs_results_to_h5_old(filename, export_dir, export_dict):
                 )
             else:
                 data = hf.create_dataset(key, data=export_dict[key])
-    print("The xpcs analysis results are exported to %s with filename as %s" % (export_dir, filename))
+    print(
+        "The xpcs analysis results are exported to %s with filename as %s"
+        % (export_dir, filename)
+    )
 
 
-def extract_xpcs_results_from_h5(filename, import_dir, onekey=None, exclude_keys=None, two_time_qindex=None):
+def extract_xpcs_results_from_h5(
+    filename, import_dir, onekey=None, exclude_keys=None, two_time_qindex=None
+):
     """
     YG. Dec 22, 2016
     extract data from a h5 file
@@ -2247,10 +2307,9 @@ def extract_xpcs_results_from_h5(filename, import_dir, onekey=None, exclude_keys
     import_dir: the imported file folder
     onekey: string, if not None, only extract that key
     return:
-        extact_dict: dict, with keys as md, g2, g4 et.al.
+        extract_dict: dict, with keys as md, g2, g4 et.al.
     """
 
-    import numpy as np
     import pandas as pds
 
     extract_dict = {}
@@ -2290,7 +2349,9 @@ def extract_xpcs_results_from_h5(filename, import_dir, onekey=None, exclude_keys
                             else:
                                 extract_dict[key] = hf.get(key)[:]
                         else:
-                            extract_dict[key] = hf.get(key)[:]  # np.array( hf.get( key  ))
+                            extract_dict[key] = hf.get(key)[
+                                :
+                            ]  # np.array( hf.get( key  ))
 
         for key in pds_type_keys:
             if key not in exclude_keys:
@@ -2321,7 +2382,7 @@ def extract_xpcs_results_from_h5(filename, import_dir, onekey=None, exclude_keys
                         extract_dict[key] = hf.get(key)[:]  # np.array( hf.get( key  ))
                     # extract_dict[onekey] = hf.get( key  )[:] #np.array( hf.get( onekey  ))
             except:
-                print("The %s dosen't have this %s value" % (fp, onekey))
+                print("The %s doesn't have this %s value" % (fp, onekey))
     return extract_dict
 
 

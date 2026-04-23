@@ -4,7 +4,6 @@ yuzhang@bnl.gov
 This module is for computation of time correlation by using compressing algorithm
 """
 
-
 from __future__ import absolute_import, division, print_function
 
 import logging
@@ -310,7 +309,9 @@ def _validate_and_transform_inputs(num_bufs, num_levels, labels):
         length of each levels
     """
     if num_bufs % 2 != 0:
-        raise ValueError("There must be an even number of `num_bufs`. You " "provided %s" % num_bufs)
+        raise ValueError(
+            "There must be an even number of `num_bufs`. You provided %s" % num_bufs
+        )
     label_array, pixel_list = extract_label_indices(labels)
 
     # map the indices onto a sequential list of integers starting at 1
@@ -398,7 +399,9 @@ def _init_state_one_time(num_levels, num_bufs, labels, cal_error=False):
     # matrix for normalizing G into g2
     future_intensity = np.zeros_like(G)
     if cal_error:
-        G_all = np.zeros((int((num_levels + 1) * num_bufs / 2), len(pixel_list)), dtype=np.float64)
+        G_all = np.zeros(
+            (int((num_levels + 1) * num_bufs / 2), len(pixel_list)), dtype=np.float64
+        )
 
         # matrix for normalizing G into g2
         past_intensity_all = np.zeros_like(G_all)
@@ -502,7 +505,7 @@ def lazy_one_time(
     -------
 
             A `results` object is yielded after every image has been processed.
-            This `reults` object contains, in this order:
+            This `results` object contains, in this order:
             - `g2`: the normalized correlation
               shape is (len(lag_steps), num_rois)
             - `lag_steps`: the times at which the correlation was computed
@@ -923,7 +926,7 @@ def multi_tau_auto_corr(
     author: Mark Sutton
     For parameter description, please reference the docstring for
     lazy_one_time. Note that there is an API difference between this function
-    and `lazy_one_time`. The `images` arugment is at the end of this function
+    and `lazy_one_time`. The `images` argument is at the end of this function
     signature here for backwards compatibility, but is the first argument in
     the `lazy_one_time()` function. The semantics of the variables remain
     unchanged.
@@ -946,7 +949,9 @@ def multi_tau_auto_corr(
         return result.g2, result.lag_steps
 
 
-def multi_tau_two_time_auto_corr(num_lev, num_buf, ring_mask, FD, bad_frame_list=None, imgsum=None, norm=None):
+def multi_tau_two_time_auto_corr(
+    num_lev, num_buf, ring_mask, FD, bad_frame_list=None, imgsum=None, norm=None
+):
     """Wraps generator implementation of multi-tau two time correlation
     This function computes two-time correlation
     Original code : author: Yugang Zhang
@@ -1011,7 +1016,7 @@ def lazy_two_time(
     ------
     namedtuple
         A ``results`` object is yielded after every image has been processed.
-        This `reults` object contains, in this order:
+        This `results` object contains, in this order:
         - ``g2``: the normalized correlation
           shape is (num_rois, len(lag_steps), len(lag_steps))
         - ``lag_steps``: the times at which the correlation was computed
@@ -1040,7 +1045,9 @@ def lazy_two_time(
 
     num_frames = FD.end - FD.beg
     if two_time_internal_state is None:
-        two_time_internal_state = _init_state_two_time(num_levels, num_bufs, labels, num_frames)
+        two_time_internal_state = _init_state_two_time(
+            num_levels, num_bufs, labels, num_frames
+        )
     # create a shorthand reference to the results and state named tuple
     s = two_time_internal_state
     qind, pixelist = roi.extract_label_indices(labels)
@@ -1111,7 +1118,10 @@ def lazy_two_time(
 
                 t1_idx = (s.count_level[level] - 1) * 2
 
-                current_img_time = ((s.time_ind[level - 1])[t1_idx] + (s.time_ind[level - 1])[t1_idx + 1]) / 2.0
+                current_img_time = (
+                    (s.time_ind[level - 1])[t1_idx]
+                    + (s.time_ind[level - 1])[t1_idx + 1]
+                ) / 2.0
                 # time frame for each level
                 s.time_ind[level].append(current_img_time)
                 # make the track_level zero once that level is processed
@@ -1231,9 +1241,13 @@ def _two_time_process(
         if not isinstance(current_img_time, int):
             nshift = 2 ** (level - 1)
             for i in range(-nshift + 1, nshift + 1):
-                g2[:, int(tind1 + i), int(tind2 + i)] = (tmp_binned / (pi_binned * fi_binned)) * num_pixels
+                g2[:, int(tind1 + i), int(tind2 + i)] = (
+                    tmp_binned / (pi_binned * fi_binned)
+                ) * num_pixels
         else:
-            g2[:, int(tind1), int(tind2)] = tmp_binned / (pi_binned * fi_binned) * num_pixels
+            g2[:, int(tind1), int(tind2)] = (
+                tmp_binned / (pi_binned * fi_binned) * num_pixels
+            )
 
         # print( num_pixels )
 
@@ -1343,11 +1357,16 @@ def cal_c12c(
 
     if num_lev is None:
         num_lev = int(np.log(noframes / (num_buf - 1)) / np.log(2) + 1) + 1
-    print("In this g2 calculation, the buf and lev number are: %s--%s--" % (num_buf, num_lev))
+    print(
+        "In this g2 calculation, the buf and lev number are: %s--%s--"
+        % (num_buf, num_lev)
+    )
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
-            print("Bad frame involved and will be precessed!")
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            print("Bad frame involved and will be processed!")
+            noframes -= len(
+                np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0]
+            )
     print("%s frames will be processed..." % (noframes))
 
     c12, lag_steps, state = multi_tau_two_time_auto_corr(
@@ -1384,11 +1403,16 @@ def cal_g2c(
 
     if num_lev is None:
         num_lev = int(np.log(noframes / (num_buf - 1)) / np.log(2) + 1) + 1
-    print("In this g2 calculation, the buf and lev number are: %s--%s--" % (num_buf, num_lev))
+    print(
+        "In this g2 calculation, the buf and lev number are: %s--%s--"
+        % (num_buf, num_lev)
+    )
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
-            print("Bad frame involved and will be precessed!")
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            print("Bad frame involved and will be processed!")
+            noframes -= len(
+                np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0]
+            )
 
     print("%s frames will be processed..." % (noframes))
     if cal_error:
@@ -1437,8 +1461,10 @@ def cal_g2c(
             g2[:g_max, qi - 1] = avgGi[:g_max] / (avgPi[:g_max] * avgFi[:g_max])
             g2_err[:g_max, qi - 1] = np.sqrt(
                 (1 / (avgFi[:g_max] * avgPi[:g_max])) ** 2 * devGi[:g_max] ** 2
-                + (avgGi[:g_max] / (avgFi[:g_max] ** 2 * avgPi[:g_max])) ** 2 * devFi[:g_max] ** 2
-                + (avgGi[:g_max] / (avgFi[:g_max] * avgPi[:g_max] ** 2)) ** 2 * devPi[:g_max] ** 2
+                + (avgGi[:g_max] / (avgFi[:g_max] ** 2 * avgPi[:g_max])) ** 2
+                * devFi[:g_max] ** 2
+                + (avgGi[:g_max] / (avgFi[:g_max] * avgPi[:g_max] ** 2)) ** 2
+                * devPi[:g_max] ** 2
             )
 
         print("G2 with error bar calculation DONE!")
@@ -1474,7 +1500,7 @@ def get_pixelist_interp_iq(qp, iq, ring_mask, center):
 
 class Get_Pixel_Arrayc_todo(object):
     """
-    a class to get intested pixels from a images sequence,
+    a class to get interested pixels from a images sequence,
     load ROI of all images into memory
     get_data: to get a 2-D array, shape as (len(images), len(pixellist))
 
@@ -1498,7 +1524,7 @@ class Get_Pixel_Arrayc_todo(object):
         pixelist:  1-D array, interest pixel list
         norm:   each q-ROI of each frame is normalized by the corresponding q-ROI of time averaged intensity
         imgsum: each q-ROI of each frame is normalized by the total intensity of the corresponding frame, should have the same time sequences as FD, e.g., imgsum[10] corresponding to FD[10]
-        norm_inten: if True, each q-ROI of each frame is normlized by total intensity of the correponding q-ROI of the corresponding frame
+        norm_inten: if True, each q-ROI of each frame is normalized by total intensity of the corresponding q-ROI of the corresponding frame
         qind: the index of each ROI in one frame, i.e., q
         if norm_inten is True: qind has to be given
 
@@ -1526,7 +1552,7 @@ class Get_Pixel_Arrayc_todo(object):
 
     def get_data(self):
         """
-        To get intested pixels array
+        To get interested pixels array
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
 
@@ -1552,14 +1578,20 @@ class Get_Pixel_Arrayc_todo(object):
             pxlist = timg[p[w]] - 1
             # np.bincount( qind[pxlist], weight=
 
-            if self.mean_int_sets is not None:  # for each frame will normalize each ROI by it's averaged value
+            if (
+                self.mean_int_sets is not None
+            ):  # for each frame will normalize each ROI by it's averaged value
                 for j in range(noqs):
                     # if i ==100:
                     #    if j==0:
                     #        print( self.mean_int_sets[i][j] )
                     #        print( qind_[ noprs[j]: noprs[j+1] ] )
-                    Mean_Int_Qind[qind_[noprs[j] : noprs[j + 1]]] = self.mean_int_sets[i][j]
-                norm_Mean_Int_Qind = Mean_Int_Qind[pxlist]  # self.mean_int_set or Mean_Int_Qind[pxlist]
+                    Mean_Int_Qind[qind_[noprs[j] : noprs[j + 1]]] = self.mean_int_sets[
+                        i
+                    ][j]
+                norm_Mean_Int_Qind = Mean_Int_Qind[
+                    pxlist
+                ]  # self.mean_int_set or Mean_Int_Qind[pxlist]
 
                 # if i==100:
                 #    print( i, Mean_Int_Qind[ self.qind== 11    ])
@@ -1589,7 +1621,7 @@ class Get_Pixel_Arrayc_todo(object):
 
 class Get_Pixel_Arrayc(object):
     """
-    a class to get intested pixels from a images sequence,
+    a class to get interested pixels from a images sequence,
     load ROI of all images into memory
     get_data: to get a 2-D array, shape as (len(images), len(pixellist))
 
@@ -1613,7 +1645,7 @@ class Get_Pixel_Arrayc(object):
         pixelist:  1-D array, interest pixel list
         norm:   each q-ROI of each frame is normalized by the corresponding q-ROI of time averaged intensity
         imgsum: each q-ROI of each frame is normalized by the total intensity of the corresponding frame, should have the same time sequences as FD, e.g., imgsum[10] corresponding to FD[10]
-        mean_int_sets: each q-ROI of each frame is normlized by total intensity of the correponding q-ROI of the corresponding frame
+        mean_int_sets: each q-ROI of each frame is normalized by total intensity of the corresponding q-ROI of the corresponding frame
         qind: the index of each ROI in one frame, i.e., q
         if mean_int_sets is not None: qind has to be not None
 
@@ -1641,7 +1673,7 @@ class Get_Pixel_Arrayc(object):
 
     def get_data(self):
         """
-        To get intested pixels array
+        To get interested pixels array
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
 
@@ -1666,14 +1698,20 @@ class Get_Pixel_Arrayc(object):
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
 
-            if self.mean_int_sets is not None:  # for normalization of each averaged ROI of each frame
+            if (
+                self.mean_int_sets is not None
+            ):  # for normalization of each averaged ROI of each frame
                 for j in range(noqs):
                     # if i ==100:
                     #    if j==0:
                     #        print( self.mean_int_sets[i][j] )
                     #        print( qind_[ noprs[j]: noprs[j+1] ] )
-                    Mean_Int_Qind[qind_[noprs[j] : noprs[j + 1]]] = self.mean_int_sets[i][j]
-                norm_Mean_Int_Qind = Mean_Int_Qind[pxlist]  # self.mean_int_set or Mean_Int_Qind[pxlist]
+                    Mean_Int_Qind[qind_[noprs[j] : noprs[j + 1]]] = self.mean_int_sets[
+                        i
+                    ][j]
+                norm_Mean_Int_Qind = Mean_Int_Qind[
+                    pxlist
+                ]  # self.mean_int_set or Mean_Int_Qind[pxlist]
 
                 # if i==100:
                 #    print( i, Mean_Int_Qind[ self.qind== 11    ])
@@ -1749,7 +1787,7 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
         DO = True
     except:
         print(
-            "The array is too large. The Sever can't handle such big array. Will calulate different Q sequencely"
+            "The array is too large. The Sever can't handle such big array. Will calculate different Q sequencely"
         )
         """TO be done here  """
         DO = False
@@ -1765,7 +1803,9 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
             sum2 = sum1.T
             # print( qi, qlist, )
             # print( g12b[:,:,qi -1 ] )
-            g12b[:, :, i] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[qi - 1]
+            g12b[:, :, i] = (
+                np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[qi - 1]
+            )
             i += 1
         return g12b
 
@@ -1773,12 +1813,12 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
 def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
     """
     Dec 16, 2015, Y.G.@CHX
-    a numpy operation method to get two-time correlation function by giving explict normalization
+    a numpy operation method to get two-time correlation function by giving explicit normalization
 
     Parameters:
         data:  images sequence, shape as [img[0], img[1], imgs_length]
         rois: 2-D array, the interested roi, has the same shape as image, can be rings for saxs, boxes for gisaxs
-        norm: if not None, shoud be the shape as data_pixel, will normalize two time by this norm
+        norm: if not None, should be the shape as data_pixel, will normalize two time by this norm
               if None, will return two time without normalization
 
     Options:
@@ -1816,7 +1856,7 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
         DO = True
     except:
         print(
-            "The array is too large. The Sever can't handle such big array. Will calulate different Q sequencely"
+            "The array is too large. The Sever can't handle such big array. Will calculate different Q sequencely"
         )
         """TO be done here  """
         DO = False
@@ -1832,7 +1872,9 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
             else:
                 sum1 = 1
                 sum2 = 1
-            g12b[:, :, i] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[qi - 1]
+            g12b[:, :, i] = (
+                np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[qi - 1]
+            )
             i += 1
         return g12b
 
@@ -1881,7 +1923,7 @@ def two_time_norm(data_pixel, rois, index=None):
         DO = True
     except:
         print(
-            "The array is too large. The Sever can't handle such big array. Will calulate different Q sequencely"
+            "The array is too large. The Sever can't handle such big array. Will calculate different Q sequencely"
         )
         """TO be done here  """
         DO = False
@@ -1909,7 +1951,7 @@ def check_normalization(frame_num, q_list, imgsa, data_pixel):
         frame_num: integer, the number of frame to be checked
         q_list: list of integer, the list of q to be checked
         imgsa: the raw data
-        data_pixel: the normalized data, caculated by fucntion  Get_Pixel_Arrayc
+        data_pixel: the normalized data, calculated by function  Get_Pixel_Arrayc
     Plot the intensities
     """
     fig, ax = plt.subplots(2)

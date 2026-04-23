@@ -5,16 +5,15 @@ This module is for the static SAXS analysis, such as fit form factor
 """
 
 # import numpy as np
-from lmfit import Model, Parameter, Parameters, fit_report, minimize, report_fit
-from scipy.optimize import curve_fit, least_squares, leastsq
-from scipy.special import gamma, gammaln
-
+from lmfit import Model, Parameters, minimize
+from scipy.optimize import leastsq
+from scipy.special import gamma
+import skbeam.core.utils as utils
 from pyCHX.chx_generic_functions import find_index, plot1D, show_img
 
 # import matplotlib as mpl
-# import matplotlib.pyplot as plt
-# from matplotlib.colors import LogNorm
-from pyCHX.chx_libs import *
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def mono_sphere_form_factor_intensity(x, radius, delta_rho=100, fit_func="G"):
@@ -62,7 +61,10 @@ def distribution_func(radius=1.0, sigma=0.1, num_points=20, spread=3, func="G"):
         spread = (1 - sigma) / sigma - 1
     # print( num_points  )
     x, rs = np.linspace(
-        radius - radius * spread * sigma, radius + radius * spread * sigma, int(num_points), retstep=True
+        radius - radius * spread * sigma,
+        radius + radius * spread * sigma,
+        int(num_points),
+        retstep=True,
     )
     # print(x)
     if func == "G":
@@ -74,7 +76,14 @@ def distribution_func(radius=1.0, sigma=0.1, num_points=20, spread=3, func="G"):
 
 
 def poly_sphere_form_factor_intensity(
-    x, radius, sigma=0.1, delta_rho=1.00, background=0, num_points=20, spread=5, fit_func="G"
+    x,
+    radius,
+    sigma=0.1,
+    delta_rho=1.00,
+    background=0,
+    num_points=20,
+    spread=5,
+    fit_func="G",
 ):
     """
     Input:
@@ -82,7 +91,7 @@ def poly_sphere_form_factor_intensity(
         radius/R: in A
         sigma:sqrt root of variance in percent
         delta_rho: Scattering Length Density(SLD) difference between solvent and the scatter, A-2
-        fit_func: G: Guassian;S:  Flory–Schulz distribution
+        fit_func: G: Gaussian;S:  Flory–Schulz distribution
     Output:
         The form factor intensity of the polydispersed scatter
     """
@@ -94,7 +103,9 @@ def poly_sphere_form_factor_intensity(
     if sigma == 0:
         v = mono_sphere_form_factor_intensity(q, R, delta_rho)
     else:
-        r, rs, wt = distribution_func(radius=R, sigma=sigma, num_points=num_points, spread=spread, func=fit_func)
+        r, rs, wt = distribution_func(
+            radius=R, sigma=sigma, num_points=num_points, spread=spread, func=fit_func
+        )
         for i, Ri in enumerate(r):
             # print(Ri, wt[i],delta_rho, rs)
             v += mono_sphere_form_factor_intensity(q, Ri, delta_rho) * wt[i] * rs
@@ -114,16 +125,18 @@ def poly_sphere_form_factor_intensity_q2(
         The form factor intensity of the polydispersed scatter
     """
 
-    return poly_sphere_form_factor_intensity(x, radius, sigma, delta_rho, fit_func) * x**2  # * scale + baseline
+    return (
+        poly_sphere_form_factor_intensity(x, radius, sigma, delta_rho, fit_func) * x**2
+    )  # * scale + baseline
 
 
 def find_index_old(x, x0, tolerance=None):
     # find the position of P in a list (plist) with tolerance
 
-    N = len(x)
+    _ = len(x)
     i = 0
     position = None
-    if tolerance == None:
+    if tolerance is None:
         tolerance = (x[1] - x[0]) / 2.0
     if x0 > max(x):
         position = len(x) - 1
@@ -139,7 +152,9 @@ def find_index_old(x, x0, tolerance=None):
     return position
 
 
-def form_factor_residuals(p, iq, q, num_points=20, spread=5, fit_func="G", form_model="poly_sphere"):
+def form_factor_residuals(
+    p, iq, q, num_points=20, spread=5, fit_func="G", form_model="poly_sphere"
+):
     """Residuals for fit iq by spheical form factor using leastsq.
     p: parameters for radius, sigma, delta_rho, background
 
@@ -156,7 +171,12 @@ def form_factor_residuals(p, iq, q, num_points=20, spread=5, fit_func="G", form_
         spread=spread,
         fit_func=fit_func,
     )
-    radius, sigma, delta_rho, background = abs(radius), abs(sigma), abs(delta_rho), abs(background)
+    radius, sigma, delta_rho, background = (
+        abs(radius),
+        abs(sigma),
+        abs(delta_rho),
+        abs(background),
+    )
     err = np.log(iq / fiq)
     return np.sqrt(np.abs(err))
 
@@ -194,7 +214,9 @@ def form_factor_residuals_bg(
     return np.sqrt(np.abs(err))
 
 
-def form_factor_residuals_lmfit(p, iq, q, num_points=20, spread=5, fit_func="G", form_model="poly_sphere"):
+def form_factor_residuals_lmfit(
+    p, iq, q, num_points=20, spread=5, fit_func="G", form_model="poly_sphere"
+):
     """Residuals for fit iq by spheical form factor using leastsq.
     p: parameters for radius, sigma, delta_rho, background
     """
@@ -219,7 +241,9 @@ def form_factor_residuals_lmfit(p, iq, q, num_points=20, spread=5, fit_func="G",
     return err
 
 
-def form_factor_residuals_bg_lmfit(p, iq, q, num_points=20, spread=5, fit_func="G", form_model="poly_sphere"):
+def form_factor_residuals_bg_lmfit(
+    p, iq, q, num_points=20, spread=5, fit_func="G", form_model="poly_sphere"
+):
     """Residuals for fit iq by spheical form factor using leastsq.
     p: parameters for radius, sigma, delta_rho, background
     """
@@ -262,7 +286,7 @@ def get_form_factor_fit_lmfit(
     num_points=20,
     spread=5,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     YG Dev@CHX 2019/8/1
@@ -286,7 +310,7 @@ def get_form_factor_fit_lmfit(
 
     Returns
     -------
-    fit resutls:
+    fit results:
          radius
          sigma
     an example:
@@ -322,7 +346,10 @@ def get_form_factor_fit_lmfit(
             pars[var].vary = fit_variables[var]
     # print( pars )
     result = minimize(
-        mod, pars, args=(iq_, q_), kws={"num_points": num_points, "spread": spread, "fit_func": fit_func}
+        mod,
+        pars,
+        args=(iq_, q_),
+        kws={"num_points": num_points, "spread": spread, "fit_func": fit_func},
     )
     fitp = {}
     fitpe = {}
@@ -389,7 +416,7 @@ def get_form_factor_fit2(
     spread=5,
     bounds=None,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor
@@ -411,7 +438,7 @@ def get_form_factor_fit2(
 
     Returns
     -------
-    fit resutls:
+    fit results:
          radius
          sigma
     an example:
@@ -504,7 +531,9 @@ def get_form_factor_fit2(
         )
 
     if (len(iq_) > len(p)) and pcov is not None:
-        s_sq = (fit_funcs(pfit, iq_, q_, num_points, spread, fit_func, function)).sum() / (len(iq_) - len(p))
+        s_sq = (
+            fit_funcs(pfit, iq_, q_, num_points, spread, fit_func, function)
+        ).sum() / (len(iq_) - len(p))
         pcov = pcov * s_sq
     else:
         pcov = np.inf
@@ -513,7 +542,7 @@ def get_form_factor_fit2(
     for i in range(len(pfit)):
         try:
             error.append(np.absolute(pcov[i][i]) ** 0.5)
-        except:
+        except Exception:
             error.append(None)
     pfit_leastsq = pfit
     perr_leastsq = np.array(error)
@@ -531,7 +560,7 @@ def get_form_factor_fit(
     fit_func="G",
     fit_power=0,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor for GUI
@@ -554,7 +583,7 @@ def get_form_factor_fit(
 
     Returns
     -------
-    fit resutls:
+    fit results:
          radius
          sigma
     an example:
@@ -566,7 +595,10 @@ def get_form_factor_fit(
     elif function == "mono_sphere":
         mod = Model(mono_sphere_form_factor_intensity)
     else:
-        print("The %s is not supported.The supported functions include poly_sphere and mono_sphere" % function)
+        print(
+            "The %s is not supported.The supported functions include poly_sphere and mono_sphere"
+            % function
+        )
 
     if fit_range is not None:
         x1, x2 = fit_range
@@ -603,18 +635,20 @@ def get_form_factor_fit(
     # fit_power = 0
     result = mod.fit(iq_ * q_**fit_power, pars, x=q_)  # , fit_func=fit_func )
     if function == "poly_sphere":
-        sigma = result.best_values["sigma"]
+        pass
     elif function == "mono_sphere":
-        sigma = 0
-    r = result.best_values["radius"]
+        pass
+    _ = result.best_values["radius"]
     # scale =  result.best_values['scale']
     # baseline = result.best_values['baseline']
-    delta_rho = result.best_values["delta_rho"]
+    _ = result.best_values["delta_rho"]
     print(result.best_values)
     return result, q_
 
 
-def plot_form_factor_with_fit(q, iq, q_, result, fit_power=0, res_pargs=None, return_fig=False, *argv, **kwargs):
+def plot_form_factor_with_fit(
+    q, iq, q_, result, y, fit_power=0, res_pargs=None, return_fig=False, *argv, **kwargs
+):
     if res_pargs is not None:
         uid = res_pargs["uid"]
         path = res_pargs["path"]
@@ -636,7 +670,7 @@ def plot_form_factor_with_fit(q, iq, q_, result, fit_power=0, res_pargs=None, re
     plt.title("uid= %s:--->" % uid + title_qr, fontsize=20, y=1.02)
 
     r = result.best_values["radius"]
-    delta_rho = result.best_values["delta_rho"]
+    _ = result.best_values["delta_rho"]
     sigma = result.best_values["sigma"]
 
     ax.semilogy(q, iq, "ro", label="Form Factor")
@@ -682,7 +716,7 @@ def fit_form_factor(
     fit_func="G",
     return_fig=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor
@@ -706,7 +740,7 @@ def fit_form_factor(
 
     Returns
     -------
-    fit resutls:
+    fit results:
          radius
          sigma
     an example:
@@ -714,9 +748,17 @@ def fit_form_factor(
     """
 
     result, q_ = get_form_factor_fit(
-        q, iq, guess_values, fit_range=fit_range, fit_variables=fit_variables, function=function, fit_func=fit_func
+        q,
+        iq,
+        guess_values,
+        fit_range=fit_range,
+        fit_variables=fit_variables,
+        function=function,
+        fit_func=fit_func,
     )
-    plot_form_factor_with_fit(q, iq, q_, result, fit_power=0, res_pargs=res_pargs, return_fig=return_fig)
+    plot_form_factor_with_fit(
+        q, iq, q_, result, fit_power=0, res_pargs=res_pargs, return_fig=return_fig
+    )
 
     return result
 
@@ -725,13 +767,14 @@ def fit_form_factor2(
     q,
     iq,
     guess_values,
+    y,
     fit_range=None,
     fit_variables=None,
     res_pargs=None,
     function="poly_sphere",
     fit_func="G",
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor
@@ -755,7 +798,7 @@ def fit_form_factor2(
 
     Returns
     -------
-    fit resutls:
+    fit results:
          radius
          sigma
     an example:
@@ -780,7 +823,10 @@ def fit_form_factor2(
     elif function == "mono_sphere":
         mod = Model(mono_sphere_form_factor_intensity)
     else:
-        print("The %s is not supported.The supported functions include poly_sphere and mono_sphere" % function)
+        print(
+            "The %s is not supported.The supported functions include poly_sphere and mono_sphere"
+            % function
+        )
 
     if fit_range is not None:
         x1, x2 = fit_range
@@ -915,14 +961,19 @@ def show_saxs_qmap(
     # center = [ center[1], center[0] ] #due to python conventions
     w = width
 
-    img_ = np.zeros([w, w])
-    minW, maxW = min(center[0] - w, center[1] - w), max(center[0] - w, center[1] - w)
+    # img_ = np.zeros([w, w])
+    minW, _ = min(center[0] - w, center[1] - w), max(center[0] - w, center[1] - w)
     if w < minW:
-        img_ = img[cx - w // 2 : cx + w // 2, cy + w // 2 : cy + w // 2]
+        _ = img[cx - w // 2 : cx + w // 2, cy + w // 2 : cy + w // 2]
     # elif w > maxW:
     #    img_[ cx-w//2:cx+w//2, cy+w//2:cy+w//2 ] =
 
-    ROI = [max(0, center[0] - w), min(center[0] + w, lx), max(0, center[1] - w), min(ly, center[1] + w)]
+    ROI = [
+        max(0, center[0] - w),
+        min(center[0] + w, lx),
+        max(0, center[1] - w),
+        min(ly, center[1] + w),
+    ]
     # print( ROI )
     ax = plt.subplots()
     if not show_pixel:
@@ -988,7 +1039,9 @@ def show_saxs_qmap(
 ##Fit sphere by scipy.leastsq fit
 
 
-def fit_sphere_form_factor_func(parameters, ydata, xdata, yerror=None, nonvariables=None):
+def fit_sphere_form_factor_func(
+    parameters, ydata, xdata, yerror=None, nonvariables=None
+):
     """##Develop by YG at July 28, 2017 @CHX
     This function is for fitting form factor of polyderse spherical particles by using scipy.leastsq fit
 
@@ -1063,7 +1116,17 @@ def plot_fit_sphere_form_factor(q, pq, res, p0=None, xlim=None, ylim=None):
 
     fig, ax = plt.subplots()
     if p0 is not None:
-        plot1D(x=q, y=fit_init, c="b", m="", ls="-", lw=3, ax=ax, logy=True, legend="Init_Fitting")
+        plot1D(
+            x=q,
+            y=fit_init,
+            c="b",
+            m="",
+            ls="-",
+            lw=3,
+            ax=ax,
+            logy=True,
+            legend="Init_Fitting",
+        )
     plot1D(x=q, y=fit, c="r", m="", ls="-", lw=3, ax=ax, logy=True, legend="Fitting")
     plot1D(
         x=q,
@@ -1088,7 +1151,7 @@ def plot_fit_sphere_form_factor(q, pq, res, p0=None, xlim=None, ylim=None):
     ax.text(x=0.02, y=0.15, s=txts, fontsize=14, transform=ax.transAxes)
 
 
-def exm_plot():
+def exm_plot(iq, ff, q):
     fig, ax = plt.subplots()
 
     ax.semilogy(q, iq, "ro", label="data")

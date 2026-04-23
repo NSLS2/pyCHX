@@ -90,7 +90,7 @@ docs/_build/
 *.tiff
 *.tif
 
-#generated documntation files
+#generated documentation files
 doc/resource/api/generated/
 
 # Enaml
@@ -99,3 +99,6 @@ __enamlcache__/
 
 # PyBuilder
 target/
+# pixi environments
+.pixi/*
+!.pixi/config.toml

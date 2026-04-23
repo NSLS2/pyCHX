@@ -1,56 +1,37 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
-import os
-import struct
-from collections import namedtuple
 
 import matplotlib.pyplot as plt
-from skbeam.core.roi import extract_label_indices
-from skbeam.core.utils import multi_tau_lags
 from tqdm import tqdm
 
 from pyCHX.chx_generic_functions import save_arrays
 
-# from pyCHX.chx_generic_functions import (get_circular_average)
-# from pyCHX.XPCS_SAXS import (get_circular_average)
 from pyCHX.chx_libs import (
     RUN_GUI,
     Figure,
-    LogNorm,
     colors,
-    colors_,
-    datetime,
-    db,
-    getpass,
     markers,
-    markers_,
     np,
-    os,
     roi,
-    time,
 )
-
-logger = logging.getLogger(__name__)
 
 from modest_image import imshow
 
 from pyCHX.chx_compress import (
-    Multifile,
-    compress_eigerdata,
     get_avg_imgc,
-    get_each_frame_intensityc,
-    init_compress_eigerdata,
     mean_intensityc,
-    pass_FD,
-    read_compressed_eigerdata,
 )
 from pyCHX.chx_generic_functions import find_bad_pixels_FD
 
 # from pyCHX.chx_compress import *
 
+logger = logging.getLogger(__name__)
 
-def get_time_edge_avg_img(FD, frame_edge, show_progress=True, apply_threshold=False, threshold=15):
+
+def get_time_edge_avg_img(
+    FD, frame_edge, show_progress=True, apply_threshold=False, threshold=15
+):
     """YG Dev Nov 14, 2017@CHX
     Update@2019/6/12 with option of apply a threshold for each frame
     Get averaged img by giving FD and frame edges
@@ -76,14 +57,20 @@ def get_time_edge_avg_img(FD, frame_edge, show_progress=True, apply_threshold=Fa
     for i in tqdm(range(Nt)):
         t1, t2 = frame_edge[i]
         if not apply_threshold:
-            d[i] = get_avg_imgc(FD, beg=t1, end=t2, sampling=1, plot_=False, show_progress=show_progress)
+            d[i] = get_avg_imgc(
+                FD, beg=t1, end=t2, sampling=1, plot_=False, show_progress=show_progress
+            )
         else:
             dti = np.zeros([t2 - t1, avg_imgi.shape[0], avg_imgi.shape[1]])
             j = 0
             for ti in range(t1, t2):
                 # print( j, ti )
                 badpi = find_bad_pixels_FD(
-                    np.arange(ti, ti + 1), FD, img_shape=avg_imgi.shape, threshold=threshold, show_progress=False
+                    np.arange(ti, ti + 1),
+                    FD,
+                    img_shape=avg_imgi.shape,
+                    threshold=threshold,
+                    show_progress=False,
                 )
                 badpi = np.array(badpi, dtype=float)
                 badpi[badpi == 0] = np.nan
@@ -97,12 +84,19 @@ def get_time_edge_avg_img(FD, frame_edge, show_progress=True, apply_threshold=Fa
 def plot_imgs(imgs, image_name=None, *argv, **kwargs):
     # NOT WORKing NOW....
     N = len(imgs)
-    sx = np.ceil(np.sqrt(N))
+    _ = np.ceil(np.sqrt(N))
     pass
 
 
 def cal_waterfallc(
-    FD, labeled_array, qindex=1, bin_waterfall=False, waterfall_roi_size=None, save=False, *argv, **kwargs
+    FD,
+    labeled_array,
+    qindex=1,
+    bin_waterfall=False,
+    waterfall_roi_size=None,
+    save=False,
+    *argv,
+    **kwargs,
 ):
     """Compute the mean intensity for each ROI in the compressed file (FD)
 
@@ -140,7 +134,12 @@ def cal_waterfallc(
     if labeled_array_.shape != (FD.md["ncols"], FD.md["nrows"]):
         raise ValueError(
             " `image` shape (%d, %d) in FD is not equal to the labeled_array shape (%d, %d)"
-            % (FD.md["ncols"], FD.md["nrows"], labeled_array_.shape[0], labeled_array_.shape[1])
+            % (
+                FD.md["ncols"],
+                FD.md["nrows"],
+                labeled_array_.shape[0],
+                labeled_array_.shape[1],
+            )
         )
 
     # pre-allocate an array for performance
@@ -154,10 +153,12 @@ def cal_waterfallc(
     timg[pixelist] = np.arange(1, len(pixelist) + 1)
 
     # maxqind = max(qind)
-    norm = np.bincount(qind)[1:]
+    _ = np.bincount(qind)[1:]
     n = 0
     # for  i in tqdm(range( FD.beg , FD.end )):
-    for i in tqdm(range(FD.beg, FD.end, sampling), desc="Get waterfall for q index=%s" % qindex):
+    for i in tqdm(
+        range(FD.beg, FD.end, sampling), desc="Get waterfall for q index=%s" % qindex
+    ):
         (p, v) = FD.rdrawframe(i)
         w = np.where(timg[p])[0]
         pxlist = timg[p[w]] - 1
@@ -169,7 +170,9 @@ def cal_waterfallc(
         watf_ = watf.copy()
         watf = np.zeros([watf_.shape[0], waterfall_roi_size[0]])
         for i in range(waterfall_roi_size[1]):
-            watf += watf_[:, waterfall_roi_size[0] * i : waterfall_roi_size[0] * (i + 1)]
+            watf += watf_[
+                :, waterfall_roi_size[0] * i : waterfall_roi_size[0] * (i + 1)
+            ]
         watf /= waterfall_roi_size[0]
 
     if save:
@@ -191,7 +194,7 @@ def plot_waterfallc(
     return_fig=False,
     cmap="viridis",
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """plot waterfall for a giving compressed file
 
@@ -230,7 +233,9 @@ def plot_waterfallc(
         vmin = wat.min()
     if aspect is None:
         aspect = wat.shape[0] / wat.shape[1]
-    im = imshow(ax, wat.T, cmap=cmap, vmax=vmax, extent=extent, interpolation=interpolation)
+    im = imshow(
+        ax, wat.T, cmap=cmap, vmax=vmax, extent=extent, interpolation=interpolation
+    )
     # im = ax.imshow(wat.T, cmap='viridis', vmax=vmax,extent= extent,interpolation = interpolation )
     fig.colorbar(im)
     ax.set_aspect(aspect)
@@ -249,7 +254,9 @@ def plot_waterfallc(
         return fig, ax, im
 
 
-def get_waterfallc(FD, labeled_array, qindex=1, aspect=1.0, vmax=None, save=False, *argv, **kwargs):
+def get_waterfallc(
+    FD, labeled_array, qindex=1, aspect=1.0, vmax=None, save=False, *argv, **kwargs
+):
     """plot waterfall for a giving compressed file
 
     FD: class object, the compressed file handler
@@ -288,21 +295,27 @@ def get_waterfallc(FD, labeled_array, qindex=1, aspect=1.0, vmax=None, save=Fals
     return wat
 
 
-def cal_each_ring_mean_intensityc(FD, ring_mask, sampling=1, timeperframe=None, multi_cor=False, *argv, **kwargs):
+def cal_each_ring_mean_intensityc(
+    FD, ring_mask, sampling=1, timeperframe=None, multi_cor=False, *argv, **kwargs
+):
     """
     get time dependent mean intensity of each ring
     """
 
-    mean_int_sets, index_list = mean_intensityc(FD, ring_mask, sampling, index=None, multi_cor=multi_cor)
+    mean_int_sets, index_list = mean_intensityc(
+        FD, ring_mask, sampling, index=None, multi_cor=multi_cor
+    )
     if timeperframe is None:
         times = np.arange(FD.end - FD.beg) + FD.beg  # get the time for each frame
     else:
         times = (FD.beg + np.arange(FD.end - FD.beg)) * timeperframe
-    num_rings = len(np.unique(ring_mask)[1:])
+    _ = len(np.unique(ring_mask)[1:])
     return times, mean_int_sets
 
 
-def plot_each_ring_mean_intensityc(times, mean_int_sets, xlabel="Frame", save=False, *argv, **kwargs):
+def plot_each_ring_mean_intensityc(
+    times, mean_int_sets, xlabel="Frame", save=False, *argv, **kwargs
+):
     """
     Plot time dependent mean intensity of each ring
     """
@@ -315,7 +328,14 @@ def plot_each_ring_mean_intensityc(times, mean_int_sets, xlabel="Frame", save=Fa
     ax.set_title("%s--Mean intensity of each ROI" % uid)
     for i in range(num_rings):
         # print(  markers[i],  colors[i] )
-        ax.plot(times, mean_int_sets[:, i], label="ROI " + str(i + 1), marker=markers[i], color=colors[i], ls="-")
+        ax.plot(
+            times,
+            mean_int_sets[:, i],
+            label="ROI " + str(i + 1),
+            marker=markers[i],
+            color=colors[i],
+            ls="-",
+        )
         ax.set_xlabel(xlabel)
         ax.set_ylabel("Mean Intensity")
     ax.legend(loc="best", fontsize="x-small", fancybox=True, framealpha=0.5)
@@ -334,7 +354,14 @@ def plot_each_ring_mean_intensityc(times, mean_int_sets, xlabel="Frame", save=Fa
 
 
 def get_each_ring_mean_intensityc(
-    FD, ring_mask, sampling=1, timeperframe=None, plot_=False, save=False, *argv, **kwargs
+    FD,
+    ring_mask,
+    sampling=1,
+    timeperframe=None,
+    plot_=False,
+    save=False,
+    *argv,
+    **kwargs,
 ):
     """
     get time dependent mean intensity of each ring
@@ -355,7 +382,13 @@ def get_each_ring_mean_intensityc(
 
         ax.set_title("%s--Mean intensity of each ROI" % uid)
         for i in range(num_rings):
-            ax.plot(times, mean_int_sets[:, i], label="ROI " + str(i + 1), marker="o", ls="-")
+            ax.plot(
+                times,
+                mean_int_sets[:, i],
+                label="ROI " + str(i + 1),
+                marker="o",
+                ls="-",
+            )
             if timeperframe is not None:
                 ax.set_xlabel("Time, sec")
             else:

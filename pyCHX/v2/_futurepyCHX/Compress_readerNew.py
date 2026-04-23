@@ -54,7 +54,7 @@ class Multifile:
         numimgs: num images
         """
         if mode != "rb" and mode != "wb":
-            raise ValueError("Error, mode must be 'rb' or 'wb'" "got : {}".format(mode))
+            raise ValueError("Error, mode must be 'rb' or 'wb'got : {}".format(mode))
         self._filename = filename
         self._mode = mode
 
@@ -123,7 +123,9 @@ class Multifile:
     def _read_header(self, n):
         """Read header from current seek position."""
         if n > self.Nframes:
-            raise KeyError("Error, only {} frames, asked for {}".format(self.Nframes, n))
+            raise KeyError(
+                "Error, only {} frames, asked for {}".format(self.Nframes, n)
+            )
         # read in bytes
         cur = self.frame_indexes[n]
         header_raw = self._fd[cur : cur + self.HEADER_SIZE]
@@ -146,7 +148,9 @@ class Multifile:
         Reads from current cursor in file.
         """
         if n > self.Nframes:
-            raise KeyError("Error, only {} frames, asked for {}".format(self.Nframes, n))
+            raise KeyError(
+                "Error, only {} frames, asked for {}".format(self.Nframes, n)
+            )
         cur = self.frame_indexes[n] + 1024
         dlen = self._read_header(n)["dlen"]
 
@@ -212,7 +216,7 @@ class MultifileBNL:
             raise ValueError("Write mode 'wb' not supported yet")
 
         if mode != "rb" and mode != "wb":
-            raise ValueError("Error, mode must be 'rb' or 'wb'" "got : {}".format(mode))
+            raise ValueError("Error, mode must be 'rb' or 'wb'got : {}".format(mode))
 
         self._filename = filename
         self._mode = mode
@@ -307,7 +311,9 @@ class MultifileBNL:
         Reads from current cursor in file.
         """
         if n > self.Nframes:
-            raise KeyError("Error, only {} frames, asked for {}".format(self.Nframes, n))
+            raise KeyError(
+                "Error, only {} frames, asked for {}".format(self.Nframes, n)
+            )
         # dlen is 4 bytes
         cur = self.frame_indexes[n]
         dlen = np.frombuffer(self._fd[cur : cur + 4], dtype="<u4")[0]

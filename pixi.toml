@@ -1,0 +1,51 @@
+[project]
+name = "pyCHX"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = "3.10.*"
+pip = "*"
+cython = "*"
+dask = "*"
+databroker = "*"
+dill = "*"
+historydict = "*"
+ipython = "*"
+lmfit = "*"
+matplotlib = "*"
+numpy = "*"
+pandas = "*"
+pillow = "*"
+pyyaml = "*"
+reportlab = "*"
+scikit-image = "*"
+scipy = "*"
+tifffile = "*"
+tqdm = "*"
+
+[pypi-dependencies]
+scikit-beam = { git = "https://github.com/scikit-beam/scikit-beam", rev = "main" }
+eiger-io = {git = "https://github.com/NSLS-II-CHX/eiger-io", rev="master"}
+chxtools = {git = "https://github.com/NSLS2/chxtools", rev = "main"}
+xray-vision = {git = "https://github.com/Nikea/xray-vision", rev="master"}
+modestimage = {git = "https://github.com/ChrisBeaumont/mpl-modest-image", rev="master"}
+
+[feature.dev.dependencies]
+black = "*"
+codecov = "*"
+coverage = "*"
+flake8 = "*"
+isort = "*"
+nbstripout = "*"
+pre-commit = "*"
+pre-commit-hooks = "*"
+pytest = "*"
+sphinx = "*"
+twine = "*"
+numpydoc = "*"
+sphinx-copybutton = "*"
+sphinx_rtd_theme = "*"
+
+[environments]
+dev = ["dev"]

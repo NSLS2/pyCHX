@@ -5,31 +5,33 @@ This module is for parallel computation of time correlation
 Feb 20, 2018
 The chx_correlationp2 is for dedug g2
 """
+
 from __future__ import absolute_import, division, print_function
 
 import logging
-import sys
-from collections import namedtuple
 from multiprocessing import Pool
 
-import dill
 import numpy as np
 import skbeam.core.roi as roi
 from skbeam.core.roi import extract_label_indices
-from skbeam.core.utils import multi_tau_lags
 
 from pyCHX.v2._commonspeckle.chx_compress import (  # common #TODO understand what to keep
     apply_async,
-    go_through_FD,
-    map_async,
     pass_FD,
-    run_dill_encoded,
 )
-from pyCHX.v2._commonspeckle.chx_correlationc import _one_time_process as _one_time_processp  # common
-from pyCHX.v2._commonspeckle.chx_correlationc import _one_time_process_error as _one_time_process_errorp
-from pyCHX.v2._commonspeckle.chx_correlationc import _two_time_process as _two_time_processp
-from pyCHX.v2._commonspeckle.chx_correlationc import _validate_and_transform_inputs, get_pixelist_interp_iq
-from pyCHX.v2._commonspeckle.chx_libs import tqdm  # common #TODO why not from chx module??
+from pyCHX.v2._commonspeckle.chx_correlationc import (
+    _one_time_process as _one_time_processp,
+)  # common
+from pyCHX.v2._commonspeckle.chx_correlationc import (
+    _one_time_process_error as _one_time_process_errorp,
+)
+from pyCHX.v2._commonspeckle.chx_correlationc import (
+    _two_time_process as _two_time_processp,
+)
+from pyCHX.v2._commonspeckle.chx_correlationc import _validate_and_transform_inputs
+from pyCHX.v2._commonspeckle.chx_libs import (
+    tqdm,
+)  # common #TODO why not from chx module??
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +139,7 @@ def lazy_two_timep(
     ------
     namedtuple
         A ``results`` object is yielded after every image has been processed.
-        This `reults` object contains, in this order:
+        This `results` object contains, in this order:
         - ``g2``: the normalized correlation
           shape is (num_rois, len(lag_steps), len(lag_steps))
         - ``lag_steps``: the times at which the correlation was computed
@@ -238,7 +240,10 @@ def lazy_two_timep(
                     s.buf[level - 1, prev - 1] + s.buf[level - 1, s.cur[level - 1] - 1]
                 ) / 2
                 t1_idx = (s.count_level[level] - 1) * 2
-                current_img_time = ((s.time_ind[level - 1])[t1_idx] + (s.time_ind[level - 1])[t1_idx + 1]) / 2.0
+                current_img_time = (
+                    (s.time_ind[level - 1])[t1_idx]
+                    + (s.time_ind[level - 1])[t1_idx + 1]
+                ) / 2.0
                 # time frame for each level
                 s.time_ind[level].append(current_img_time)
                 # make the track_level zero once that level is processed
@@ -290,13 +295,20 @@ def cal_c12p(
         pass_FD(FD, i)
     if num_lev is None:
         num_lev = int(np.log(noframes / (num_buf - 1)) / np.log(2) + 1) + 1
-    print("In this g2 calculation, the buf and lev number are: %s--%s--" % (num_buf, num_lev))
+    print(
+        "In this g2 calculation, the buf and lev number are: %s--%s--"
+        % (num_buf, num_lev)
+    )
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
-            print("Bad frame involved and will be precessed!")
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            print("Bad frame involved and will be processed!")
+            noframes -= len(
+                np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0]
+            )
     print("%s frames will be processed..." % (noframes))
-    ring_masks = [np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[1:]]
+    ring_masks = [
+        np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[1:]
+    ]
     qind, pixelist = roi.extract_label_indices(ring_mask)
     if norm is not None:
         norms = [
@@ -370,7 +382,7 @@ class _internal_statep:
         """YG. DEV Nov, 2016, Initialize class for the generator-based multi-tau
         for one time correlation
 
-             Jan 1, 2018, Add cal_error option to calculate signal to noise to one time correaltion
+             Jan 1, 2018, Add cal_error option to calculate signal to noise to one time correlation
 
         """
         (
@@ -647,13 +659,20 @@ def cal_g2p(
         pass_FD(FD, i)
     if num_lev is None:
         num_lev = int(np.log(noframes / (num_buf - 1)) / np.log(2) + 1) + 1
-    print("In this g2 calculation, the buf and lev number are: %s--%s--" % (num_buf, num_lev))
+    print(
+        "In this g2 calculation, the buf and lev number are: %s--%s--"
+        % (num_buf, num_lev)
+    )
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
             print("%s Bad frames involved and will be discarded!" % len(bad_frame_list))
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            noframes -= len(
+                np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0]
+            )
     print("%s frames will be processed..." % (noframes - 1))
-    ring_masks = [np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[1:]]
+    ring_masks = [
+        np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[1:]
+    ]
     qind, pixelist = roi.extract_label_indices(ring_mask)
     noqs = len(np.unique(qind))
     nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
@@ -763,8 +782,10 @@ def cal_g2p(
             g2[:g_max, i] = avgGi[:g_max] / (avgPi[:g_max] * avgFi[:g_max])
             g2_err[:g_max, i] = np.sqrt(
                 (1 / (avgFi[:g_max] * avgPi[:g_max])) ** 2 * devGi[:g_max] ** 2
-                + (avgGi[:g_max] / (avgFi[:g_max] ** 2 * avgPi[:g_max])) ** 2 * devFi[:g_max] ** 2
-                + (avgGi[:g_max] / (avgFi[:g_max] * avgPi[:g_max] ** 2)) ** 2 * devPi[:g_max] ** 2
+                + (avgGi[:g_max] / (avgFi[:g_max] ** 2 * avgPi[:g_max])) ** 2
+                * devFi[:g_max] ** 2
+                + (avgGi[:g_max] / (avgFi[:g_max] * avgPi[:g_max] ** 2)) ** 2
+                * devPi[:g_max] ** 2
             )
             Gmax = max(g_max, Gmax)
             lag_stepsi = res[i][1]
@@ -848,7 +869,9 @@ def auto_two_Arrayp(data_pixel, rois, index=None):
     pool = Pool(processes=len(inputs))
     results = {}
     for i in inputs:
-        results[i] = pool.apply_async(_get_two_time_for_one_q, [qlist[i], data_pixel_qis[i], nopr, noframes])
+        results[i] = pool.apply_async(
+            _get_two_time_for_one_q, [qlist[i], data_pixel_qis[i], nopr, noframes]
+        )
     pool.close()
     pool.join()
     res = np.array([results[k].get() for k in list(sorted(results.keys()))])

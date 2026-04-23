@@ -18,3 +18,12 @@ exclude = '''
   | tests/data
 )/
 '''
+
+[tool.typos.default.extend-identifiers]
+pixelx = "pixelx"
+minpixelx = "minpixelx"
+maxpixelx = "maxpixelx"
+pixely = "pixely"
+minpixely = "minpixely"
+maxpixely = "maxpixely"
+arry = "arry"

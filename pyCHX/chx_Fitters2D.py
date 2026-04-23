@@ -11,7 +11,12 @@ def gauss_func(x, xc, amp, sigma, baseline):
 
 
 def gauss2D_func(x, y, xc, amp, sigmax, yc, sigmay, baseline):
-    return amp * np.exp(-((x - xc) ** 2) / 2.0 / sigmax**2) * np.exp(-((y - yc) ** 2) / 2.0 / sigmay**2) + baseline
+    return (
+        amp
+        * np.exp(-((x - xc) ** 2) / 2.0 / sigmax**2)
+        * np.exp(-((y - yc) ** 2) / 2.0 / sigmay**2)
+        + baseline
+    )
 
 
 def extract_param(bestfits, key):
@@ -72,13 +77,15 @@ class VectorField2DFitter:
 
         # make the parameters from the kwargs
         for key in self.params.keys():
-            if key in kwargs.keys() and key is not "XY":
+            if key in kwargs.keys() and key != "XY":
                 params[key].value = kwargs[key]
             else:
                 # then guess
                 params[key].value = guesskeys[key]
 
-        self.mod = Model(self.fitfunc, independent_vars=["x", "y"], param_names=self.params.keys())
+        self.mod = Model(
+            self.fitfunc, independent_vars=["x", "y"], param_names=self.params.keys()
+        )
         # assumes first var is dependent var, and save last params
         V = np.array([vx, vy])
         self._res = self.mod.fit(V, x=x, y=y, params=params)
@@ -139,7 +146,7 @@ class VectorField2DLinearFitter(VectorField2DFitter):
 
         if kwargs is not None:
             for key in kwargs.keys():
-                if key in paramsdict and key is not "xy":
+                if key in paramsdict and key != "xy":
                     paramsdict[key] = kwargs[key]
 
         return paramsdict
@@ -186,15 +193,19 @@ class LineShape2DFitter:
 
         # make the parameters from the kwargs
         for key in self.params.keys():
-            if key in kwargs.keys() and key is not "XY":
+            if key in kwargs.keys() and key != "XY":
                 params[key].value = kwargs[key]
             else:
                 # then guess
                 params[key].value = guesskeys[key]
 
-        self.mod = Model(self.fitfunc, independent_vars=["XY"], param_names=self.params.keys())
+        self.mod = Model(
+            self.fitfunc, independent_vars=["XY"], param_names=self.params.keys()
+        )
         # assumes first var is dependent var
-        res = self.mod.fit(img.ravel(), XY=(XY[0].ravel(), XY[1].ravel()), params=params, **kwargs)
+        res = self.mod.fit(
+            img.ravel(), XY=(XY[0].ravel(), XY[1].ravel()), params=params, **kwargs
+        )
         ## old version, only return values
         # add reduced chisq to parameter list
         # res.best_values['chisq']=res.redchi
@@ -266,7 +277,9 @@ class Gauss2DFitter(LineShape2DFitter):
         self.params["amp"].min = 0
         return super(Gauss2DFitter, self).__call__(XY, img, **kwargs)
 
-    def fitfunc(self, XY, xc=None, yc=None, amp=1.0, baseline=0.0, sigmax=1.0, sigmay=1.0):
+    def fitfunc(
+        self, XY, xc=None, yc=None, amp=1.0, baseline=0.0, sigmax=1.0, sigmay=1.0
+    ):
         """
         xy : 2 by N by N matrix containing x and y
             xy[0] : x
@@ -284,7 +297,9 @@ class Gauss2DFitter(LineShape2DFitter):
             yc = X.shape[0] // 2
 
         return (
-            amp * np.exp(-((X - xc) ** 2) / 2.0 / sigmax**2) * np.exp(-((Y - yc) ** 2) / 2.0 / sigmay**2)
+            amp
+            * np.exp(-((X - xc) ** 2) / 2.0 / sigmax**2)
+            * np.exp(-((Y - yc) ** 2) / 2.0 / sigmay**2)
             + baseline
         )
 
@@ -331,7 +346,7 @@ class Gauss2DFitter(LineShape2DFitter):
         paramsdict["sigmay"] = 1
         # print(  paramsdict )
         for key in kwargs.keys():
-            if key in paramsdict and key is not "xy":
+            if key in paramsdict and key != "xy":
                 paramsdict[key] = kwargs[key]
         # print(  paramsdict )
         return paramsdict

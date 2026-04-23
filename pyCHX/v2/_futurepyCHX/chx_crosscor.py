@@ -7,16 +7,31 @@
 """
 This module is for functions specific to spatial correlation in order to tackle the motion of speckles
 """
+
 from __future__ import absolute_import, division, print_function
 
-from collections import namedtuple
 
 import numpy as np
 from scipy.signal import fftconvolve
-from skbeam.core.roi import extract_label_indices
+
+import threading
+
+# from . import sigtools
+from numpy import (
+    array,
+    asarray,
+)
+from numpy.fft import irfftn, rfftn
+from scipy.fftpack import fftn, ifftn
+
+##for parallel
+from multiprocessing import Pool
+
+
+from pyCHX.chx_compress import apply_async
+
 
 # from __future__ import absolute_import, division, print_function
-from skbeam.core.utils import multi_tau_lags
 
 # for a convenient status bar
 try:
@@ -42,7 +57,7 @@ def get_cor_region(cor, cij, qid, fitw):
     return cij[qid][x1:x2, y1:y2]
 
 
-def direct_corss_cor(im1, im2):
+def direct_cross_cor(im1, im2):
     """YG developed@CHX July/2019, directly calculate the cross correlation of two images
     Input:
         im1: the first image
@@ -86,7 +101,9 @@ def direct_corss_cor(im1, im2):
                     d1 = im1[j:, i:]
                     d2 = im2[:-j, :-i]
             # print(i,j)
-            C[i + Nx, j + Ny] = np.sum(d1 * d2) / (np.average(d1) * np.average(d2) * d1.size)
+            C[i + Nx, j + Ny] = np.sum(d1 * d2) / (
+                np.average(d1) * np.average(d2) * d1.size
+            )
     return C.T
 
 
@@ -259,7 +276,7 @@ class CrossCorrelator2:
                 # ccorr = np.fft.fftshift(ccorr)
                 ccorr = _centered(ccorr, self.sizes[reg, :])
             else:
-                ndim = img1.ndim
+                _ = img1.ndim
                 tmpimg2 = np.zeros_like(tmpimg)
                 tmpimg2[i, j] = img2[ii, jj]
                 im2 = np.fft.rfftn(tmpimg2, fshape)  # image 2
@@ -308,7 +325,9 @@ class CrossCorrelator2:
                 if self_correlation:
                     ccorr[w] /= maskcor[w] * np.average(tmpimg[w]) ** 2
                 else:
-                    ccorr[w] /= maskcor[w] * np.average(tmpimg[w]) * np.average(tmpimg2[w])
+                    ccorr[w] /= (
+                        maskcor[w] * np.average(tmpimg[w]) * np.average(tmpimg2[w])
+                    )
                     if check_res:
                         if reg == 0:
                             self.ckn = ccorr.copy()
@@ -341,63 +360,9 @@ def _centered(img, sz):
 # 1999 -- 2002
 
 
-import threading
-import warnings
-
-# from . import sigtools
-import numpy as np
-from numpy import (
-    allclose,
-    angle,
-    arange,
-    argsort,
-    array,
-    asarray,
-    atleast_1d,
-    atleast_2d,
-    cast,
-    dot,
-    exp,
-    expand_dims,
-    iscomplexobj,
-    isscalar,
-    mean,
-    ndarray,
-    newaxis,
-    ones,
-    pi,
-    poly,
-    polyadd,
-    polyder,
-    polydiv,
-    polymul,
-    polysub,
-    polyval,
-    prod,
-    product,
-    r_,
-    ravel,
-    real_if_close,
-    reshape,
-    roots,
-    sort,
-    sum,
-    take,
-    transpose,
-    unique,
-    where,
-    zeros,
-    zeros_like,
-)
-from numpy.fft import irfftn, rfftn
-from scipy import linalg
-from scipy._lib._version import NumpyVersion
-from scipy._lib.six import callable
-from scipy.fftpack import fft, fft2, fftfreq, fftn, ifft, ifft2, ifftn, ifftshift
-
 # from ._arraytools import axis_slice, axis_reverse, odd_ext, even_ext, const_ext
 
-_rfft_mt_safe = NumpyVersion(np.__version__) >= "1.9.0.dev-e24486e"
+_rfft_mt_safe = np.__version__ >= "1.9.0.dev-e24486e"
 
 _rfft_lock = threading.Lock()
 
@@ -492,15 +457,17 @@ def fftconvolve_new(in1, in2, mode="full"):
 
     s1 = array(in1.shape)
     s2 = array(in2.shape)
-    complex_result = np.issubdtype(in1.dtype, np.complex) or np.issubdtype(in2.dtype, np.complex)
+    complex_result = np.issubdtype(in1.dtype, np.complex) or np.issubdtype(
+        in2.dtype, np.complex
+    )
     shape = s1 + s2 - 1
 
     if mode == "valid":
-        _check_valid_mode_shapes(s1, s2)
+        _check_valid_mode_shapes(s1, s2)  # noqa F821
 
     # Speed up FFT by padding to optimal size for FFTPACK
     # expand by at least twice+1
-    fshape = [_next_regular(int(d)) for d in shape]
+    fshape = [_next_regular(int(d)) for d in shape]  # noqa F821
     fslice = tuple([slice(0, int(sz)) for sz in shape])
     # Pre-1.9 NumPy FFT routines are not threadsafe.  For older NumPys, make
     # sure we only call rfftn/irfftn from one thread at a time.
@@ -526,7 +493,7 @@ def fftconvolve_new(in1, in2, mode="full"):
     elif mode == "valid":
         return _centered(ret, s1 - s2 + 1)
     else:
-        raise ValueError("Acceptable mode flags are 'valid'," " 'same', or 'full'.")
+        raise ValueError("Acceptable mode flags are 'valid', 'same', or 'full'.")
 
 
 def _cross_corr1(img1, img2=None):
@@ -758,9 +725,13 @@ class CrossCorrelator1:
                 # do symmetric averaging
                 Icorr = _cross_corr1(tmpimg * self.submasks[reg], self.submasks[reg])
                 if self_correlation:
-                    Icorr2 = _cross_corr1(self.submasks[reg], tmpimg * self.submasks[reg])
+                    Icorr2 = _cross_corr1(
+                        self.submasks[reg], tmpimg * self.submasks[reg]
+                    )
                 else:
-                    Icorr2 = _cross_corr1(self.submasks[reg], tmpimg2 * self.submasks[reg])
+                    Icorr2 = _cross_corr1(
+                        self.submasks[reg], tmpimg2 * self.submasks[reg]
+                    )
                 # there is an extra condition that Icorr*Icorr2 != 0
                 w = np.where(np.abs(Icorr * Icorr2) > 0)  # DO WE NEED THIS (use i,j).
                 ccorr[w] *= self.maskcorrs[reg][w] / Icorr[w] / Icorr2[w]
@@ -772,21 +743,17 @@ class CrossCorrelator1:
                 if self_correlation:
                     ccorr[w] /= self.maskcorrs[reg][w] * np.average(tmpimg[w]) ** 2
                 else:
-                    ccorr[w] /= self.maskcorrs[reg][w] * np.average(tmpimg[w]) * np.average(tmpimg2[w])
+                    ccorr[w] /= (
+                        self.maskcorrs[reg][w]
+                        * np.average(tmpimg[w])
+                        * np.average(tmpimg2[w])
+                    )
             ccorrs.append(ccorr)
 
         if len(ccorrs) == 1:
             ccorrs = ccorrs[0]
 
         return ccorrs
-
-
-##for parallel
-from multiprocessing import Pool
-
-import dill
-
-from pyCHX.chx_compress import apply_async, map_async
 
 
 def run_para_ccorr_sym(ccorr_sym, FD, nstart=0, nend=None, imgsum=None, img_norm=None):
