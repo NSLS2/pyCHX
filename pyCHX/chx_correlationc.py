@@ -13,9 +13,11 @@ import numpy as np
 import skbeam.core.roi as roi
 from skbeam.core.roi import extract_label_indices
 from skbeam.core.utils import multi_tau_lags
+from tqdm import tqdm
+from pyCHX.chx_generic_functions import plot1D, markers_ as markers
+import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
-from tqdm import tqdm
 
 
 def _one_time_process(
@@ -1790,7 +1792,7 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
     try:
         g12b = np.zeros([noframes, noframes, len(qlist)])
         DO = True
-    except:
+    except Exception:
         print(
             "The array is too large. The Sever can't handle such big array. Will calculate different Q sequencely"
         )
@@ -1859,7 +1861,7 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
     try:
         g12b = np.zeros([noframes, noframes, len(qlist)])
         DO = True
-    except:
+    except Exception:
         print(
             "The array is too large. The Sever can't handle such big array. Will calculate different Q sequencely"
         )
@@ -1909,7 +1911,7 @@ def two_time_norm(data_pixel, rois, index=None):
 
     qind, pixelist = roi.extract_label_indices(rois)
     noqs = len(np.unique(qind))
-    nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+    # nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
     noframes = data_pixel.shape[0]
 
     if index is None:
@@ -1926,7 +1928,7 @@ def two_time_norm(data_pixel, rois, index=None):
     try:
         norm = np.zeros(len(qlist))
         DO = True
-    except:
+    except Exception:
         print(
             "The array is too large. The Sever can't handle such big array. Will calculate different Q sequencely"
         )
@@ -1950,7 +1952,7 @@ def two_time_norm(data_pixel, rois, index=None):
         return norm
 
 
-def check_normalization(frame_num, q_list, imgsa, data_pixel):
+def check_normalization(frame_num, q_list, imgsa, data_pixel, rois=None):
     """check the ROI intensity before and after normalization
     Input:
         frame_num: integer, the number of frame to be checked
@@ -1959,8 +1961,9 @@ def check_normalization(frame_num, q_list, imgsa, data_pixel):
         data_pixel: the normalized data, calculated by function  Get_Pixel_Arrayc
     Plot the intensities
     """
-    fig, ax = plt.subplots(2)
+    _, ax = plt.subplots(2)
     n = 0
+    qind, pixelist = roi.extract_label_indices(rois)
     for q in q_list:
         norm_data = data_pixel[frame_num][qind == q]
         raw_data = np.ravel(np.array(imgsa[frame_num]))[pixelist[qind == q]]
@@ -1972,10 +1975,6 @@ def check_normalization(frame_num, q_list, imgsa, data_pixel):
             m=markers[n],
             title="fra=%s_raw_data" % (frame_num),
         )
-
-        # plot1D( raw_data/mean_int_sets_[frame_num][q-1], ax=ax[1], legend='q=%s'%(q), m=markers[n],
-        #       xlabel='pixel',title='fra=%s_norm_data'%(frame_num))
-        # print( mean_int_sets_[frame_num][q-1] )
         plot1D(
             norm_data,
             ax=ax[1],
