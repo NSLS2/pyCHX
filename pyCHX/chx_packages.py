@@ -121,6 +121,7 @@ from pyCHX.chx_generic_functions import (
     get_roi_nr,
     get_series_g2_taus,
     get_SG_norm,
+    get_sid_filenames,
     get_sid_filenames_v3,
     get_today_date,
     get_touched_qwidth,
