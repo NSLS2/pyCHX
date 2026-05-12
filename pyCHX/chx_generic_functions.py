@@ -3437,6 +3437,26 @@ def get_sid_filenames(hdr, verbose=False):
     return ret
 
 
+def get_sid_filenames_v3(run):
+    """
+    get scan_id, uid and detector filename from databroker
+    get_sid_filenames(run,verbose=False)
+    run = db[uid]
+    returns (scan_id, uid, filepath)
+    01/26/2025 based on get_sid_filenames_v2 by Dan Allan, modified by LW to handle Eiger +oav as detectors and using md['sequence_id'] from 'series'
+    """
+    run = run.v2
+    sid = run.start['scan_id']
+    uid = run.start['uid']
+    resources = [doc for name, doc in run.documents() if name == "resource"]
+    for r in resources:
+        if r['spec'] in list(['AD_EIGER2']):
+            resource = r
+    if 'eiger' in  resource['root']:
+        datum = '%s/%s_%s_master.h5'%(resource['root'],resource['resource_path'],run.start['sequence id'])
+    return sid, uid, datum
+
+
 # def get_sid_filenames(header):
 #     """YG. Dev Jan, 2016
 #     Get a bluesky scan_id, unique_id, filename by giveing uid

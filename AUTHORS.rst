@@ -5,7 +5,7 @@ Credits
 Maintainer
 ----------
 
-* Brookhaven National Laboratory <sclark2@bnl.gov>
+* Brookhaven National Laboratory <jgoodrich@bnl.gov>
 
 Contributors
 ------------

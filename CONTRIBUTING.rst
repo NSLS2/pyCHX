@@ -13,7 +13,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at https://github.com/samclark2/pyCHX/issues.
+Report bugs at https://github.com/NSLS2/pyCHX/issues.
 
 If you are reporting a bug, please include:
 

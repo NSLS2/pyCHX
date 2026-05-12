@@ -45,8 +45,8 @@ setup(
     description="pyCHX - CHX XPCS Data Analysis Package",
     long_description=readme,
     long_description_content_type="text/markdown",
-    author="Brookhaven National Laboratory CHX",
-    url="https://github.com/NSLS-II/pyCHX",
+    author="Brookhaven National Laboratory - CHX Beamline",
+    url="https://github.com/NSLS2/pyCHX",
     python_requires=">={}".format(".".join(str(n) for n in min_version)),
     packages=find_packages(exclude=["docs", "tests"]),
     entry_points={

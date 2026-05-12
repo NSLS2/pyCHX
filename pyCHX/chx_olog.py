@@ -1,6 +1,6 @@
 from pyOlog import Attachment, LogEntry, OlogClient, SimpleOlogClient
 from pyOlog.OlogDataTypes import Logbook
-
+olog_client = SimpleOlogClient(url='https://epics-services-chx.nsls2.bnl.local:38981/Olog')
 
 def create_olog_entry(text, logbooks="Data Acquisition"):
     """
@@ -17,7 +17,7 @@ def create_olog_entry(text, logbooks="Data Acquisition"):
     -------
     eid : the entry id returned from the Olog server
     """
-    olog_client = SimpleOlogClient()
+    olog_client = SimpleOlogClient(url='https://epics-services-chx.nsls2.bnl.local:38981/Olog')
     eid = olog_client.log(text, logbooks=logbooks)
     return eid
 
@@ -98,7 +98,7 @@ def update_olog_id(logid, text, attachments, verbose=True):
 
     update_olog_id(logid=29327, text='add_test_atch', attachmenents=atch)
     """
-    olog_client = SimpleOlogClient()
+    olog_client = SimpleOlogClient(url='https://epics-services-chx.nsls2.bnl.local:38981/Olog')
     client = OlogClient()
     url = client._url
 
@@ -134,7 +134,7 @@ def update_olog_uid(uid, text, attachments):
     atch = [Attachment(open(filename1, 'rb'))]
     update_olog_uid(uid='af8f66', text='Add xpcs pdf report', attachments=atch)
     """
-    olog_client = SimpleOlogClient()
+    olog_client = SimpleOlogClient(url='https://epics-services-chx.nsls2.bnl.local:38981/Olog')
 
     logid = olog_client.find(search=f"*{uid}*")[0]["id"]
     update_olog_id(logid, text, attachments)

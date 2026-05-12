@@ -112,8 +112,8 @@ def compress_eigerdata(
         print("Create a new compress file with filename as :%s." % filename)
         if para_compress:
             # stop connection to be before forking... (let it reset again)
-            db.reg.disconnect()
-            db.mds.reset_connection()
+            # db.reg.disconnect() # Line breaks in new kernel
+            # db.mds.reset_connection() # Line breaks in the new kernel
             print("Using a multiprocess to compress the data.")
             return para_compress_eigerdata(
                 images,

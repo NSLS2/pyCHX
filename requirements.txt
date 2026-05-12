@@ -13,7 +13,6 @@ pyyaml
 reportlab
 scikit-image
 scipy
-theano
 tifffile
 tqdm
 git+https://github.com/scikit-beam/scikit-beam.git#egg=scikit-beam

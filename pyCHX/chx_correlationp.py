@@ -276,7 +276,7 @@ def cal_c12p(FD, ring_mask, bad_frame_list=None, good_start=0, num_buf=8, num_le
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
             print("Bad frame involved and will be precessed!")
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            noframes -= len(np.where(np.isin(bad_frame_list, range(good_start, FD.end)))[0])
     print("%s frames will be processed..." % (noframes))
     ring_masks = [np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[1:]]
     qind, pixelist = roi.extract_label_indices(ring_mask)
@@ -284,12 +284,12 @@ def cal_c12p(FD, ring_mask, bad_frame_list=None, good_start=0, num_buf=8, num_le
         S = norm.shape
         if len(S) > 1:
             norms = [
-                norm[:, np.in1d(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
+                norm[:, np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
                 for i in np.unique(ring_mask)[1:]
             ]
         else:
             norms = [
-                norm[np.in1d(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
+                norm[np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
                 for i in np.unique(ring_mask)[1:]
             ]
     inputs = range(len(ring_masks))
@@ -634,7 +634,7 @@ def cal_g2p(
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
             print("%s Bad frames involved and will be discarded!" % len(bad_frame_list))
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            noframes -= len(np.where(np.isin(bad_frame_list, range(good_start, FD.end)))[0])
     print("%s frames will be processed..." % (noframes - 1))
     ring_masks = [np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[1:]]
     qind, pixelist = roi.extract_label_indices(ring_mask)
@@ -644,12 +644,12 @@ def cal_g2p(
         S = norm.shape
         if len(S) > 1:
             norms = [
-                norm[:, np.in1d(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
+                norm[:, np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
                 for i in np.unique(ring_mask)[1:]
             ]
         else:
             norms = [
-                norm[np.in1d(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
+                norm[np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
                 for i in np.unique(ring_mask)[1:]
             ]
     inputs = range(len(ring_masks))
@@ -766,7 +766,7 @@ def cal_GPF(
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
             print("%s Bad frames involved and will be discarded!" % len(bad_frame_list))
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            noframes -= len(np.where(np.isin(bad_frame_list, range(good_start, FD.end)))[0])
     print("%s frames will be processed..." % (noframes - 1))
     if np.min(ring_mask) == 0:
         qstart = 1
@@ -778,7 +778,7 @@ def cal_GPF(
     nopr = np.bincount(qind, minlength=(noqs + 1))[qstart:]
     if norm is not None:
         norms = [
-            norm[np.in1d(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
+            norm[np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
             for i in np.unique(ring_mask)[qstart:]
         ]
 
