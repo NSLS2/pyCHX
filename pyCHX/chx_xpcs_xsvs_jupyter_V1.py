@@ -1,4 +1,5 @@
 import pandas as pds
+import time
 
 from pyCHX.chx_libs import colors, markers
 
@@ -7,7 +8,19 @@ import matplotlib.pyplot as plt
 import os
 from pyOlog import Attachment
 from pyCHX.chx_olog import update_olog_uid
-from pyCHX.chx_generic_functions import save_arrays, save_dict_csv, psave_obj, run_time
+from pyCHX.chx_generic_functions import (
+    save_arrays,
+    save_dict_csv,
+    psave_obj,
+    run_time,
+    get_max_countc,
+    plot_g2_general,
+    save_g2_general,
+    plot_q_rate_fit_general,
+    get_q_rate_fit_general,
+    save_g2_fit_para_tocsv,
+    get_g2_fit_general,
+)
 from pyCHX.Create_Report import export_xpcs_results_to_h5, make_pdf_report
 from pyCHX.chx_speckle import (
     plot_g2_contrast,
@@ -17,6 +30,11 @@ from pyCHX.chx_speckle import (
 )
 from pyCHX.chx_specklecp import save_KM, save_bin_his_std, get_binned_his_std, xsvsp
 from pyCHX.chx_compress_analysis import cal_each_ring_mean_intensityc
+from pyCHX.chx_correlationc import Get_Pixel_Arrayc
+from pyCHX.Two_Time_Correlation_Function import (
+    get_four_time_from_two_time,
+    get_one_time_from_two_time, show_C12
+)
 import numpy as np
 
 # from pyCHX.chx_generic_functions import get_short_long_labels_from_qval_dict
@@ -462,7 +480,7 @@ def get_iq_from_uids(uids, mask, setup_pargs):
                 image_name=uidstr + "_img_avg",
                 save=True,
                 path=setup_pargs["path"],
-                cmap=cmap_albula,
+                cmap="viridis",
             )
 
             setup_pargs["uid"] = uidstr
@@ -1281,8 +1299,8 @@ def run_xpcs_xsvs_single(
     if scat_geometry != "ang_saxs":
         roi_mask = run_pargs["roi_mask"]
         qind, pixelist = roi.extract_label_indices(roi_mask)
-        noqs = len(np.unique(qind))
-        nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+        # noqs = len(np.unique(qind))
+        # nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
 
     else:
         roi_mask_p = run_pargs["roi_mask_p"]
@@ -2238,11 +2256,11 @@ def run_xpcs_xsvs_single(
         if run_xsvs:
             max_cts = get_max_countc(FD, roi_mask)
             qind, pixelist = roi.extract_label_indices(roi_mask)
-            noqs = len(np.unique(qind))
-            nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+            # noqs = len(np.unique(qind))
+            # nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
             # time_steps = np.array( utils.geometric_series(2,   len(imgs)   ) )
             time_steps = [0, 1]  # only run the first two levels
-            num_times = len(time_steps)
+            # num_times = len(time_steps)
             times_xsvs = (
                 exposuretime + (2 ** (np.arange(len(time_steps))) - 1) * timeperframe
             )
