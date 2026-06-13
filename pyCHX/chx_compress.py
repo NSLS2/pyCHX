@@ -452,7 +452,7 @@ def para_segment_compress_eigerdata(
     print("It will create %i temporary files for parallel compression." % Nf)
 
     if Nf > num_max_para_process:
-        N_runs = np.int(np.ceil(Nf / float(num_max_para_process)))
+        N_runs = int(np.ceil(Nf / float(num_max_para_process)))
         print("The parallel run number: %s is larger than num_max_para_process: %s" % (Nf, num_max_para_process))
     else:
         N_runs = 1

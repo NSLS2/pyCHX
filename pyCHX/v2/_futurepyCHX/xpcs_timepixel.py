@@ -336,7 +336,7 @@ def init_compress_timepix_data(pos, t, binstep, filename, mask=None, md=None, no
     )
     fp.write(Header)
 
-    N_ = np.int(np.ceil((t.max() - t.min()) / binstep))
+    N_ = int(np.ceil((t.max() - t.min()) / binstep))
     print("There are %s frames to be compressed..." % (N_ - 1))
 
     ps, vs, cs = get_pvlist_from_post(pos, t, binstep, detx=md["sx"], dety=md["sy"])
@@ -344,7 +344,7 @@ def init_compress_timepix_data(pos, t, binstep, filename, mask=None, md=None, no
     css = np.cumsum(cs)
     imgsum = np.zeros(N)
     good_count = 0
-    avg_img = np.zeros([md["sy"], md["sx"]], dtype=np.float)
+    avg_img = np.zeros([md["sy"], md["sx"]], dtype=float)
 
     for i in tqdm(range(0, N)):
         if i == 0:
@@ -436,7 +436,7 @@ def init_compress_timepix_data_light_duty(
     imgsum = np.zeros(N - 1)
     print("There are %s frames to be compressed..." % (N - 1))
     good_count = 0
-    avg_img = np.zeros([md["sy"], md["sx"]], dtype=np.float)
+    avg_img = np.zeros([md["sy"], md["sx"]], dtype=float)
     for i in tqdm(range(N - 1)):
         ind1 = np.argmin(np.abs(tx[i] - t))
         ind2 = np.argmin(np.abs(tx[i + 1] - t))

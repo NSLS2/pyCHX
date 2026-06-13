@@ -2448,7 +2448,7 @@ def get_series_g2_taus(fra_max_list, acq_time=1, max_fra_num=None, log_taus=True
         if max_fra_num != None:
             L = max_fra_num
         else:
-            L = np.infty
+            L = np.inf
         if n > L:
             warnings.warn(
                 "Warning: the dose value is too large, and please"
