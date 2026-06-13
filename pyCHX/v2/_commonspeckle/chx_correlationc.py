@@ -1530,14 +1530,14 @@ class Get_Pixel_Arrayc_todo(object):
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
 
-        data_array = np.zeros([self.length, len(self.pixelist)], dtype=np.float)
+        data_array = np.zeros([self.length, len(self.pixelist)], dtype=float)
         # fra_pix = np.zeros_like( pixelist, dtype=np.float64)
         timg = np.zeros(self.FD.md["ncols"] * self.FD.md["nrows"], dtype=np.int32)
         timg[self.pixelist] = np.arange(1, len(self.pixelist) + 1)
 
         if self.norm_inten is not None:
             # Mean_Int_Qind = np.array( self.qind.copy(), dtype=np.float)
-            Mean_Int_Qind = np.ones(len(self.qind), dtype=np.float)
+            Mean_Int_Qind = np.ones(len(self.qind), dtype=float)
             noqs = len(np.unique(self.qind))
             nopr = np.bincount(self.qind - 1)
             noprs = np.concatenate([np.array([0]), np.cumsum(nopr)])
@@ -1645,14 +1645,14 @@ class Get_Pixel_Arrayc(object):
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
 
-        data_array = np.zeros([self.length, len(self.pixelist)], dtype=np.float)
+        data_array = np.zeros([self.length, len(self.pixelist)], dtype=float)
         # fra_pix = np.zeros_like( pixelist, dtype=np.float64)
         timg = np.zeros(self.FD.md["ncols"] * self.FD.md["nrows"], dtype=np.int32)
         timg[self.pixelist] = np.arange(1, len(self.pixelist) + 1)
 
         if self.mean_int_sets is not None:
             # Mean_Int_Qind = np.array( self.qind.copy(), dtype=np.float)
-            Mean_Int_Qind = np.ones(len(self.qind), dtype=np.float)
+            Mean_Int_Qind = np.ones(len(self.qind), dtype=float)
             noqs = len(np.unique(self.qind))
             nopr = np.bincount(self.qind - 1)
             noprs = np.concatenate([np.array([0]), np.cumsum(nopr)])

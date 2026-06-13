@@ -301,7 +301,7 @@ def init_compress_timepix_data(pos, t, binstep, filename, mask=None, md=None, no
     )
     fp.write(Header)
 
-    N_ = np.int(np.ceil((t.max() - t.min()) / binstep))
+    N_ = int(np.ceil((t.max() - t.min()) / binstep))
     print("There are %s frames to be compressed..." % (N_ - 1))
 
     ps, vs, cs = get_pvlist_from_post(pos, t, binstep, detx=md["sx"], dety=md["sy"])

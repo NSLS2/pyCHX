@@ -289,7 +289,7 @@ def get_qedge2(qstart, qend, qwidth, noqs, return_int=False):
     if not return_int:
         return qedge, qcenter
     else:
-        return np.int(qedge), np.int(qcenter)
+        return int(qedge), int(qcenter)
 
 
 def get_qedge(qstart, qend, qwidth, noqs, return_int=False):
@@ -308,7 +308,7 @@ def get_qedge(qstart, qend, qwidth, noqs, return_int=False):
     if not return_int:
         return qedge, qcenter
     else:
-        return np.int(qedge), np.int(qcenter)
+        return int(qedge), int(qcenter)
 
 
 def get_time_edge(tstart, tend, twidth, nots, return_int=False):
@@ -328,7 +328,7 @@ def get_time_edge(tstart, tend, twidth, nots, return_int=False):
     if not return_int:
         return tedge, tcenter
     else:
-        return np.int(tedge), np.int(tcenter)
+        return int(tedge), int(tcenter)
 
 
 def rotate_g12q_to_rectangle(g12q):

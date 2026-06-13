@@ -248,8 +248,8 @@ def read_compressed_eigerdata(
             CAL = True
     if CAL:
         FD = Multifile(filename, beg, end)
-        imgsum = np.zeros(FD.end - FD.beg, dtype=np.float)
-        avg_img = np.zeros([FD.md["ncols"], FD.md["nrows"]], dtype=np.float)
+        imgsum = np.zeros(FD.end - FD.beg, dtype=float)
+        avg_img = np.zeros([FD.md["ncols"], FD.md["nrows"]], dtype=float)
         imgsum, bad_frame_list_ = get_each_frame_intensityc(
             FD,
             sampling=1,
@@ -458,7 +458,7 @@ def para_segment_compress_eigerdata(
     print("It will create %i temporary files for parallel compression." % Nf)
 
     if Nf > num_max_para_process:
-        N_runs = np.int(np.ceil(Nf / float(num_max_para_process)))
+        N_runs = int(np.ceil(Nf / float(num_max_para_process)))
         print("The parallel run number: %s is larger than num_max_para_process: %s" % (Nf, num_max_para_process))
     else:
         N_runs = 1
@@ -541,7 +541,7 @@ def segment_compress_eigerdata(
 
     Nimg_ = len(images)
     M, N = images[0].shape
-    avg_img = np.zeros([M, N], dtype=np.float)
+    avg_img = np.zeros([M, N], dtype=float)
     Nopix = float(avg_img.size)
     n = 0
     good_count = 0
@@ -788,7 +788,7 @@ def init_compress_eigerdata(
     fp.write(Header)
 
     Nimg_ = len(images)
-    avg_img = np.zeros_like(images[0], dtype=np.float)
+    avg_img = np.zeros_like(images[0], dtype=float)
     Nopix = float(avg_img.size)
     n = 0
     good_count = 0
