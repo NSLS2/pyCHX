@@ -6,7 +6,7 @@ import struct
 import sys
 from contextlib import closing
 from glob import iglob
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 
 import dill
 import matplotlib.pyplot as plt
@@ -74,7 +74,7 @@ def compress_eigerdata(
     bins=1,
     bad_frame_list=None,
     para_compress=False,
-    num_sub=100,
+    num_sub=128,
     dtypes="uid",
     reverse=True,
     rot90=False,
@@ -84,7 +84,7 @@ def compress_eigerdata(
     data_path=None,
     images_per_file=100,
     copy_rawdata=True,
-    new_path="/tmp_data/data/",
+    new_path="/tmp/",
 ):
     """
     Init 2016, YG@CHX
@@ -111,9 +111,12 @@ def compress_eigerdata(
     if force_compress:
         print("Create a new compress file with filename as :%s." % filename)
         if para_compress:
-            # stop connection to be before forking... (let it reset again)
-            # db.reg.disconnect() # Line breaks in new kernel
-            # db.mds.reset_connection() # Line breaks in the new kernel
+            # stop connection to be before forking... (let it reset again); 11/09/2024 this seems to fail with 'registry doesn't have attribute disconnect... -> try making this optional; this might have been a leftover: if compression happens "natuarally" (not as force_compress=True) this disconnect/reconnect is already missing...we definitely had this error before...
+            try:
+                db.reg.disconnect()
+                db.mds.reset_connection()
+            except:
+                pass
             print("Using a multiprocess to compress the data.")
             return para_compress_eigerdata(
                 images,
@@ -178,6 +181,7 @@ def compress_eigerdata(
                     data_path=data_path,
                     images_per_file=images_per_file,
                     copy_rawdata=copy_rawdata,
+                    new_path=new_path
                 )
             else:
                 return init_compress_eigerdata(
@@ -270,7 +274,7 @@ def para_compress_eigerdata(
     mask,
     md,
     filename,
-    num_sub=100,
+    num_sub=128,
     bad_pixel_threshold=1e15,
     hot_pixel_threshold=2**30,
     bad_pixel_low_threshold=0,
@@ -280,13 +284,13 @@ def para_compress_eigerdata(
     reverse=True,
     rot90=False,
     num_max_para_process=500,
-    cpu_core_number=72,
+    cpu_core_number=0,
     with_pickle=True,
     direct_load_data=False,
     data_path=None,
     images_per_file=100,
     copy_rawdata=True,
-    new_path="/tmp_data/data/",
+    new_path="/tmp/",
 ):
 
     data_path_ = data_path
@@ -302,7 +306,7 @@ def para_compress_eigerdata(
             if not copy_rawdata:
                 images_ = EigerImages(data_path, images_per_file, md)
             else:
-                print("Due to a IO problem running on GPFS. The raw data will be copied to /tmp_data/Data.")
+                print("Due to a IO problem running on GPFS. The raw data will be copied to /tmp/")
                 print("Copying...")
                 copy_data(data_path, new_path)
                 # print(data_path, new_path)
@@ -319,10 +323,14 @@ def para_compress_eigerdata(
 
     else:
         N = len(images)
+
+    if cpu_core_number == 0:
+        cpu_core_number = cpu_count()
+        
     N = int(np.ceil(N / bins))
     Nf = int(np.ceil(N / num_sub))
     if Nf > cpu_core_number:
-        print("The process number is larger than %s (XF11ID server core number)" % cpu_core_number)
+        print("The process number is larger than %s (current server's core threads)" % cpu_core_number)
         num_sub_old = num_sub
         num_sub = int(np.ceil(N / cpu_core_number))
         Nf = int(np.ceil(N / num_sub))
@@ -466,7 +474,7 @@ def para_segment_compress_eigerdata(
         fns = [filename + "_temp-%i.tmp" % i for i in inputs]
         # print( nr, inputs, )
         pool = Pool(processes=len(inputs))  # , maxtasksperchild=1000 )
-        # print( inputs )
+        print( 'Pool processes: %s'%len(inputs) )
         for i in inputs:
             if i * num_sub <= N:
                 result[i] = pool.apply_async(
