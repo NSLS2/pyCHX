@@ -71,10 +71,14 @@ def add_image_string(
             return height / ratio
 
     else:
+        print(f"Cannot find {image}")
         c.setFillColor(blue)
         c.drawString(str1_left, str1_top, str1)
         c.setFillColor(red)
         c.drawString(str1_left, str1_top - 40, "-->Not Calculated!")
+        if return_:
+            return 100
+
 
 
 class create_pdf_report(object):
@@ -966,6 +970,7 @@ class create_pdf_report(object):
                 imgf = q_rate_file
             if self.report_type != "ang_saxs":
                 # print(img_width)
+
                 if img_width > 400:
                     img_height = 90
                 else:

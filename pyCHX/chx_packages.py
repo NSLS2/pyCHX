@@ -62,6 +62,7 @@ from pyCHX.chx_correlationp import _one_time_process_errorp, auto_two_Arrayp, ca
 from pyCHX.chx_crosscor import CrossCorrelator2, run_para_ccorr_sym
 from pyCHX.chx_generic_functions import (
     R_2,
+    RemoveHot,
     apply_mask,
     average_array_withNan,
     check_bad_uids,
@@ -73,6 +74,7 @@ from pyCHX.chx_generic_functions import (
     create_cross_mask,
     create_fullImg_with_box,
     create_hot_pixel_mask,
+    create_multi_rotated_rectangle_mask,
     create_polygon_mask,
     create_rectangle_mask,
     create_ring_mask,
@@ -122,6 +124,7 @@ from pyCHX.chx_generic_functions import (
     get_series_g2_taus,
     get_SG_norm,
     get_sid_filenames,
+    get_sid_filenames_v2,
     get_sid_filenames_v3,
     get_today_date,
     get_touched_qwidth,
@@ -161,6 +164,7 @@ from pyCHX.chx_generic_functions import (
     save_g2_general,
     save_lists,
     save_oavs_tifs,
+    save_oavs_tifs_v2,
     sgolay2d,
     shift_mask,
     show_img,
@@ -172,6 +176,7 @@ from pyCHX.chx_generic_functions import (
     validate_uid,
 )
 from pyCHX.chx_olog import Attachment, LogEntry, update_olog_id, update_olog_uid, update_olog_uid_with_file
+from pyCHX.chx_outlier_detection import is_outlier, outlier_mask
 from pyCHX.chx_specklecp import (
     get_binned_his_std,
     get_contrast,
@@ -183,6 +188,27 @@ from pyCHX.chx_specklecp import (
     save_KM,
     xsvsc,
     xsvsp,
+)
+from pyCHX.chx_xpcs_xsvs_jupyter_V1 import (
+    compress_multi_uids,
+    do_compress_on_line,
+    get_fra_num_by_dose,
+    get_iq_from_uids,
+    get_series_g2_from_g12,
+    get_series_one_time_mulit_uids,
+    get_t_iqc_uids,
+    get_two_time_mulit_uids,
+    get_uids_by_range,
+    get_uids_in_time_period,
+    plot_dose_g2,
+    plot_entries_from_csvlist,
+    plot_entries_from_uids,
+    plot_t_iqc_uids,
+    plot_t_iqtMq2,
+    realtime_xpcs_analysis,
+    run_xpcs_xsvs_single,
+    wait_data_acquistion_finish,
+    wait_func,
 )
 from pyCHX.Create_Report import (
     create_multi_pdf_reports_for_uids,

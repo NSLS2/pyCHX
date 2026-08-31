@@ -232,7 +232,7 @@ def xsvsp_single(
     # print(time_bin)
     # number of times in the time bin
     num_times = len(time_bin)
-    prob_k = np.zeros([num_times, num_roi], dtype=np.object)
+    prob_k = np.zeros([num_times, num_roi], dtype=object)
     prob_k_std_dev = np.zeros_like(prob_k)
     his_sum = np.zeros([num_times, num_roi])
     # print( len(res) )
@@ -441,7 +441,7 @@ def xsvsc_single(
     # number of pixels per ROI
     num_pixels = np.bincount(labels, minlength=(num_roi + 1))[1:]
     # probability density of detecting photons
-    prob_k = np.zeros([num_times, num_roi], dtype=np.object)
+    prob_k = np.zeros([num_times, num_roi], dtype=object)
     his_sum = np.zeros([num_times, num_roi])
     # square of probability density of detecting photons
     prob_k_pow = np.zeros_like(prob_k)
@@ -727,9 +727,9 @@ def get_his_std(data_pixel, rois, max_cts=None):
         max_cts = np.max(data_pixel) + 1
     qind, pixelist = roi.extract_label_indices(rois)
     noqs = len(np.unique(qind))
-    his = np.zeros([noqs], dtype=np.object)
-    std = np.zeros_like(his, dtype=np.object)
-    kmean = np.zeros_like(his, dtype=np.object)
+    his = np.zeros([noqs], dtype=object)
+    std = np.zeros_like(his, dtype=object)
+    kmean = np.zeros_like(his, dtype=object)
     for qi in range(noqs):
         pixelist_qi = np.where(qind == qi + 1)[0]
         # print(qi, max_cts)
@@ -800,10 +800,10 @@ def get_binned_his_std_qi(data_pixel_qi, lag_steps, max_cts=None):
     lag_steps = np.array(lag_steps)
     lag_steps = lag_steps[np.nonzero(lag_steps)]
     nologs = len(lag_steps)
-    his = np.zeros([nologs], dtype=np.object)
-    bins = np.zeros_like(his, dtype=np.object)
-    std = np.zeros_like(his, dtype=np.object)
-    kmean = np.zeros_like(his, dtype=np.object)
+    his = np.zeros([nologs], dtype=object)
+    bins = np.zeros_like(his, dtype=object)
+    std = np.zeros_like(his, dtype=object)
+    kmean = np.zeros_like(his, dtype=object)
     i = 0
     for lag in lag_steps:
         data_pixel_qi_ = np.sum(reshape_array(data_pixel_qi, lag), axis=1)
@@ -834,10 +834,10 @@ def get_binned_his_std(data_pixel, rois, lag_steps, max_cts=None):
     lag_steps = lag_steps[np.nonzero(lag_steps)]
 
     nologs = len(lag_steps)
-    his = np.zeros([nologs, noqs], dtype=np.object)
-    bins = np.zeros([nologs], dtype=np.object)
-    std = np.zeros_like(his, dtype=np.object)
-    kmean = np.zeros_like(his, dtype=np.object)
+    his = np.zeros([nologs, noqs], dtype=object)
+    bins = np.zeros([nologs], dtype=object)
+    std = np.zeros_like(his, dtype=object)
+    kmean = np.zeros_like(his, dtype=object)
     i = 0
     for lag in tqdm(lag_steps):
         data_pixel_ = np.sum(reshape_array(data_pixel, lag), axis=1)
@@ -1390,8 +1390,8 @@ def get_his_std_from_pds(spec_pds, his_shapes=None):
     if his_shapes is None:
         M, N = 2, int((len(spkeys) - 1) / 4)
     # print(M,N)
-    spec_his = np.zeros([M, N], dtype=np.object)
-    spec_std = np.zeros([M, N], dtype=np.object)
+    spec_his = np.zeros([M, N], dtype=object)
+    spec_std = np.zeros([M, N], dtype=object)
     for i in range(M):
         for j in range(N):
             spec_his[i, j] = np.array(spec_pds[spkeys[1 + i * N + j]][~np.isnan(spec_pds[spkeys[1 + i * N + j]])])

@@ -113,7 +113,7 @@ def xsvs(
     num_pixels = np.bincount(labels, minlength=(num_roi + 1))[1:]
 
     # probability density of detecting photons
-    prob_k_all = np.zeros([num_times, num_roi], dtype=np.object)
+    prob_k_all = np.zeros([num_times, num_roi], dtype=object)
 
     # square of probability density of detecting photons
     prob_k_pow_all = np.zeros_like(prob_k_all)

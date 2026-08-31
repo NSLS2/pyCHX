@@ -4,6 +4,8 @@ yuzhang@bnl.gov
 This module is for the GiSAXS XPCS analysis
 """
 
+
+
 from skbeam.core.accumulators.binned_statistic import BinnedStatistic1D, BinnedStatistic2D
 
 from pyCHX.chx_compress import (
@@ -161,7 +163,7 @@ def get_qr(data, Qr, Qz, qr, qz, mask=None):
 
 ########################
 # get one-d of I(q) as a function of qr for different qz
-#####################
+# ####################
 
 
 def cal_1d_qr(
@@ -434,8 +436,8 @@ def plot_t_qrc(qr_1d, frame_edge, save=False, pargs=None, fontsize=8, *argv, **k
 
 
 ##########################################
-###Functions for GiSAXS
-##########################################
+# ##Functions for GiSAXS
+# #########################################
 
 
 def make_gisaxs_grid(qr_w=10, qz_w=12, dim_r=100, dim_z=120):
@@ -455,7 +457,7 @@ def make_gisaxs_grid(qr_w=10, qz_w=12, dim_r=100, dim_z=120):
 
 ###########################################
 # for Q-map, convert pixel to Q
-###########################################
+# ##########################################
 
 
 def convert_Qmap(img, qx_map, qy_map=None, bins=None, rangeq=None, mask=None, statistic="sum"):
@@ -695,7 +697,7 @@ def get_qedge2(
 
 ###########################################
 # for plot Q-map
-###########################################
+# ##########################################
 
 
 def get_qmap_label(qmap, qedge):
@@ -741,7 +743,17 @@ def get_qzrmap(label_array_qz, label_array_qr, qz_center, qr_center):
 
 
 def show_label_array_on_image(
-    ax, image, label_array, cmap=None, norm=None, log_img=True, alpha=0.3, imshow_cmap="gray", **kwargs
+    ax,
+    image,
+    label_array,
+    cmap=None,
+    norm=None,
+    log_img=True,
+    alpha=0.3,
+    vmin=0.1,
+    vmax=5,
+    imshow_cmap="gray",
+    **kwargs,
 ):  # norm=LogNorm(),
     """
     This will plot the required ROI's(labeled array) on the image
@@ -771,13 +783,32 @@ def show_label_array_on_image(
     """
     ax.set_aspect("equal")
     if log_img:
-        im = ax.imshow(image, cmap=imshow_cmap, interpolation="none", norm=LogNorm(norm), **kwargs)  # norm=norm,
+        im = ax.imshow(
+            image,
+            cmap=imshow_cmap,
+            interpolation="none",
+            norm=LogNorm(vmin=vmin, vmax=vmax),
+            **kwargs,
+        )
     else:
-        im = ax.imshow(image, cmap=imshow_cmap, interpolation="none", norm=norm, **kwargs)  # norm=norm,
+        if norm is None:
+            im = ax.imshow(
+                image,
+                cmap=imshow_cmap,
+                interpolation="none",
+                vmin=vmin,
+                vmax=vmax,
+                **kwargs,
+            )
+        else:
+            im = ax.imshow(image, cmap=imshow_cmap, interpolation="none", norm=norm, **kwargs)
 
-    im_label = mpl_plot.show_label_array(
-        ax, label_array, cmap=cmap, norm=norm, alpha=alpha, **kwargs
-    )  # norm=norm,
+    if norm is None:
+        im_label = mpl_plot.show_label_array(
+            ax, label_array, cmap=cmap, vmin=vmin, vmax=vmax, alpha=alpha, **kwargs
+        )
+    else:
+        im_label = mpl_plot.show_label_array(ax, label_array, cmap=cmap, norm=norm, alpha=alpha, **kwargs)
 
     return im, im_label
 
@@ -2141,8 +2172,6 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
 
 
 # GiSAXS End
-###############################
-
 
 def get_each_box_mean_intensity(data_series, box_mask, sampling, timeperframe, plot_=True, *argv, **kwargs):
     """Dec 16, 2015, Y.G.@CHX

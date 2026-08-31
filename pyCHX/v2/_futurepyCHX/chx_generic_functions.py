@@ -1438,7 +1438,7 @@ def get_waxs_beam_center(gamma, origin=[432, 363], Ldet=1495, pixel_size=75 * 1e
         beam center: for the target gamma, in pixel
     """
     return [
-        np.int(origin[0] + np.tan(np.radians(gamma)) * Ldet / pixel_size),
+        int(origin[0] + np.tan(np.radians(gamma)) * Ldet / pixel_size),
         origin[1],
     ]
 
@@ -2543,7 +2543,7 @@ def get_series_g2_taus(fra_max_list, acq_time=1, max_fra_num=None, log_taus=True
         if max_fra_num is not None:
             L = max_fra_num
         else:
-            L = np.infty
+            L = np.inf
         if n > L:
             warnings.warn(
                 "Warning: the dose value is too large, and please"
@@ -2638,8 +2638,8 @@ def combine_images(filenames, outputfile, outsize=(2000, 2400)):
     # nx = np.int( np.ceil( np.sqrt(N)) )
     # ny = np.int( np.ceil( N / float(nx)  ) )
 
-    ny = np.int(np.ceil(np.sqrt(N)))
-    nx = np.int(np.ceil(N / float(ny)))
+    ny = int(np.ceil(np.sqrt(N)))
+    nx = int(np.ceil(N / float(ny)))
 
     # print(nx,ny)
     result = Image.new("RGB", outsize, color=(255, 255, 255, 0))
