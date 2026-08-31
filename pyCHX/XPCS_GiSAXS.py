@@ -743,7 +743,17 @@ def get_qzrmap(label_array_qz, label_array_qr, qz_center, qr_center):
 
 
 def show_label_array_on_image(
-    ax, image, label_array, cmap=None, norm=None, log_img=True, alpha=0.3, imshow_cmap="gray", **kwargs
+    ax,
+    image,
+    label_array,
+    cmap=None,
+    norm=None,
+    log_img=True,
+    alpha=0.3,
+    vmin=0.1,
+    vmax=5,
+    imshow_cmap="gray",
+    **kwargs,
 ):  # norm=LogNorm(),
     """
     This will plot the required ROI's(labeled array) on the image
@@ -773,14 +783,32 @@ def show_label_array_on_image(
     """
     ax.set_aspect("equal")
     if log_img:
-        norm=LogNorm(vmin=vmin, vmax=vmax)
-        im = ax.imshow(image, cmap=imshow_cmap, interpolation="none", norm=norm)  # norm=norm,
+        im = ax.imshow(
+            image,
+            cmap=imshow_cmap,
+            interpolation="none",
+            norm=LogNorm(vmin=vmin, vmax=vmax),
+            **kwargs,
+        )
     else:
-        im = ax.imshow(image, cmap=imshow_cmap, interpolation="none", norm=norm, **kwargs)  # norm=norm,
+        if norm is None:
+            im = ax.imshow(
+                image,
+                cmap=imshow_cmap,
+                interpolation="none",
+                vmin=vmin,
+                vmax=vmax,
+                **kwargs,
+            )
+        else:
+            im = ax.imshow(image, cmap=imshow_cmap, interpolation="none", norm=norm, **kwargs)
 
-    im_label = mpl_plot.show_label_array(
-        ax, label_array, cmap=cmap, norm=norm, alpha=alpha, **kwargs
-    )  # norm=norm,
+    if norm is None:
+        im_label = mpl_plot.show_label_array(
+            ax, label_array, cmap=cmap, vmin=vmin, vmax=vmax, alpha=alpha, **kwargs
+        )
+    else:
+        im_label = mpl_plot.show_label_array(ax, label_array, cmap=cmap, norm=norm, alpha=alpha, **kwargs)
 
     return im, im_label
 
@@ -2144,7 +2172,6 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
 
 
 # GiSAXS End
-""
 
 def get_each_box_mean_intensity(data_series, box_mask, sampling, timeperframe, plot_=True, *argv, **kwargs):
     """Dec 16, 2015, Y.G.@CHX

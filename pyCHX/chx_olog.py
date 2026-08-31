@@ -21,7 +21,6 @@ def create_olog_entry(text, logbooks="Data Acquisition"):
     -------
     eid : the entry id returned from the Olog server
     """
-    olog_client = SimpleOlogClient()
     eid = olog_client.log(text, logbooks=logbooks)
     return eid
 
@@ -75,7 +74,7 @@ def update_olog_logid_with_file(logid, text, filename=None, verbose=False):
     else:
         atch = None
     try:
-        update_olog_id(logid=logid, text=text, attachments=atch, verbose=verbose)
+        update_olog_id(olog_client, logid=logid, text=text, attachments=atch, verbose=verbose)
     except Exception:
         pass
 

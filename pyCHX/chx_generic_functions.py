@@ -860,7 +860,7 @@ def save_oavs_tifs(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1
         plt.plot([cross[0] - cross[2] / 2, cross[0] + cross[2] / 2], [cross[1], cross[1]], "r-")
         plt.plot([cross[0], cross[0]], [cross[1] - cross[2] / 2, cross[1] + cross[2] / 2], "r-")
         if pixel_scalebar != None:
-            plt.plot([1100, 1100 + pixel_scalebar], [150, 150], "r-", Linewidth=5)  # scale bar.
+            plt.plot([1100, 1100 + pixel_scalebar], [150, 150], "r-", linewidth=5)  # scale bar.
             plt.text(1000, 50, text_string, fontsize=14, color="r")
         plt.text(600, 50, str(oav_times[m])[:5] + " [s]", fontsize=14, color="r")
         plt.axis("off")
@@ -922,7 +922,7 @@ def save_oavs_tifs_v2(uid, data_dir, brightness_scale=1, scalebar_size=100, scal
         plt.plot([cross[0] - cross[2] / 2, cross[0] + cross[2] / 2], [cross[1], cross[1]], "r-")
         plt.plot([cross[0], cross[0]], [cross[1] - cross[2] / 2, cross[1] + cross[2] / 2], "r-")
         if pixel_scalebar != None:
-            plt.plot([1100, 1100 + pixel_scalebar], [150, 150], "r-", Linewidth=5)  # scale bar.
+            plt.plot([1100, 1100 + pixel_scalebar], [150, 150], "r-", linewidth=5)  # scale bar.
             plt.text(1000, 50, text_string, fontsize=14, color="r")
         plt.text(600, 50, str(oav_times[m])[:5] + " [s]", fontsize=14, color="r")
         plt.axis("off");pc+=1
@@ -3519,9 +3519,12 @@ def get_sid_filenames_v2(run):
     sid = run.start['scan_id']
     uid = run.start['uid']
     resources = [doc for name, doc in run.documents() if name == "resource"]
+    resource = None
     for r in resources:
         if r['spec'] in list(['AD_EIGER2']):
             resource = r
+    if resource is None:
+        raise ValueError(f"No AD_EIGER2 resource found for run {uid}")
     datum_pages = [doc for name, doc in run.documents() if name == "datum_page"]
     handler = EigerHandler(str(Path(resource['root'], resource['resource_path'])), **resource['resource_kwargs'])
     datums = []

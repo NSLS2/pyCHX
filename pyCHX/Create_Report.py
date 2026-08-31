@@ -76,7 +76,8 @@ def add_image_string(
         c.drawString(str1_left, str1_top, str1)
         c.setFillColor(red)
         c.drawString(str1_left, str1_top - 40, "-->Not Calculated!")
-        return 100
+        if return_:
+            return 100
 
 
 

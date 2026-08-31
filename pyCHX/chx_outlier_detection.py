@@ -41,24 +41,23 @@ def outlier_mask(
     by LW 06/21/2023
     """
 
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import roi               # or from yourpackage import roi
-    from is_outlier import is_outlier  # adjust to your actual module
-
-    upper_outlier_threshold = True
-    lower_outlier_threshold = True
-    
     hhmask = np.ones(np.shape(roi_mask))
     pc = 1
 
     for rn in np.arange(1, np.max(roi_mask) + 1, 1):
+        upper_outlier_threshold = False
+        lower_outlier_threshold = False
         rm = np.zeros(np.shape(roi_mask))
         rm = rm - 1
         rm[np.where(roi_mask == rn)] = 1
         pixel = roi.roi_pixel_values(avg_img * rm, roi_mask, [rn])
         out_l = is_outlier((avg_img * mask * rm)[rm > -1], thresh=outlier_threshold)
-        if np.nanmax(out_l) > 0:  # Did detect at least one outlier
+        if out_l is None or len(out_l) == 0:
+            outlier_fraction = 0
+        else:
+            outlier_fraction = np.sum(out_l) / len(pixel[0][0])
+
+        if out_l is not None and len(out_l) > 0 and np.nanmax(out_l) > 0:  # Did detect at least one outlier
             ave_roi_int = np.nanmean((pixel[0][0])[out_l < 1])
             if verbose:
                 print("ROI #%s\naverage ROI intensity: %s" % (rn, ave_roi_int))
@@ -84,11 +83,6 @@ def outlier_mask(
 
         ### MAKE SURE we don't REMOVE more than x percent of the pixels in the roi
         
-        if out_l is None or len(out_l) == 0:
-            outline_faction = 0 
-        else:
-            outlier_fraction = np.sum(out_l) / len(pixel[0][0])
-
         if verbose:
             print("fraction of pixel values detected as outliers: %s" % np.round(outlier_fraction, 2))
         if outlier_fraction > maximum_outlier_fraction:
