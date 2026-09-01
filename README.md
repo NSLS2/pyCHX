@@ -1,15 +1,17 @@
-pyCHX -- CHX XPCS Data Analysis Packages
-========
+# pyCHX
 
-Repository for data collection and analysis scripts that are useful at the
-CHX beamline at NSLS-II (11-ID) developed by Dr. Yugang Zhang (yuzhang@bnl.gov).
+Python tools for X-ray photon correlation spectroscopy (XPCS) data collection
+and analysis at the NSLS-II Coherent Hard X-ray Scattering (CHX) beamline.
 
-Installation instructions on Linux:
+## Installation
 
-Install miniconda from https://conda.io/miniconda.html. Then create the environment for pyCHX:
+Clone the repository and install its dependencies in a Python environment:
+
+```bash
+git clone https://github.com/NSLS2/pyCHX.git
+cd pyCHX
+python -m pip install -r requirements.txt
+python -m pip install .
 ```
-conda create --name pyCHX python=3.6 numpy scipy matplotlib
-source activate pyCHX
-pip install -r https://raw.githubusercontent.com/NSLS-II-CHX/pyCHX/master/requirements.txt
-pip install git+https://github.com/NSLS-II-CHX/pyCHX
-```
+
+See [CONTRIBUTING.rst](CONTRIBUTING.rst) for development setup and checks.

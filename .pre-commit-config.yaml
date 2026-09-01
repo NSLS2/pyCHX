@@ -1,4 +1,3 @@
-exclude: '(v2)/.*'
 default_language_version:
     python: python3
 repos:
@@ -17,6 +16,11 @@ repos:
     hooks:
       - id: isort
         args: ["--profile", "black"]
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        files: ^pyCHX/.*\.py$
   - repo: https://github.com/kynan/nbstripout
     rev: 0.7.1
     hooks:

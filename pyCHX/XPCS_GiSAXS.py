@@ -4,20 +4,16 @@ yuzhang@bnl.gov
 This module is for the GiSAXS XPCS analysis
 """
 
-
-
 from skbeam.core.accumulators.binned_statistic import BinnedStatistic1D, BinnedStatistic2D
 
 from pyCHX.chx_compress import (
     Multifile,
     compress_eigerdata,
     get_avg_imgc,
-    init_compress_eigerdata,
-    read_compressed_eigerdata,
 )
 from pyCHX.chx_correlationc import cal_g2c
 from pyCHX.chx_generic_functions import *
-from pyCHX.chx_libs import colors, colors_, markers, markers_
+from pyCHX.chx_libs import colors, markers
 
 
 def get_gisaxs_roi2(qr_edge, qz_edge, qr_map, qz_map, mask=None, qval_dict=None):
@@ -90,7 +86,7 @@ def get_gisaxs_roi(Qr, Qz, qr_map, qz_map, mask=None, qval_dict=None):
 
 
 ############
-##developed at Octo 11, 2016
+# developed at Octo 11, 2016
 def get_qr(data, Qr, Qz, qr, qz, mask=None):
     """Octo 12, 2016, Y.G.@CHX
        plot one-d of I(q) as a function of qr for different qz
@@ -184,7 +180,8 @@ def cal_1d_qr(
         Dec 16, 2016, Y.G.@CHX
        calculate one-d of I(q) as a function of qr for different qz
        data: a dataframe
-       Qr: info for qr, = qr_start , qr_end, qr_width, qr_num, the purpose of Qr is only for the defination of qr range (qr number does not matter)
+       Qr: info for qr, = qr_start , qr_end, qr_width, qr_num, the purpose of Qr is only for the defination of qr
+       range (qr number does not matter)
        Qz: info for qz, = qz_start,   qz_end,  qz_width , qz_num
        qr: qr-map
        qz: qz-map
@@ -296,7 +293,7 @@ def get_t_qrc(FD, frame_edge, Qr, Qz, qr, qz, mask=None, path=None, uid=None, sa
     """
 
     Nt = len(frame_edge)
-    iqs = list(np.zeros(Nt))
+    _ = list(np.zeros(Nt))
     qz_start, qz_end, qz_width, qz_num = Qz
     qz_edge, qz_center = get_qedge(qz_start, qz_end, qz_width, qz_num, verbose=False)
     # print('here')
@@ -445,7 +442,7 @@ def make_gisaxs_grid(qr_w=10, qz_w=12, dim_r=100, dim_z=120):
     y, x = np.indices([dim_z, dim_r])
     Nr = int(dim_r / qp_w)
     Nz = int(dim_z / qz_w)
-    noqs = Nr * Nz
+    _ = Nr * Nz
 
     ind = 1
     for i in range(0, Nr):
@@ -657,7 +654,6 @@ def get_qedge(qstart, qend, qwidth, noqs, verbose=True):
     return a qedge by giving the noqs, qstart,qend,qwidth.
            a qcenter, which is center of each qedge
     KEYWORD:  None"""
-    import numpy as np
 
     if noqs != 1:
         spacing = (qend - qstart - noqs * qwidth) / (noqs - 1)  # spacing between rings
@@ -717,7 +713,7 @@ def get_qmap_label(qmap, qedge):
 
 def get_qzrmap(label_array_qz, label_array_qr, qz_center, qr_center):
     """April 20, 2016, Y.G.@CHX, get   qzrmap"""
-    qzmax = label_array_qz.max()
+    _ = label_array_qz.max()
     label_array_qr_ = np.zeros(label_array_qr.shape)
     ind = np.where(label_array_qr != 0)
     label_array_qr_[ind] = label_array_qr[ind] + 1e4  # add some large number to qr
@@ -1015,9 +1011,9 @@ def plot_qr_1d_with_ROI(qr_1d, qr_center, loglog=False, save=True, uid="uid", pa
 
     fig, ax = plt.subplots()
     Ncol = len(qr_1d.columns)
-    Nqr = Ncol % 2
+    _ = Ncol % 2
     qz_center = qr_1d.columns[1::1]  # qr_1d.columns[1::2]
-    Nqz = len(qz_center)
+    _ = len(qz_center)
     for i, qzc_ in enumerate(qz_center):
         x = qr_1d[qr_1d.columns[0]]
         y = qr_1d[qzc_]
@@ -1115,14 +1111,14 @@ def get_qr_tick_label(qr, label_array_qr, inc_x0, interp=True):
             w = np.where(rticks <= inc_x0)[0]
             rticks1 = np.int_(np.interp(np.round(rticks_label[w], 3), rticks_label[w], rticks[w]))
             rticks_label1 = np.round(rticks_label[w], 3)
-        except:
+        except Exception:
             rticks_label1 = []
         try:
             w = np.where(rticks > inc_x0)[0]
             rticks2 = np.int_(np.interp(np.round(rticks_label[w], 3), rticks_label[w], rticks[w]))
             rticks = np.append(rticks1, rticks2)
             rticks_label2 = np.round(rticks_label[w], 3)
-        except:
+        except Exception:
             rticks_label2 = []
 
         rticks_label = np.append(rticks_label1, rticks_label2)
@@ -1201,16 +1197,16 @@ def get_qzr_map(qr, qz, inc_x0, Nzline=10, Nrline=10, interp=True, return_qrz_la
 
     labels_qz, indices_qz = roi.extract_label_indices(label_array_qz)
     labels_qr, indices_qr = roi.extract_label_indices(label_array_qr)
-    num_qz = len(np.unique(labels_qz))
-    num_qr = len(np.unique(labels_qr))
+    _ = len(np.unique(labels_qz))
+    _ = len(np.unique(labels_qr))
     zticks, zticks_label = get_qz_tick_label(qz, label_array_qz)
     # rticks,rticks_label  = get_qr_tick_label(label_array_qr,inc_x0)
     try:
         rticks, rticks_label = zip(*np.sort(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp))))
-    except:
+    except Exception:
         rticks, rticks_label = zip(*sorted(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp))))
     # stride = int(len(zticks)/10)
-    ticks = [zticks, zticks_label, rticks, rticks_label]
+    _ = [zticks, zticks_label, rticks, rticks_label]
     if return_qrz_label:
         return zticks, zticks_label, rticks, rticks_label, label_array_qr, label_array_qz
     else:
@@ -1272,10 +1268,10 @@ def plot_qzr_map(qr, qz, inc_x0, ticks=None, data=None, uid="uid", path="", vmin
     else:
         im = ax.imshow(data, cmap="viridis", origin="lower", norm=LogNorm(vmin=vmin, vmax=vmax))
 
-    imr = ax.imshow(
+    _ = ax.imshow(
         label_array_qr, origin="lower", cmap="viridis", vmin=0.5, vmax=None
     )  # ,interpolation='nearest',)
-    imz = ax.imshow(
+    _ = ax.imshow(
         label_array_qz, origin="lower", cmap="viridis", vmin=0.5, vmax=None
     )  # ,interpolation='nearest',)
 
@@ -1347,8 +1343,8 @@ def show_qzr_map(qr, qz, inc_x0, data=None, Nzline=10, Nrline=10, interp=True, *
 
     labels_qz, indices_qz = roi.extract_label_indices(label_array_qz)
     labels_qr, indices_qr = roi.extract_label_indices(label_array_qr)
-    num_qz = len(np.unique(labels_qz))
-    num_qr = len(np.unique(labels_qr))
+    _ = len(np.unique(labels_qz))
+    _ = len(np.unique(labels_qr))
 
     fig, ax = plt.subplots(figsize=(8, 14))
 
@@ -1358,10 +1354,10 @@ def show_qzr_map(qr, qz, inc_x0, data=None, Nzline=10, Nrline=10, interp=True, *
     else:
         im = ax.imshow(data, cmap="viridis", origin="lower", norm=LogNorm(vmin=0.001, vmax=1e1))
 
-    imr = ax.imshow(
+    _ = ax.imshow(
         label_array_qr, origin="lower", cmap="viridis", vmin=0.5, vmax=None
     )  # ,interpolation='nearest',)
-    imz = ax.imshow(
+    _ = ax.imshow(
         label_array_qz, origin="lower", cmap="viridis", vmin=0.5, vmax=None
     )  # ,interpolation='nearest',)
 
@@ -1383,7 +1379,7 @@ def show_qzr_map(qr, qz, inc_x0, data=None, Nzline=10, Nrline=10, interp=True, *
     # rticks,rticks_label  = get_qr_tick_label(label_array_qr,inc_x0)
     try:
         rticks, rticks_label = zip(*np.sort(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp))))
-    except:
+    except Exception:
         rticks, rticks_label = zip(*sorted(zip(*get_qr_tick_label(qr, label_array_qr, inc_x0, interp=interp))))
     # stride = int(len(zticks)/10)
 
@@ -1431,7 +1427,7 @@ def show_qzr_roi(
     save=False,
     return_fig=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Dec 16, 2015, Y.G.@CHX
@@ -1542,7 +1538,8 @@ def plot_gisaxs_g2(g2, taus, res_pargs=None, one_plot=False, *argv, **kwargs):
         ylim/xlim: the limit of y and x
 
     e.g.
-    plot_gisaxs_g2( g2b, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99, 1.01] )
+    plot_gisaxs_g2( g2b, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99,
+    1.01] )
     """
 
     if res_pargs is not None:
@@ -1690,7 +1687,8 @@ def plot_gisaxs_two_g2(g2, taus, g2b, tausb, res_pargs=None, one_plot=False, *ar
         ylim/xlim: the limit of y and x
 
     e.g.
-    plot_saxs_g2( g2b, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99, 1.01] )
+    plot_saxs_g2( g2b, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99,
+    1.01] )
 
     """
 
@@ -1852,7 +1850,7 @@ def save_gisaxs_g2(g2, res_pargs, time_label=False, taus=None, filename=None, *a
     try:
         qz_center = res_pargs["qz_center"]
         qr_center = res_pargs["qr_center"]
-    except:
+    except Exception:
         roi_label = res_pargs["roi_label"]
 
     path = res_pargs["path"]
@@ -1866,7 +1864,7 @@ def save_gisaxs_g2(g2, res_pargs, time_label=False, taus=None, filename=None, *a
         for qz in qz_center:
             for qr in qr_center:
                 columns.append([str(qz), str(qr)])
-    except:
+    except Exception:
         columns.append([v for (k, v) in roi_label.items()])
 
     df.columns = columns
@@ -1945,10 +1943,10 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
     # uid=res_pargs['uid']
 
     num_rings = g2.shape[1]
-    beta = np.zeros(num_rings)  #  contrast factor
-    rate = np.zeros(num_rings)  #  relaxation rate
-    alpha = np.zeros(num_rings)  #  alpha
-    baseline = np.zeros(num_rings)  #  baseline
+    beta = np.zeros(num_rings)  # contrast factor
+    rate = np.zeros(num_rings)  # relaxation rate
+    alpha = np.zeros(num_rings)  # alpha
+    baseline = np.zeros(num_rings)  # baseline
 
     if function == "simple_exponential" or function == "simple":
         _vars = np.unique(_vars + ["alpha"])
@@ -2173,6 +2171,7 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
 
 # GiSAXS End
 
+
 def get_each_box_mean_intensity(data_series, box_mask, sampling, timeperframe, plot_=True, *argv, **kwargs):
     """Dec 16, 2015, Y.G.@CHX
     get each box (ROI) mean intensity as a function of time
@@ -2183,7 +2182,7 @@ def get_each_box_mean_intensity(data_series, box_mask, sampling, timeperframe, p
     mean_int_sets, index_list = roi.mean_intensity(np.array(data_series[::sampling]), box_mask)
     try:
         N = len(data_series)
-    except:
+    except Exception:
         N = data_series.length
     times = np.arange(N) * timeperframe  # get the time for each frame
     num_rings = len(np.unique(box_mask)[1:])
@@ -2261,7 +2260,7 @@ def fit_qr_qz_rate(qr, qz, rate, plot_=True, *argv, **kwargs):
     for i, qz_ in enumerate(qz):
         try:
             y = np.array(rate["rate"][i * Nqr : (i + 1) * Nqr])
-        except:
+        except Exception:
             y = np.array(rate[i * Nqr : (i + 1) * Nqr])
 
         # print( len(x), len(y) )
@@ -2280,13 +2279,13 @@ def fit_qr_qz_rate(qr, qz, rate, plot_=True, *argv, **kwargs):
             txts = r"$D0: %.3e$" % D0[i] + r" $A^2$" + r"$s^{-1}$"
             dy = 0.1
             ax.text(x=0.15, y=0.65 - dy * i, s=txts, fontsize=14, transform=ax.transAxes)
-            legend = ax.legend(loc="best")
+            _ = ax.legend(loc="best")
 
         ax.set_ylabel("Relaxation rate " r"$\gamma$" "($s^{-1}$)")
         ax.set_xlabel("$q^%s$" r"($\AA^{-2}$)" % power)
 
         dt = datetime.now()
-        CurTime = "%s%02d%02d-%02d%02d-" % (dt.year, dt.month, dt.day, dt.hour, dt.minute)
+        _ = "%s%02d%02d-%02d%02d-" % (dt.year, dt.month, dt.day, dt.hour, dt.minute)
         # fp = path + 'Q%s-Rate--uid=%s'%(power,uid) + CurTime + '--Fit.png'
         fp = path + "uid=%s--Q-Rate" % (uid) + "--fit-.png"
         fig.savefig(fp, dpi=fig.dpi)
@@ -2312,7 +2311,8 @@ def plot_gisaxs_g4(g4, taus, res_pargs=None, one_plot=False, *argv, **kwargs):
         ylim/xlim: the limit of y and x
 
     e.g.
-    plot_gisaxs_g4( g4, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99, 1.01] )
+    plot_gisaxs_g4( g4, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99,
+    1.01] )
 
     """
 
@@ -2494,7 +2494,7 @@ def multi_uids_gisaxs_xpcs_analysis(
             try:
                 detector = get_detector(db[uid])
                 imgs = load_data(uid, detector)
-            except:
+            except Exception:
                 print("The %i--th uid: %s can not load data" % (i, uid))
                 imgs = 0
 
@@ -2502,12 +2502,12 @@ def multi_uids_gisaxs_xpcs_analysis(
             os.makedirs(data_dir_, exist_ok=True)
             i += 1
             if imgs != 0:
-                Nimg = len(imgs)
+                _ = len(imgs)
                 md_ = imgs.md
                 useful_uids[run_seq + 1][i] = uid
 
                 imgsr = reverse_updown(imgs)
-                imgsra = apply_mask(imgsr, maskr)
+                _ = apply_mask(imgsr, maskr)
 
                 if compress:
                     filename = "/XF11ID/analysis/Compressed_Data" + "/uid_%s.cmp" % uid
@@ -2527,7 +2527,7 @@ def multi_uids_gisaxs_xpcs_analysis(
                         md["Measurement"] = db[uid]["start"]["Measurement"]
                         # md['sample']=db[uid]['start']['sample']
                         # print( md['Measurement'] )
-                    except:
+                    except Exception:
                         md["Measurement"] = "Measurement"
                         md["sample"] = "sample"
 
@@ -2535,12 +2535,12 @@ def multi_uids_gisaxs_xpcs_analysis(
                     lambda_ = md["incident_wavelength"]  # wavelegth of the X-rays in Angstroms
                     Ldet = md["detector_distance"]
                     # detector to sample distance (mm), currently, *1000 for saxs, *1 for gisaxs
-                    exposuretime = md["count_time"]
+                    _ = md["count_time"]
                     acquisition_period = md["frame_time"]
                     timeperframe = acquisition_period  # for g2
                     # timeperframe = exposuretime#for visiblitly
                     # timeperframe = 2  ## manual overwrite!!!! we apparently writing the wrong metadata....
-                    setup_pargs = dict(
+                    _ = dict(
                         uid=uid, dpix=dpix, Ldet=Ldet, lambda_=lambda_, timeperframe=timeperframe, path=data_dir
                     )
                     md["avg_img"] = avg_imgr

@@ -1,31 +1,27 @@
 ######################################################################################
-########Dec 16, 2015, Yugang Zhang, yuzhang@bnl.gov, CHX, NSLS-II, BNL################
-########Time correlation function, include one-time, two-time, four-time##############
-########Muli-tau method, array-operation method#######################################
+# Dec 16, 2015, Yugang Zhang, yuzhang@bnl.gov, CHX, NSLS-II, BNL################
+# Time correlation function, include one-time, two-time, four-time##############
+# Muli-tau method, array-operation method#######################################
 ######################################################################################
 
 
-import itertools
-import sys
 import time
-from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
 import skbeam.core.roi as roi
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
-from modest_image import ModestImage, imshow
+from modest_image import imshow
 from tqdm import tqdm
 
 # from pyCHX.chx_libs import  colors_ as mcolors,  markers_ as markers
 from pyCHX.chx_libs import RUN_GUI, Figure
 from pyCHX.chx_libs import colors
 from pyCHX.chx_libs import colors as colors_array
-from pyCHX.chx_libs import lstyles
 from pyCHX.chx_libs import markers
 from pyCHX.chx_libs import markers as markers_array
-from pyCHX.chx_libs import markers_copy, mcolors, multi_tau_lags
+from pyCHX.chx_libs import multi_tau_lags
 
 
 def delays(num_lev=3, num_buf=4, time=1):
@@ -71,7 +67,7 @@ class Get_Pixel_Array(object):
         # self.shape = indexable.shape
         try:
             self.length = len(indexable)
-        except:
+        except Exception:
             self.length = indexable.length
 
     def get_data(self):
@@ -95,7 +91,7 @@ class Reverse_Coordinate(object):
         self.mask = mask
         try:
             self.shape = indexable.shape
-        except:
+        except Exception:
             # if
             self.shape = [len(indexable), indexable[0].shape[0], indexable[0].shape[1]]
         # self.shape = indexable.shape
@@ -177,7 +173,15 @@ def get_each_frame_ROI_intensity(data_pixel, bad_pixel_threshold=1e10, plot_=Fal
     """
 
     # print ( argv, kwargs )
-    imgsum = np.array([np.sum(img) for img in tqdm(data_series[::sampling], leave=True)])
+    imgsum = np.array(
+        [
+            np.sum(img)
+            for img in tqdm(
+                data_series[::sampling],  # noqa: F821 - supplied by the legacy notebook workflow
+                leave=True,
+            )
+        ]
+    )
     if plot_:
         uid = "uid"
         if "uid" in kwargs.keys():
@@ -185,10 +189,10 @@ def get_each_frame_ROI_intensity(data_pixel, bad_pixel_threshold=1e10, plot_=Fal
         fig, ax = plt.subplots()
         ax.plot(imgsum, "bo")
         ax.set_title("uid= %s--imgsum" % uid)
-        ax.set_xlabel("Frame_bin_%s" % sampling)
+        ax.set_xlabel("Frame_bin_%s" % sampling)  # noqa: F821 - legacy notebook setting
         ax.set_ylabel("Total_Intensity")
 
-        if save:
+        if save:  # noqa: F821 - legacy notebook setting
             # dt =datetime.now()
             # CurTime = '%s%02d%02d-%02d%02d-' % (dt.year, dt.month, dt.day,dt.hour,dt.minute)
             path = kwargs["path"]
@@ -239,8 +243,8 @@ def auto_two_Array(data, rois, data_pixel=None):
 
     noframes = data_pixel.shape[0]
     g12b = np.zeros([noframes, noframes, noqs])
-    Unitq = noqs / 10
-    proi = 0
+    _ = noqs / 10
+    _ = 0
 
     for qi in tqdm(range(1, noqs + 1)):
         pixelist_qi = np.where(qind == qi)[0]
@@ -264,7 +268,7 @@ def auto_two_Array(data, rois, data_pixel=None):
 
 
 ####################################
-##Derivation of Two time correlation
+# Derivation of Two time correlation
 #####################################
 
 
@@ -592,7 +596,7 @@ def show_g12q_aged_g2(
 
     for i in range(len(age_center)):
         ps = linS1[1][i]
-        pe = linE1[0][i]
+        _ = linE1[0][i]
         if ps >= N:
             s0 = ps - N
             s1 = N
@@ -605,7 +609,7 @@ def show_g12q_aged_g2(
         # else:e0=pe;e1=0
 
         ps = linS2[1][i]
-        pe = linE2[0][i]
+        _ = linE2[0][i]
         if ps >= N:
             S0 = ps - N
             S1 = N
@@ -683,7 +687,7 @@ def show_g12q_aged_g2(
 
 def plot_aged_g2(g2_aged, tau=None, timeperframe=1, ylim=None, xlim=None):
     """'A plot of g2 calculated from two-time"""
-    fig = plt.figure(figsize=(8, 10))
+    _ = plt.figure(figsize=(8, 10))
     age_center = list(sorted(g2_aged.keys()))
     gs = gridspec.GridSpec(len(age_center), 1)
     for n, i in enumerate(age_center):
@@ -893,7 +897,9 @@ def get_one_time_from_two_time_old(g12, norms=None, nopr=None):
         g12: a 3-D array, two correlation function, shape as ( imgs_length, imgs_length, q)
 
     Options:
-        norms: if not None, a 2-D array, shape as ( imgs_length,   q), a normalization for further get one-time from two time, get by:  g12b_norm, g12b_not_norm, norms = auto_two_Array_g1_norm( imgsr, ring_mask, data_pixel = data_pixel )
+        norms: if not None, a 2-D array, shape as ( imgs_length,   q), a normalization for further get one-time
+        from two time, get by:  g12b_norm, g12b_not_norm, norms = auto_two_Array_g1_norm( imgsr, ring_mask,
+        data_pixel = data_pixel )
         nopr: if not None, 1-D array, shape as [q], the number of interested pixel of each q
 
 
@@ -932,7 +938,9 @@ def get_one_time_from_two_time(g12, norms=None, nopr=None):
         g12: a 3-D array, two correlation function, shape as ( imgs_length, imgs_length, q)
 
     Options:
-        norms: if not None, a 2-D array, shape as ( imgs_length,   q), a normalization for further get one-time from two time, get by:  g12b_norm, g12b_not_norm, norms = auto_two_Array_g1_norm( imgsr, ring_mask, data_pixel = data_pixel )
+        norms: if not None, a 2-D array, shape as ( imgs_length,   q), a normalization for further get one-time
+        from two time, get by:  g12b_norm, g12b_not_norm, norms = auto_two_Array_g1_norm( imgsr, ring_mask,
+        data_pixel = data_pixel )
         nopr: if not None, 1-D array, shape as [q], the number of interested pixel of each q
 
 
@@ -952,7 +960,7 @@ def get_one_time_from_two_time(g12, norms=None, nopr=None):
         g2f12 = np.zeros([m, noqs])
         for q in range(noqs):
             yn = norms[:, q]
-            g2f12[i, q] = np.array(
+            g2f12[:, q] = np.array(
                 [
                     np.nanmean(g12[:, :, q].diagonal(i)) / (np.average(yn[i:]) * np.average(yn[: m - i]) * nopr[q])
                     for i in range(m)
@@ -1195,22 +1203,22 @@ def show_C12(
     shape = C12.shape
     if (q_ind < 1) or (q_ind > shape[2]):
         raise Exceptions(
-            "Error: qind starts from 1 (corresponding to python array index 0, but in the plot it will show as 1) to the max Q-length of two time funcs %s."
-            % shape[2]
+            "Error: qind starts from 1 (corresponding to python array index 0, but in the plot it "
+            "will show as 1) to the max Q-length of two time funcs %s." % shape[2]
         )
 
     if isinstance(q_ind, int):
         C12_num = q_ind - 1
     else:
         qz_ind, qr_ind = q_ind - 1
-        C12_num = qz_ind * num_qr + qr_ind
+        C12_num = qz_ind * num_qr + qr_ind  # noqa: F821 - set by the legacy GISAXS workflow
 
     if "timeperframe" in kwargs.keys():
         timeperframe = kwargs["timeperframe"]
     else:
         timeperframe = 1
 
-    if "timeoffset" in kwargs.keys():  ### added timeoffset here
+    if "timeoffset" in kwargs.keys():  # added timeoffset here
         timeoffset = kwargs["timeoffset"]
     else:
         timeoffset = 0
@@ -1253,7 +1261,7 @@ def show_C12(
         fig, ax = fig_ax
 
     # extent=[0, data.shape[0]*timeperframe, 0, data.shape[0]*timeperframe ]
-    extent = np.array([N1, N2, N1, N2]) * timeperframe + timeoffset  ### added timeoffset to extend
+    extent = np.array([N1, N2, N1, N2]) * timeperframe + timeoffset  # added timeoffset to extend
 
     if logs:
         im = imshow(

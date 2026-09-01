@@ -9,13 +9,17 @@ from __future__ import absolute_import, division, print_function
 import logging
 from collections import namedtuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import skbeam.core.roi as roi
 from skbeam.core.roi import extract_label_indices
 from skbeam.core.utils import multi_tau_lags
+from tqdm import tqdm
+
+from pyCHX.chx_generic_functions import plot1D
+from pyCHX.chx_libs import markers
 
 logger = logging.getLogger(__name__)
-from tqdm import tqdm
 
 
 def _one_time_process(
@@ -546,7 +550,7 @@ def lazy_one_time(
         if i in bad_frame_list:
             fra_pix[:] = np.nan
         else:
-            (p, v) = FD.rdrawframe(i)
+            p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
 
@@ -726,7 +730,7 @@ def lazy_one_time_debug(
         if i in bad_frame_list:
             fra_pix[:] = np.nan
         else:
-            (p, v) = FD.rdrawframe(i)
+            p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             if imgsum is None:
@@ -890,12 +894,12 @@ def auto_corr_scat_factor(lags, beta, relaxation_rate, baseline=1):
     The intensity-intensity autocorrelation g2 is connected to the intermediate
     scattering factor(ISF) g1
     .. math::
-        g_2(q, \\tau) = \\beta_1[g_1(q, \\tau)]^{2} + g_\infty
+        g_2(q, \\tau) = \\beta_1[g_1(q, \\tau)]^{2} + g_\\infty
     For a system undergoing  diffusive dynamics,
     .. math::
-        g_1(q, \\tau) = e^{-\gamma(q) \\tau}
+        g_1(q, \\tau) = e^{-\\gamma(q) \\tau}
     .. math::
-       g_2(q, \\tau) = \\beta_1 e^{-2\gamma(q) \\tau} + g_\infty
+       g_2(q, \\tau) = \\beta_1 e^{-2\\gamma(q) \\tau} + g_\\infty
     These implementation are based on published work. [1]_
     References
     ----------
@@ -1041,7 +1045,7 @@ def lazy_two_time(
         if i in bad_frame_list:
             fra_pix[:] = np.nan
         else:
-            (p, v) = FD.rdrawframe(i)
+            p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             if imgsum is None:
@@ -1442,8 +1446,10 @@ class Get_Pixel_Arrayc_todo(object):
         indexable: a images sequences
         pixelist:  1-D array, interest pixel list
         norm:   each q-ROI of each frame is normalized by the corresponding q-ROI of time averaged intensity
-        imgsum: each q-ROI of each frame is normalized by the total intensity of the corresponding frame, should have the same time sequences as FD, e.g., imgsum[10] corresponding to FD[10]
-        norm_inten: if True, each q-ROI of each frame is normlized by total intensity of the correponding q-ROI of the corresponding frame
+        imgsum: each q-ROI of each frame is normalized by the total intensity of the corresponding frame, should
+        have the same time sequences as FD, e.g., imgsum[10] corresponding to FD[10]
+        norm_inten: if True, each q-ROI of each frame is normlized by total intensity of the correponding q-ROI of
+        the corresponding frame
         qind: the index of each ROI in one frame, i.e., q
         if norm_inten is True: qind has to be given
 
@@ -1496,7 +1502,7 @@ class Get_Pixel_Arrayc_todo(object):
 
         n = 0
         for i in tqdm(range(self.beg, self.end)):
-            (p, v) = self.FD.rdrawframe(i)
+            p, v = self.FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             # np.bincount( qind[pxlist], weight=
@@ -1551,8 +1557,10 @@ class Get_Pixel_Arrayc(object):
         indexable: a images sequences
         pixelist:  1-D array, interest pixel list
         norm:   each q-ROI of each frame is normalized by the corresponding q-ROI of time averaged intensity
-        imgsum: each q-ROI of each frame is normalized by the total intensity of the corresponding frame, should have the same time sequences as FD, e.g., imgsum[10] corresponding to FD[10]
-        mean_int_sets: each q-ROI of each frame is normlized by total intensity of the correponding q-ROI of the corresponding frame
+        imgsum: each q-ROI of each frame is normalized by the total intensity of the corresponding frame, should
+        have the same time sequences as FD, e.g., imgsum[10] corresponding to FD[10]
+        mean_int_sets: each q-ROI of each frame is normlized by total intensity of the correponding q-ROI of the
+        corresponding frame
         qind: the index of each ROI in one frame, i.e., q
         if mean_int_sets is not None: qind has to be not None
 
@@ -1601,7 +1609,7 @@ class Get_Pixel_Arrayc(object):
 
         n = 0
         for i in tqdm(range(self.beg, self.end)):
-            (p, v) = self.FD.rdrawframe(i)
+            p, v = self.FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
 
@@ -1686,7 +1694,7 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
     try:
         g12b = np.zeros([noframes, noframes, len(qlist)])
         DO = True
-    except:
+    except Exception:
         print(
             "The array is too large. The Sever can't handle such big array. Will calulate different Q sequencely"
         )
@@ -1753,7 +1761,7 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
     try:
         g12b = np.zeros([noframes, noframes, len(qlist)])
         DO = True
-    except:
+    except Exception:
         print(
             "The array is too large. The Sever can't handle such big array. Will calulate different Q sequencely"
         )
@@ -1801,7 +1809,7 @@ def two_time_norm(data_pixel, rois, index=None):
 
     qind, pixelist = roi.extract_label_indices(rois)
     noqs = len(np.unique(qind))
-    nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+    _ = np.bincount(qind, minlength=(noqs + 1))[1:]
     noframes = data_pixel.shape[0]
 
     if index is None:
@@ -1818,7 +1826,7 @@ def two_time_norm(data_pixel, rois, index=None):
     try:
         norm = np.zeros(len(qlist))
         DO = True
-    except:
+    except Exception:
         print(
             "The array is too large. The Sever can't handle such big array. Will calulate different Q sequencely"
         )
@@ -1854,8 +1862,10 @@ def check_normalization(frame_num, q_list, imgsa, data_pixel):
     fig, ax = plt.subplots(2)
     n = 0
     for q in q_list:
-        norm_data = data_pixel[frame_num][qind == q]
-        raw_data = np.ravel(np.array(imgsa[frame_num]))[pixelist[qind == q]]
+        norm_data = data_pixel[frame_num][qind == q]  # noqa: F821 - legacy caller supplies ROI indices
+        raw_data = np.ravel(np.array(imgsa[frame_num]))[
+            pixelist[qind == q]  # noqa: F821 - legacy caller supplies ROI indices
+        ]
         # print(raw_data.mean())
         plot1D(raw_data, ax=ax[0], legend="q=%s" % (q), m=markers[n], title="fra=%s_raw_data" % (frame_num))
 

@@ -1,9 +1,12 @@
 # simple brute force multitau
 # from pyCHX.chx_generic_functions import average_array_withNan
+import matplotlib.pyplot as plt
 import numpy as np
-import skbeam.core.roi as roi
 from numpy.fft import fft, ifft
+from scipy.optimize import leastsq
 from tqdm import tqdm
+
+from pyCHX.chx_generic_functions import plot1D
 
 
 def fit_one_peak_curve(x, y, fit_range):
@@ -26,7 +29,7 @@ def fit_one_peak_curve(x, y, fit_range):
     peak = LorentzianModel()
     background = LinearModel()
     model = peak + background
-    x1, x2 = xrange
+    x1, x2 = fit_range
     xf = x[x1:x2]
     yf = y[x1:x2]
     model.set_param_hint("slope", value=5)
@@ -48,6 +51,10 @@ def plot_xy_with_fit(x, y, xf, out, xlim=[1e-3, 0.01], xlabel="q (" r"$\AA^{-1}$
     currently this code is dedicated to plot q-Iq with fit and show the fittign parameter, peak pos, peak wid"""
 
     yf2 = out.model.eval(params=out.params, x=xf)
+    cen = out.params["center"].value
+    cen_std = out.params["center"].stderr
+    wid = out.params["sigma"].value * 2
+    wid_std = out.params["sigma"].stderr * 2
     fig, ax = plt.subplots()
     plot1D(x=x, y=y, ax=ax, m="o", ls="", c="k", legend="data")
     plot1D(x=xf, y=yf2, ax=ax, m="", ls="-", c="r", legend="fit", logy=True)
@@ -67,7 +74,7 @@ def plot_xy_with_fit(x, y, xf, out, xlim=[1e-3, 0.01], xlabel="q (" r"$\AA^{-1}$
     return ax
 
 
-#############For APD detector
+# For APD detector
 def get_pix_g2_fft(time_inten):
     """YG Dev@CHX 2018/12/4 get g2 for oneD intensity
         g2 = G/(P*F)
@@ -294,15 +301,15 @@ def multitau(Ipix, bind, lvl=12, nobuf=8):
             / noperbin
         )
         G2[j, :] = np.bincount(bind, np.mean(dII[j:, :] * dII[:-j, :], axis=0)) / t
-    for l in tqdm(np.arange(1, lvl), desc="Calcuate g2..."):
+    for level in tqdm(np.arange(1, lvl), desc="Calcuate g2..."):
         nn = dII.shape[0] // 2 * 2  # make it even
         dII = (dII[0:nn:2, :] + dII[1:nn:2, :]) / 2.0  # sum in pairs
         nn = nn // 2
         if nn < nobuf:
             break
         for j in np.arange(nobufov2, min(nobuf, nn)):
-            ind = nobufov2 + nobufov2 * l + (j - nobufov2)
-            tt[ind] = 2**l * j
+            ind = nobufov2 + nobufov2 * level + (j - nobufov2)
+            tt[ind] = 2**level * j
             t = (
                 np.bincount(bind, np.mean(dII[j:, :], axis=0))
                 * np.bincount(bind, np.mean(dII[:-j, :], axis=0))
@@ -325,14 +332,14 @@ def average_array_withNan(array, axis=0, mask=None):
     Output:
         avg: averaged array along axis
     """
-    shape = array.shape
+    _ = array.shape
     if mask is None:
         mask = np.isnan(array)
         # mask = np.ma.masked_invalid(array).mask
     array_ = np.ma.masked_array(array, mask=mask)
     try:
         sums = np.array(np.ma.sum(array_[:, :], axis=axis))
-    except:
+    except Exception:
         sums = np.array(np.ma.sum(array_[:], axis=axis))
 
     cts = np.sum(~mask, axis=axis)
@@ -424,21 +431,17 @@ def autocor_for_pix_time(pix_time_data, dly_dict, pixel_norm=None, frame_norm=No
 def autocor_xytframe(self, n):
     """Do correlation for one xyt frame--with data name as n"""
 
-    data = read_xyt_frame(n)  # load data
+    data = read_xyt_frame(n)  # noqa: F821 - injected by the legacy Timepix setup
     N = len(data)
-    crl = correlate(data, data, "full")[N - 1 :]
-    FN = arange(1, N + 1, dtype=float)[::-1]
-    IP = cumsum(data)[::-1]
-    IF = cumsum(data[::-1])[::-1]
+    crl = np.correlate(data, data, "full")[N - 1 :]
+    FN = np.arange(1, N + 1, dtype=float)[::-1]
+    IP = np.cumsum(data)[::-1]
+    IF = np.cumsum(data[::-1])[::-1]
 
     return crl / (IP * IF) * FN
 
 
-###################For Fit
-
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.optimize import leastsq
+# For Fit
 
 # duplicate my curfit function from yorick, except use sigma and not w
 # notice the main feature is an adjust list.
@@ -480,12 +483,12 @@ def _residuals(p, x, y, sigy, pall, adj, fun):
 def fitpr(chisq, a, sigmaa, title=None, lbl=None):
     """nicely print out results of a fit"""
     # get fitted results.
-    if lbl == None:
+    if lbl is None:
         lbl = []
-        for i in xrange(a.size):
+        for i in range(a.size):
             lbl.append("A%(#)02d" % {"#": i})
     # print resuls of a fit.
-    if title != None:
+    if title is not None:
         print(title)
     print("   chisq=%(c).4f" % {"c": chisq})
     for i in range(a.size):
@@ -516,7 +519,7 @@ def Gaussian(x, p):
     return g
 
 
-###########For ellipse shaped sectors by users
+# For ellipse shaped sectors by users
 def elps_r(a, b, theta):
     """
     Returns the radius of an ellipse with semimajor/minor axes a/b

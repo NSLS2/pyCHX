@@ -8,32 +8,23 @@ This module will provide XSVS analysis tools
 from __future__ import absolute_import, division, print_function
 
 import logging
-import time
-
-import six
-from skbeam.core import roi
-from skbeam.core.utils import bin_edges_to_centers, geometric_series
-
-logger = logging.getLogger(__name__)
-
-import itertools
 import os
-import sys
 from datetime import datetime
 from multiprocessing import Pool
 
-import dill
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy as sp
 import scipy.stats as st
-from matplotlib.colors import LogNorm
-from scipy.optimize import leastsq, minimize
+from scipy.optimize import leastsq
+from scipy.special import gamma, gammaln
+from skbeam.core import roi
+from skbeam.core.utils import bin_edges_to_centers, geometric_series
 from tqdm import tqdm
 
-from pyCHX.chx_compress import apply_async, go_through_FD, map_async, pass_FD, run_dill_encoded
+from pyCHX.chx_compress import apply_async, pass_FD
 from pyCHX.chx_generic_functions import trans_data_to_pd
+
+logger = logging.getLogger(__name__)
 
 
 def xsvsp(
@@ -155,7 +146,7 @@ def xsvsp_single(
     qind, pixelist = roi.extract_label_indices(label_array)
     if norm is not None:
         norms = [
-            norm[np.in1d(pixelist, extract_label_indices(np.array(label_array == i, dtype=np.int64))[1])]
+            norm[np.in1d(pixelist, roi.extract_label_indices(np.array(label_array == i, dtype=np.int64))[1])]
             for i in np.unique(label_array)[1:]
         ]
 
@@ -349,7 +340,9 @@ def xsvsc_single(
     norm=None,
     progress_bar=True,
 ):
-    """YG MOD@Octo 12, 2017, Change photon statistic error bar from sampling statistic bar to error bar with phisical meaning,
+    """Change the photon-statistic error bar from sampling to physical error.
+
+    YG MOD@Octo 12, 2017.
     photon_number@one_particular_count = photon_tolal_number * photon_distribution@one_particular_count +/-
                                                   sqrt( photon_number@one_particular_count )
 
@@ -428,7 +421,7 @@ def xsvsc_single(
     # number of times in the time bin
     num_times = len(time_bin)
     # number of pixels per ROI
-    num_pixels = np.bincount(labels, minlength=(num_roi + 1))[1:]
+    _ = np.bincount(labels, minlength=(num_roi + 1))[1:]
     # probability density of detecting photons
     prob_k = np.zeros([num_times, num_roi], dtype=object)
     his_sum = np.zeros([num_times, num_roi])
@@ -474,7 +467,7 @@ def xsvsc_single(
             # print( 'here is a bad frmae--%i'%i )
         else:
             fra_pix[:] = 0
-            (p, v) = FD.rdrawframe(i)
+            p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             if imgsum is None:
@@ -496,7 +489,7 @@ def xsvsc_single(
         # fra_pix[:]=0
         if threshold is not None:
             if img_.max() >= threshold:
-                print("bad image: %s here!" % n)
+                print("bad image: %s here!" % i)
                 img_[:] = np.nan
         buf[0, cur[0] - 1] = img_
         _process(
@@ -610,8 +603,8 @@ def _process(
     # print (img_per_level,track_bad_level)
     u_labels = list(np.unique(labels))
     ##############
-    ##To Do list here, change histogram to bincount
-    ##Change error bar calculation
+    # To Do list here, change histogram to bincount
+    # Change error bar calculation
     if not (np.isnan(data).any()):
         for j, label in enumerate(u_labels):
             roi_data = data[labels == label]
@@ -737,12 +730,12 @@ def save_bin_his_std(spec_bins, spec_his, spec_std, filename, path):
         for j in range(nstd):
             spec_data[:max_m, 1 + mhis * ql + i * ql + j] = spec_std[i, j]
     label = ["count"]
-    for l in range(mhis):
+    for level in range(mhis):
         for q in range(nhis):
-            label += ["his_level_%s_q_%s" % (l, q)]
-    for l in range(mstd):
+            label += ["his_level_%s_q_%s" % (level, q)]
+    for level in range(mstd):
         for q in range(nstd):
-            label += ["std_level_%s_q_%s" % (l, q)]
+            label += ["std_level_%s_q_%s" % (level, q)]
     spec_pds = trans_data_to_pd(spec_data, label, "array")
     filename_ = os.path.join(path, filename)
     spec_pds.to_csv(filename_)
@@ -872,14 +865,11 @@ def get_bin_edges(num_times, num_rois, mean_roi, max_cts):
 
 
 #################
-##for fit
+# for fit
 ###################
 
-from scipy import stats
-from scipy.special import gamma, gammaln
-
-###########################3
-##Dev at Nov 18, 2016
+# 3
+# Dev at Nov 18, 2016
 #
 
 
@@ -930,7 +920,7 @@ def nbinomres(p, hist, x, hist_err=None, N=1):
 
 
 ###########
-##Dev at Octo 12, 2017
+# Dev at Octo 12, 2017
 
 
 def nbinom(p, x, mu):
@@ -1042,9 +1032,9 @@ def get_xsvs_fit(
             kmean_guess = K_mean[j, i]
             N = spec_sum[j, i]
             if spec_bins is None:
-                x_, x, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
+                x_, _, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
             else:
-                x_, x, y = bin_edges[j], bin_edges[j] / kmean_guess, spe_cts_all[j, i]
+                x_, _, y = bin_edges[j], bin_edges[j] / kmean_guess, spe_cts_all[j, i]
 
             if spec_std is not None:
                 yerr = spec_std[j, i]
@@ -1078,7 +1068,7 @@ def get_xsvs_fit(
                     full_output=1,
                 )
                 ML_val[i].append(abs(resultL[0][0]))
-                KL_val[i].append(kmean_guess)  #   resultL[0][0] )
+                KL_val[i].append(kmean_guess)  # resultL[0][0] )
             else:
                 # vary M and K
                 fit_func = nbinomlog
@@ -1093,7 +1083,7 @@ def get_xsvs_fit(
                 )
 
                 ML_val[i].append(abs(resultL[0][1]))
-                KL_val[i].append(abs(resultL[0][0]))  #   resultL[0][0] )
+                KL_val[i].append(abs(resultL[0][0]))  # resultL[0][0] )
                 # print( j, m0, resultL[0][1], resultL[0][0], K_mean[i] * 2**j    )
             if j == 0:
                 K_.append(KL_val[i][0])
@@ -1304,14 +1294,14 @@ def save_KM(K_mean, KL_val, ML_val, qs=None, level_time=None, uid=None, path=Non
     m2, m1 = K_mean.shape
     # print(L,n,m2,m1)
     if level_time is None:
-        l = (
+        labels = (
             ["K_mean_%d" % i for i in range(m2)]
             + ["K_fit_Bin_%i" % s for s in range(1, n + 1)]
             + ["M_Fit_Bin_%i" % s for s in range(1, n + 1)]
             + ["Contrast_Fit_Bin_%i" % s for s in range(1, n + 1)]
         )
     else:
-        l = (
+        labels = (
             ["K_mean_%s" % i for i in level_time]
             + ["K_fit_%s" % s for s in level_time]
             + ["M_Fit_%s" % s for s in level_time]
@@ -1320,7 +1310,7 @@ def save_KM(K_mean, KL_val, ML_val, qs=None, level_time=None, uid=None, path=Non
     data = np.hstack([(K_mean).T, kl.reshape(L, n), ml.reshape(L, n), (1 / ml).reshape(L, n)])
     if qs is not None:
         qs = np.array(qs)
-        l = ["q"] + l
+        labels = ["q"] + labels
         # print(   (K_mean).T,  (K_mean).T.shape )
         # print(  qs )
         data = np.hstack(
@@ -1328,7 +1318,7 @@ def save_KM(K_mean, KL_val, ML_val, qs=None, level_time=None, uid=None, path=Non
         )
 
     df = DataFrame(data)
-    df.columns = (x for x in l)
+    df.columns = (x for x in labels)
     filename = "%s_xsvs_fitted_KM.csv" % (uid)
     filename1 = os.path.join(path, filename)
     print("The K-M values are saved as %s in %s." % (filename, path))
@@ -1381,7 +1371,7 @@ def plot_g2_contrast(
         range_ = range(qth, qth + 1)
     else:
         range_ = range(nq)
-    num_times = nt
+    _ = nt
     nr = len(range_)
     sx = int(round(np.sqrt(nr)))
     if nr % sx == 0:
@@ -1471,7 +1461,7 @@ def get_xsvs_fit_old(spe_cts_all, K_mean, varyK=True, qth=None, max_bins=2, g2=N
             mi_g2 = 1 / (g2c[:, i] - 1)
             m_ = np.interp(times, taus, mi_g2)
         for j in range(num_times):
-            x_, x, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
+            x_, _, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
             if g2 is not None:
                 m0 = m_[j]
             else:
@@ -1491,7 +1481,7 @@ def get_xsvs_fit_old(spe_cts_all, K_mean, varyK=True, qth=None, max_bins=2, g2=N
                     full_output=1,
                 )
                 ML_val[i].append(abs(resultL[0][0]))
-                KL_val[i].append(K_mean[i] * 2**j)  #   resultL[0][0] )
+                KL_val[i].append(K_mean[i] * 2**j)  # resultL[0][0] )
 
             else:
                 # vary M and K
@@ -1506,7 +1496,7 @@ def get_xsvs_fit_old(spe_cts_all, K_mean, varyK=True, qth=None, max_bins=2, g2=N
                 )
 
                 ML_val[i].append(abs(resultL[0][1]))
-                KL_val[i].append(abs(resultL[0][0]))  #   resultL[0][0] )
+                KL_val[i].append(abs(resultL[0][0]))  # resultL[0][0] )
                 # print( j, m0, resultL[0][1], resultL[0][0], K_mean[i] * 2**j    )
             if j == 0:
                 K_.append(KL_val[i][0])
@@ -1534,7 +1524,7 @@ def gammaDist(x, params):
 
 
 def gamma_dist(bin_values, K, M):
-    """
+    r"""
     Gamma distribution function
     Parameters
     ----------
@@ -1601,7 +1591,7 @@ def nbinom_dist(bin_values, K, M):
     return nbinom
 
 
-#########poisson
+# poisson
 def poisson(x, K):
     """Poisson distribution function.
     K is  average photon counts
@@ -1609,12 +1599,12 @@ def poisson(x, K):
     the probability density of photon, P(x), satify this poisson function.
     """
     K = float(K)
-    Pk = np.exp(-K) * power(K, x) / gamma(x + 1)
+    Pk = np.exp(-K) * np.power(K, x) / gamma(x + 1)
     return Pk
 
 
 def poisson_dist(bin_values, K):
-    """
+    r"""
     Poisson Distribution
     Parameters
     ---------
@@ -1731,7 +1721,6 @@ def fit_xsvs1(
 
     """
     from lmfit import Model
-    from scipy.interpolate import UnivariateSpline
 
     if func == "bn":
         mod = Model(nbinom_dist)
@@ -1870,7 +1859,8 @@ def plot_xsvs_g2(g2, taus, res_pargs=None, *argv, **kwargs):
         ylim/xlim: the limit of y and x
 
     e.g.
-    plot_gisaxs_g2( g2b, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99, 1.01] )
+    plot_gisaxs_g2( g2b, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99,
+    1.01] )
 
     """
 
@@ -1978,7 +1968,7 @@ def get_xsvs_fit_old1(
             mi_g2 = 1 / (g2c[:, i] - 1)
             m_ = np.interp(times, taus, mi_g2)
         for j in range(num_times):
-            x_, x, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
+            x_, _, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
             if spec_std is not None:
                 yerr = spec_std[j, i]
             else:
@@ -2009,7 +1999,7 @@ def get_xsvs_fit_old1(
                 )
 
                 ML_val[i].append(abs(resultL[0][0]))
-                KL_val[i].append(K_mean[i] * 2**j)  #   resultL[0][0] )
+                KL_val[i].append(K_mean[i] * 2**j)  # resultL[0][0] )
 
             else:
                 # vary M and K
@@ -2028,7 +2018,7 @@ def get_xsvs_fit_old1(
                 )
 
                 ML_val[i].append(abs(resultL[0][1]))
-                KL_val[i].append(abs(resultL[0][0]))  #   resultL[0][0] )
+                KL_val[i].append(abs(resultL[0][0]))  # resultL[0][0] )
                 # print( j, m0, resultL[0][1], resultL[0][0], K_mean[i] * 2**j    )
             if j == 0:
                 K_.append(KL_val[i][0])

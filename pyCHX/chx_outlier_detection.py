@@ -1,9 +1,11 @@
-import numpy as np
 import matplotlib.pyplot as plt
-try: # some genius moved roi within skbeam....
+import numpy as np
+
+try:  # some genius moved roi within skbeam....
     from skbeam.core.utils import roi
-except:
-    from skbeam.core import roi 
+except Exception:
+    from skbeam.core import roi
+
 
 def is_outlier(points, thresh=3.5, verbose=False):
     """MAD test"""
@@ -25,18 +27,22 @@ def outlier_mask(
     avg_img, mask, roi_mask, outlier_threshold=7.5, maximum_outlier_fraction=0.1, verbose=False, plot=False
 ):
     """
-    outlier_mask(avg_img,mask,roi_mask,outlier_threshold = 7.5,maximum_outlier_fraction = .1,verbose=False,plot=False)
+    outlier_mask(avg_img,mask,roi_mask,outlier_threshold = 7.5,maximum_outlier_fraction =
+    .1,verbose=False,plot=False)
     avg_img: average image data (2D)
     mask: 2D array, same size as avg_img with pixels that are already masked
-    roi_mask: 2D array, same size as avg_img, ROI labels 'encoded' as mask values (i.e. all pixels belonging to ROI 5 have the value 5)
+    roi_mask: 2D array, same size as avg_img, ROI labels 'encoded' as mask values (i.e. all pixels belonging to ROI
+    5 have the value 5)
     outlier_threshold: threshold for MAD test
-    maximum_outlier_fraction: maximum fraction of pixels in an ROI that can be classifed as outliers. If the detected fraction is higher, no outliers will be masked for that ROI.
+    maximum_outlier_fraction: maximum fraction of pixels in an ROI that can be classifed as outliers. If the
+    detected fraction is higher, no outliers will be masked for that ROI.
     verbose: 'True' enables message output
     plot: 'True' enables visualization of outliers
     returns: mask (dtype=float): 0 for pixels that have been classified as outliers, 1 else
     dependency: is_outlier()
 
-    function does outlier detection for each ROI separately based on pixel intensity in avg_img*mask and ROI specified by roi_mask, using the median-absolute-deviation (MAD) method
+    function does outlier detection for each ROI separately based on pixel intensity in avg_img*mask and ROI
+    specified by roi_mask, using the median-absolute-deviation (MAD) method
 
     by LW 06/21/2023
     """
@@ -65,7 +71,7 @@ def outlier_mask(
                 upper_outlier_threshold = np.nanmin((out_l * pixel[0][0])[out_l * pixel[0][0] > ave_roi_int])
                 if verbose:
                     print("upper outlier threshold: %s" % upper_outlier_threshold)
-            except:
+            except Exception:
                 upper_outlier_threshold = False
                 if verbose:
                     print("no upper outlier threshold found")
@@ -73,7 +79,7 @@ def outlier_mask(
             ind2 = (out_l * pixel[0][0]) < ave_roi_int
             try:
                 lower_outlier_threshold = np.nanmax((out_l * pixel[0][0])[ind1 * ind2])
-            except:
+            except Exception:
                 lower_outlier_threshold = False
                 if verbose:
                     print("no lower outlier threshold found")
@@ -81,14 +87,15 @@ def outlier_mask(
             if verbose:
                 print("ROI #%s: no outliers detected" % rn)
 
-        ### MAKE SURE we don't REMOVE more than x percent of the pixels in the roi
-        
+        # MAKE SURE we don't REMOVE more than x percent of the pixels in the roi
+
         if verbose:
             print("fraction of pixel values detected as outliers: %s" % np.round(outlier_fraction, 2))
         if outlier_fraction > maximum_outlier_fraction:
             if verbose:
                 print(
-                    "fraction of pixel values detected as outliers > than maximum fraction %s allowed -> NOT masking outliers...check threshold for MAD and maximum fraction of outliers allowed"
+                    "fraction of pixel values detected as outliers > than maximum fraction %s allowed -> "
+                    "NOT masking outliers...check threshold for MAD and maximum fraction of outliers allowed"
                     % maximum_outlier_fraction
                 )
             upper_outlier_threshold = False

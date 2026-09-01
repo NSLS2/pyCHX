@@ -1,10 +1,11 @@
-Steps for releasing a version of pyCHX
+# Releasing pyCHX
 
+Before publishing a release, confirm which PyPI workflow is intended to run;
+the repository currently contains two publication workflows.
 
-* Make sure that you have an up-to-date copy of the master branch.
-* Make an empty commit to serve as a marker in the history. This is technically
-  optional, but it is nice to do. ``git commit --allow-empty -m "REL: v0.0.1"``
-* Now make the tag. This should never be delete, so make sure you are certain.
-  ``git tag v0.0.1``
-* Push the commit up to github: ``git push upstream master``
-* Push the tag also: ``git push upstream v0.0.1``
+1. Update the local `main` branch and run the configured tests and checks.
+2. Create an annotated version tag, for example
+   `git tag -a v0.0.1 -m "REL: v0.0.1"`.
+3. Push `main` and the tag to the upstream repository.
+4. Create and publish the corresponding GitHub release.
+5. Verify the expected PyPI publication workflow completes successfully.

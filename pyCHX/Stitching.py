@@ -1,6 +1,4 @@
-import os
 import re
-import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -75,7 +73,8 @@ def Correct_Overlap_Images_Intensities(
 ):
     """YG Correct WAXS Images intensities by using overlap area intensity
      Image intensity keep same for the first image
-     Other image intensity is scaled by a pixel-width intensity array, which is averaged in the overlap area and then smoothed by
+     Other image intensity is scaled by a pixel-width intensity array, which is averaged in the overlap area and
+     then smoothed by
      scipy.signal import savgol_filter with parameters as  window_length=101, polyorder=5,
 
      from scipy.signal import savgol_filter as sf
@@ -214,7 +213,7 @@ def stitch_WAXS_in_Qspace(dataM, phis, calibration, dx=0, dy=22, dz=0, dq=0.015,
     # Intensity_mapN = np.zeros( (8, len(qzs), len(qxs)) )
     for i in range(len(phis)):
         dM = np.rot90(dataM[i].T)
-        D = dM.ravel()
+        _ = dM.ravel()
         phi = phis[i]
         calibration.set_angles(det_phi_g=phi, det_theta_g=0.0, offset_x=dx, offset_y=dy, offset_z=dz)
         calibration.clear_maps()
@@ -243,7 +242,6 @@ def plot_qmap_in_folder(inDir):
     """
     import pickle as cpl
 
-    from pyCHX.chx_generic_functions import show_img
     from pyCHX.chx_libs import cmap_vge_hdr, plt
 
     fp = get_base_all_filenames(inDir, base_filename_cut_length=-10)
@@ -262,8 +260,8 @@ def plot_qmap_in_folder(inDir):
             logs=False,
             show_colorbar=True,
             show_ticks=True,
-            xlabel="$q_x \, (\AA^{-1})$",
-            ylabel="$q_z \, (\AA^{-1})$",
+            xlabel=r"$q_x \, (\AA^{-1})$",
+            ylabel=r"$q_z \, (\AA^{-1})$",
             cmap=cmap_vge_hdr,  # vmin= np.min(d), vmax = np.max(d),
             aspect=1,
             vmin=-1,
@@ -279,7 +277,8 @@ def plot_qmap_in_folder(inDir):
 def get_qmap_range(calibration, phi_min, phi_max):
     """YG Sep 27@SMI
     Get q_range, [ qx_start, qx_end, qz_start, qz_end ] for SMI WAXS qmap
-            (only rotate around z-axis, so det_theta_g=0.,actually being the y-axis for beamline conventional defination)
+            (only rotate around z-axis, so det_theta_g=0.,actually being the y-axis for beamline conventional
+            defination)
             based on calibration on Sep 22,  offset_x= 0,  offset_y= 22
     Input:
         calibration: class, See SciAnalysis.XSAnalysis.DataGonio.CalibrationGonio
@@ -301,7 +300,7 @@ def get_qmap_range(calibration, phi_min, phi_max):
 
 
 def get_phi(filename, phi_offset=0, phi_start=4.5, phi_spacing=4.0, polarity=-1, ext="_WAXS.tif"):
-    pattern_re = "^.+\/?([a-zA-Z0-9_]+_)(\d\d\d\d\d\d)(\%s)$" % ext
+    pattern_re = r"^.+\/?([a-zA-Z0-9_]+_)(\d\d\d\d\d\d)(\%s)$" % ext
     # print( pattern_re )
     # pattern_re='^.+\/?([a-zA-Z0-9_]+_)(\d\d\d)(\.tif)$'
     phi_re = re.compile(pattern_re)
@@ -321,7 +320,7 @@ def get_phi(filename, phi_offset=0, phi_start=4.5, phi_spacing=4.0, polarity=-1,
     return phi_c
 
 
-############For CHX beamline
+# For CHX beamline
 
 
 def get_qmap_qxyz_range(
@@ -337,7 +336,8 @@ def get_qmap_qxyz_range(
 ):
     """YG Nov 8, 2017@CHX
     Get q_range, [ qx_start, qx_end, qz_start, qz_end ] for SMI WAXS qmap
-            (only rotate around z-axis, so det_theta_g=0.,actually being the y-axis for beamline conventional defination)
+            (only rotate around z-axis, so det_theta_g=0.,actually being the y-axis for beamline conventional
+            defination)
             based on calibration on Sep 22,  offset_x= 0,  offset_y= 22
     Input:
         calibration: class, See SciAnalysis.XSAnalysis.DataGonio.CalibrationGonio

@@ -1,3 +1,5 @@
-def test_import():
-    "Check that the main pyCHX imports work"
-    from pyCHX.chx_packages import * 
+def test_public_api_imports():
+    """Check that the aggregate pyCHX function imports load without errors."""
+    import pyCHX.chx_packages
+
+    assert pyCHX.chx_packages.__name__ == "pyCHX.chx_packages"

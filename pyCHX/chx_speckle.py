@@ -8,24 +8,20 @@ This module will provide XSVS analysis tools
 from __future__ import absolute_import, division, print_function
 
 import logging
-import time
-
-import six
-from skbeam.core import roi
-from skbeam.core.utils import bin_edges_to_centers, geometric_series
-
-logger = logging.getLogger(__name__)
-
 import sys
+import time
 from datetime import datetime
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy as sp
 import scipy.stats as st
-from matplotlib.colors import LogNorm
-from scipy.optimize import leastsq, minimize
+from scipy.optimize import leastsq
+from scipy.special import gamma, gammaln
+from skbeam.core import roi
+from skbeam.core.utils import bin_edges_to_centers, geometric_series
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 def xsvs(
@@ -110,7 +106,7 @@ def xsvs(
     num_times = len(time_bin)
 
     # number of pixels per ROI
-    num_pixels = np.bincount(labels, minlength=(num_roi + 1))[1:]
+    _ = np.bincount(labels, minlength=(num_roi + 1))[1:]
 
     # probability density of detecting photons
     prob_k_all = np.zeros([num_times, num_roi], dtype=object)
@@ -151,7 +147,7 @@ def xsvs(
 
         try:
             noframes = len(images)
-        except:
+        except Exception:
             noframes = images.length
 
         # Num= { key: [0]* len(  dict_dly[key] ) for key in list(dict_dly.keys())  }
@@ -404,11 +400,8 @@ def get_bin_edges(num_times, num_rois, mean_roi, max_cts):
 
 
 #################
-##for fit
+# for fit
 ###################
-
-from scipy import stats
-from scipy.special import gamma, gammaln
 
 
 def gammaDist(x, params):
@@ -428,7 +421,7 @@ def gammaDist(x, params):
 
 
 def gamma_dist(bin_values, K, M):
-    """
+    r"""
     Gamma distribution function
     Parameters
     ----------
@@ -495,7 +488,7 @@ def nbinom_dist(bin_values, K, M):
     return nbinom
 
 
-#########poisson
+# poisson
 def poisson(x, K):
     """Poisson distribution function.
     K is  average photon counts
@@ -503,12 +496,12 @@ def poisson(x, K):
     the probability density of photon, P(x), satify this poisson function.
     """
     K = float(K)
-    Pk = np.exp(-K) * power(K, x) / gamma(x + 1)
+    Pk = np.exp(-K) * np.power(K, x) / gamma(x + 1)
     return Pk
 
 
 def poisson_dist(bin_values, K):
-    """
+    r"""
     Poisson Distribution
     Parameters
     ---------
@@ -634,7 +627,6 @@ def fit_xsvs1(
 
     """
     from lmfit import Model
-    from scipy.interpolate import UnivariateSpline
 
     if func == "bn":
         mod = Model(nbinom_dist)
@@ -773,7 +765,8 @@ def plot_xsvs_g2(g2, taus, res_pargs=None, *argv, **kwargs):
         ylim/xlim: the limit of y and x
 
     e.g.
-    plot_gisaxs_g2( g2b, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99, 1.01] )
+    plot_gisaxs_g2( g2b, taus= np.arange( g2b.shape[0]) *timeperframe, q_ring_center = q_ring_center, vlim=[.99,
+    1.01] )
 
     """
 
@@ -846,7 +839,7 @@ def plot_xsvs_g2(g2, taus, res_pargs=None, *argv, **kwargs):
     # plt.show()
 
 
-###########################3
+# 3
 
 #
 
@@ -929,7 +922,7 @@ def get_xsvs_fit(spe_cts_all, K_mean, varyK=True, max_bins=None, qth=None, g2=No
             mi_g2 = 1 / (g2c[:, i] - 1)
             m_ = np.interp(times, taus, mi_g2)
         for j in range(num_times):
-            x_, x, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
+            x_, _, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
             if g2 is not None:
                 m0 = m_[j]
             else:
@@ -949,7 +942,7 @@ def get_xsvs_fit(spe_cts_all, K_mean, varyK=True, max_bins=None, qth=None, g2=No
                     full_output=1,
                 )
                 ML_val[i].append(abs(resultL[0][0]))
-                KL_val[i].append(K_mean[i] * 2**j)  #   resultL[0][0] )
+                KL_val[i].append(K_mean[i] * 2**j)  # resultL[0][0] )
 
             else:
                 # vary M and K
@@ -964,7 +957,7 @@ def get_xsvs_fit(spe_cts_all, K_mean, varyK=True, max_bins=None, qth=None, g2=No
                 )
 
                 ML_val[i].append(abs(resultL[0][1]))
-                KL_val[i].append(abs(resultL[0][0]))  #   resultL[0][0] )
+                KL_val[i].append(abs(resultL[0][0]))  # resultL[0][0] )
                 # print( j, m0, resultL[0][1], resultL[0][0], K_mean[i] * 2**j    )
             if j == 0:
                 K_.append(KL_val[i][0])
@@ -1019,7 +1012,7 @@ def plot_xsvs_fit(
         n += 1
         for j in range(num_times):
             # print( i, j )
-            x_, x, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
+            _, x, y = bin_edges[j, i][:-1], Knorm_bin_edges[j, i][:-1], spe_cts_all[j, i]
             # Using the best K and M values interpolate and get more values for fitting curve
 
             xscale = bin_edges[j, i][:-1][1] / Knorm_bin_edges[j, i][:-1][1]
@@ -1092,7 +1085,7 @@ def get_max_countc(FD, labeled_array):
 
     max_inten = 0
     for i in tqdm(range(FD.beg, FD.end, 1), desc="Get max intensity of ROIs in all frames"):
-        (p, v) = FD.rdrawframe(i)
+        p, v = FD.rdrawframe(i)
         w = np.where(timg[p])[0]
 
         max_inten = max(max_inten, np.max(v[w]))
@@ -1115,7 +1108,7 @@ def plot_g2_contrast(contrast_factorL, g2, times, taus, q_ring_center=None, uid=
         range_ = range(qth, qth + 1)
     else:
         range_ = range(nq)
-    num_times = nt
+    _ = nt
     nr = len(range_)
     sx = int(round(np.sqrt(nr)))
     if nr % sx == 0:

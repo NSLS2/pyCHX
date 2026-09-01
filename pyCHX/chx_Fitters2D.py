@@ -72,7 +72,7 @@ class VectorField2DFitter:
 
         # make the parameters from the kwargs
         for key in self.params.keys():
-            if key in kwargs.keys() and key is not "XY":
+            if key in kwargs.keys() and key != "XY":
                 params[key].value = kwargs[key]
             else:
                 # then guess
@@ -139,7 +139,7 @@ class VectorField2DLinearFitter(VectorField2DFitter):
 
         if kwargs is not None:
             for key in kwargs.keys():
-                if key in paramsdict and key is not "xy":
+                if key in paramsdict and key != "xy":
                     paramsdict[key] = kwargs[key]
 
         return paramsdict
@@ -186,7 +186,7 @@ class LineShape2DFitter:
 
         # make the parameters from the kwargs
         for key in self.params.keys():
-            if key in kwargs.keys() and key is not "XY":
+            if key in kwargs.keys() and key != "XY":
                 params[key].value = kwargs[key]
             else:
                 # then guess
@@ -195,11 +195,11 @@ class LineShape2DFitter:
         self.mod = Model(self.fitfunc, independent_vars=["XY"], param_names=self.params.keys())
         # assumes first var is dependent var
         res = self.mod.fit(img.ravel(), XY=(XY[0].ravel(), XY[1].ravel()), params=params, **kwargs)
-        ## old version, only return values
+        # old version, only return values
         # add reduced chisq to parameter list
         # res.best_values['chisq']=res.redchi
         # return res.best_values
-        ## new version, also return the std
+        # new version, also return the std
         resf = {}
         ks = list(res.params.keys())
         for var in ks:
@@ -331,7 +331,7 @@ class Gauss2DFitter(LineShape2DFitter):
         paramsdict["sigmay"] = 1
         # print(  paramsdict )
         for key in kwargs.keys():
-            if key in paramsdict and key is not "xy":
+            if key in paramsdict and key != "xy":
                 paramsdict[key] = kwargs[key]
         # print(  paramsdict )
         return paramsdict

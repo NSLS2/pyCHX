@@ -1,51 +1,37 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
-import os
-import struct
-from collections import namedtuple
 
 import matplotlib.pyplot as plt
-from skbeam.core.roi import extract_label_indices
-from skbeam.core.utils import multi_tau_lags
+from modest_image import imshow
 from tqdm import tqdm
 
-from pyCHX.chx_generic_functions import save_arrays
+from pyCHX.chx_compress import Multifile as _Multifile
+from pyCHX.chx_compress import compress_eigerdata as _compress_eigerdata
+from pyCHX.chx_compress import get_avg_imgc
+from pyCHX.chx_compress import get_each_frame_intensityc as _get_each_frame_intensityc
+from pyCHX.chx_compress import mean_intensityc
+from pyCHX.chx_compress import read_compressed_eigerdata as _read_compressed_eigerdata
+from pyCHX.chx_generic_functions import find_bad_pixels_FD, save_arrays
 
 # from pyCHX.chx_generic_functions import (get_circular_average)
 # from pyCHX.XPCS_SAXS import (get_circular_average)
 from pyCHX.chx_libs import (
     RUN_GUI,
     Figure,
-    LogNorm,
     colors,
-    colors_,
-    datetime,
-    db,
-    getpass,
     markers,
-    markers_,
     np,
-    os,
     roi,
-    time,
 )
 
 logger = logging.getLogger(__name__)
 
-from modest_image import imshow
-
-from pyCHX.chx_compress import (
-    Multifile,
-    compress_eigerdata,
-    get_avg_imgc,
-    get_each_frame_intensityc,
-    init_compress_eigerdata,
-    mean_intensityc,
-    pass_FD,
-    read_compressed_eigerdata,
-)
-from pyCHX.chx_generic_functions import find_bad_pixels_FD
+# Compatibility aliases consumed by chx_packages and older interactive code.
+Multifile = _Multifile
+compress_eigerdata = _compress_eigerdata
+get_each_frame_intensityc = _get_each_frame_intensityc
+read_compressed_eigerdata = _read_compressed_eigerdata
 
 # from pyCHX.chx_compress import *
 
@@ -97,7 +83,7 @@ def get_time_edge_avg_img(FD, frame_edge, show_progress=True, apply_threshold=Fa
 def plot_imgs(imgs, image_name=None, *argv, **kwargs):
     # NOT WORKing NOW....
     N = len(imgs)
-    sx = np.ceil(np.sqrt(N))
+    _ = np.ceil(np.sqrt(N))
     pass
 
 
@@ -154,11 +140,11 @@ def cal_waterfallc(
     timg[pixelist] = np.arange(1, len(pixelist) + 1)
 
     # maxqind = max(qind)
-    norm = np.bincount(qind)[1:]
+    _ = np.bincount(qind)[1:]
     n = 0
     # for  i in tqdm(range( FD.beg , FD.end )):
     for i in tqdm(range(FD.beg, FD.end, sampling), desc="Get waterfall for q index=%s" % qindex):
-        (p, v) = FD.rdrawframe(i)
+        p, v = FD.rdrawframe(i)
         w = np.where(timg[p])[0]
         pxlist = timg[p[w]] - 1
 
@@ -298,7 +284,7 @@ def cal_each_ring_mean_intensityc(FD, ring_mask, sampling=1, timeperframe=None, 
         times = np.arange(FD.end - FD.beg) + FD.beg  # get the time for each frame
     else:
         times = (FD.beg + np.arange(FD.end - FD.beg)) * timeperframe
-    num_rings = len(np.unique(ring_mask)[1:])
+    _ = len(np.unique(ring_mask)[1:])
     return times, mean_int_sets
 
 

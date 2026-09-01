@@ -1,3 +1,6 @@
+import struct
+import time
+
 import numpy as np
 
 """
@@ -82,7 +85,7 @@ class Multifile:
 
     def rdframe(self, n):
         # read header then image
-        hdr = self._read_header(n)
+        _ = self._read_header(n)
         pos, vals = self._read_raw(n)
         img = np.zeros((self._rows * self._cols,))
         img[pos] = vals
@@ -90,12 +93,12 @@ class Multifile:
 
     def rdrawframe(self, n):
         # read header then image
-        hdr = self._read_header(n)
+        _ = self._read_header(n)
         return self._read_raw(n)
 
     def rdchunk(self):
         """read the next chunk"""
-        header = self._fd.read(1024)
+        _ = self._fd.read(1024)
 
     def index(self):
         """Index the file by reading all frame_indexes.
@@ -188,10 +191,6 @@ class Multifile:
         vals = vals.astype(self._dtype)
         self._fd.write(pos)
         self._fd.write(vals)
-
-
-import struct
-import time
 
 
 # TODO : split into RO and RW classes
@@ -297,7 +296,7 @@ class MultifileBNL:
             "cols_begin",
             "cols_end",
         ]
-        magic = struct.unpack("@16s", header_raw[:16])
+        _ = struct.unpack("@16s", header_raw[:16])
         md_temp = struct.unpack("@8d7I916x", header_raw[16:])
         self.md = dict(zip(ms_keys, md_temp))
         return self.md

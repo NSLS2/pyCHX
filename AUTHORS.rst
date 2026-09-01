@@ -10,4 +10,5 @@ Maintainer
 Contributors
 ------------
 
-None yet. Why not be the first? See: CONTRIBUTING.rst
+See the repository's `contributors page
+<https://github.com/NSLS2/pyCHX/graphs/contributors>`_.
