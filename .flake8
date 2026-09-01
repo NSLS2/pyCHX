@@ -5,25 +5,21 @@ exclude =
     __pycache__,
     build,
     dist,
-    versioneer.py,
-    pyCHX/_version.py,
     docs/source/conf.py
 max-line-length = 115
 # Ignore some style 'errors' produced while formatting by 'black'
 ignore = E203, W503
 
 # These two modules intentionally assemble public, import-based namespaces.
-# chx_packages also has late imports and repeated bindings whose final values
-# are part of the long-standing interactive API.
 per-file-ignores =
-    pyCHX/chx_packages.py:F401,F811,E402
+    pyCHX/chx_packages.py:F401,F811
     pyCHX/chx_libs.py:F401
 
-    # These legacy analysis modules intentionally consume aggregate namespaces
-    # through wildcard imports; keep that API while linting every other rule.
-    pyCHX/SAXS.py:F403,F405
-    pyCHX/XPCS_GiSAXS.py:F403,F405
-    pyCHX/XPCS_SAXS.py:F403,F405
-    pyCHX/XPCS_XSVS_SAXS_Multi_2017_V4.py:F403,F405
-    pyCHX/chx_generic_functions.py:F403,F405
-    pyCHX/chx_xpcs_xsvs_jupyter_V1.py:F403,F405
+    # Some old notebook-driven entry points still consume caller-defined
+    # globals. Their imports are explicit; retain that interactive behavior.
+    pyCHX/SAXS.py:F821
+    pyCHX/XPCS_GiSAXS.py:F821
+    pyCHX/XPCS_SAXS.py:F821
+    pyCHX/XPCS_XSVS_SAXS_Multi_2017_V4.py:F821
+    pyCHX/chx_generic_functions.py:F821
+    pyCHX/chx_xpcs_xsvs_jupyter_V1.py:F821

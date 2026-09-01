@@ -1,6 +1,8 @@
 __author__ = "Yugang Zhang"
 
-from ._version import get_versions
+from importlib.metadata import PackageNotFoundError, version
 
-__version__ = get_versions()["version"]
-del get_versions
+try:
+    __version__ = version("pyCHX")
+except PackageNotFoundError:
+    __version__ = "0+unknown"

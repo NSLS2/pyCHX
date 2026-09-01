@@ -1,21 +1,38 @@
 import copy
+import getpass
+import os
+import pickle
+import time
+import warnings
 from datetime import datetime
 from os import listdir
 
+import h5py
 import matplotlib.cm as mcm
+import matplotlib.pyplot as plt
 import numpy as np
 import PIL
+import pims
 import pytz
 import scipy
-from modest_image import imshow
+import skbeam.core.correlation as corr
+import skbeam.core.roi as roi
+import skbeam.core.utils as utils
+import xray_vision.mpl_plotting as mpl_plot
+from lmfit import Model
+from matplotlib.colors import LogNorm
+from matplotlib.figure import Figure
+from pandas import DataFrame
+from PIL import Image
 from scipy.special import erf
-from skbeam.core.utils import angle_grid, radial_grid, radius_to_twotheta
+from skbeam.core.utils import angle_grid, multi_tau_lags, radial_grid, radius_to_twotheta
 from skimage.draw import disk, ellipse, polygon
 from skimage.filters import prewitt
+from tqdm import tqdm
 
-# from tqdm import *
-from pyCHX.chx_libs import *
-from pyCHX.chx_libs import colors
+from pyCHX._optional import imshow
+from pyCHX.chx_handlers import db
+from pyCHX.chx_libs import RUN_GUI, cmap_albula, cmap_vge_hdr, colors, colors_, markers_
 
 markers = [
     "o",

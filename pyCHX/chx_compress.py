@@ -3,15 +3,15 @@ import pickle as pkl
 import shutil
 import struct
 import sys
+import time
 from multiprocessing import Pool, cpu_count
 
 import dill
 import matplotlib.pyplot as plt
-
-# imports handler from CHX
-# this is where the decision is made whether or not to use dask
-# from chxtools.handlers import EigerImages, EigerHandler
-from eiger_io.fs_handler import EigerImages
+import numpy as np
+import skbeam.core.roi as roi
+from matplotlib.colors import LogNorm
+from matplotlib.figure import Figure
 from tqdm import tqdm
 
 from pyCHX.chx_generic_functions import (
@@ -25,7 +25,8 @@ from pyCHX.chx_generic_functions import (
     reverse_updown,
     rot90_clockwise,
 )
-from pyCHX.chx_libs import RUN_GUI, Figure, LogNorm, db, np, roi, time
+from pyCHX.chx_handlers import EigerImages, db
+from pyCHX.chx_libs import RUN_GUI
 
 
 def run_dill_encoded(what):
@@ -1422,7 +1423,7 @@ def get_each_frame_intensityc(
     bad_frame_list=None,
     save=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """Get the total intensity of each frame by sampling every N frames
     Also get bad_frame_list by check whether above  bad_pixel_threshold

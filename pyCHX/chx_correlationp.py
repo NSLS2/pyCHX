@@ -12,13 +12,13 @@ from multiprocessing import Pool
 import numpy as np
 import skbeam.core.roi as roi
 from skbeam.core.roi import extract_label_indices
+from tqdm import tqdm
 
 from pyCHX.chx_compress import apply_async, pass_FD
 from pyCHX.chx_correlationc import _one_time_process as _one_time_processp
 from pyCHX.chx_correlationc import _one_time_process_error as _one_time_process_errorp
 from pyCHX.chx_correlationc import _two_time_process as _two_time_processp
 from pyCHX.chx_correlationc import _validate_and_transform_inputs
-from pyCHX.chx_libs import tqdm
 
 logger = logging.getLogger(__name__)
 

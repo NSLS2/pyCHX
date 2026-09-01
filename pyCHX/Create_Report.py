@@ -27,7 +27,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.pdfgen import canvas
 
 from pyCHX.chx_generic_functions import pload_obj
-from pyCHX.chx_libs import db
+from pyCHX.chx_handlers import db
 
 # from reportlab.platypus import Image, Paragraph, Table
 

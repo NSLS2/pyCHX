@@ -242,7 +242,7 @@ def plot_qmap_in_folder(inDir):
     """
     import pickle as cpl
 
-    from pyCHX.chx_libs import cmap_vge_hdr, plt
+    from pyCHX.chx_libs import cmap_vge_hdr
 
     fp = get_base_all_filenames(inDir, base_filename_cut_length=-10)
     print(

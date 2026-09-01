@@ -17,7 +17,8 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
+import os
+
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
@@ -107,9 +108,6 @@ todo_include_todos = False
 # a list of builtin themes.
 #
 html_theme = "sphinx_rtd_theme"
-import sphinx_rtd_theme
-
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -212,3 +210,8 @@ intersphinx_mapping = {
     "pandas": ("https://pandas.pydata.org/pandas-docs/stable", None),
     "matplotlib": ("https://matplotlib.org/stable", None),
 }
+
+# Permit strict documentation builds in network-isolated environments while
+# retaining external cross-reference inventories in normal CI builds.
+if os.environ.get("PYCHX_DOCS_OFFLINE"):
+    intersphinx_mapping = {}

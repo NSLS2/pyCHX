@@ -4,17 +4,14 @@ yuzhang@bnl.gov
 This module is for the static SAXS analysis, such as fit form factor
 """
 
-# import numpy as np
+import matplotlib.pyplot as plt
+import numpy as np
+import skbeam.core.utils as utils
 from lmfit import Model, Parameters, minimize
 from scipy.optimize import leastsq
 from scipy.special import gamma
 
 from pyCHX.chx_generic_functions import find_index, plot1D, show_img
-
-# import matplotlib as mpl
-# import matplotlib.pyplot as plt
-# from matplotlib.colors import LogNorm
-from pyCHX.chx_libs import *
 
 
 def mono_sphere_form_factor_intensity(x, radius, delta_rho=100, fit_func="G"):
@@ -262,7 +259,7 @@ def get_form_factor_fit_lmfit(
     num_points=20,
     spread=5,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     YG Dev@CHX 2019/8/1
@@ -389,7 +386,7 @@ def get_form_factor_fit2(
     spread=5,
     bounds=None,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor
@@ -531,7 +528,7 @@ def get_form_factor_fit(
     fit_func="G",
     fit_power=0,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor for GUI
@@ -682,7 +679,7 @@ def fit_form_factor(
     fit_func="G",
     return_fig=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor
@@ -731,7 +728,7 @@ def fit_form_factor2(
     function="poly_sphere",
     fit_func="G",
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor

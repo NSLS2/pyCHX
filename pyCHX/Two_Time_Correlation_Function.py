@@ -12,16 +12,16 @@ import numpy as np
 import skbeam.core.roi as roi
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
-from modest_image import imshow
+from matplotlib.figure import Figure
+from skbeam.core.utils import multi_tau_lags
 from tqdm import tqdm
 
-# from pyCHX.chx_libs import  colors_ as mcolors,  markers_ as markers
-from pyCHX.chx_libs import RUN_GUI, Figure
+from pyCHX._optional import imshow
+from pyCHX.chx_libs import RUN_GUI
 from pyCHX.chx_libs import colors
 from pyCHX.chx_libs import colors as colors_array
 from pyCHX.chx_libs import markers
 from pyCHX.chx_libs import markers as markers_array
-from pyCHX.chx_libs import multi_tau_lags
 
 
 def delays(num_lev=3, num_buf=4, time=1):
@@ -530,7 +530,7 @@ def show_g12q_aged_g2(
     uid="uid",
     path="",
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Octo 20, 2017, add taus_aged option
@@ -1175,7 +1175,7 @@ def show_C12(
     qlabel=None,
     show_colorbar=True,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     plot one-q of two-time correlation function

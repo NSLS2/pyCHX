@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.12"]
       fail-fast: false
 
     defaults:
@@ -23,12 +23,12 @@ jobs:
           echo "REPOSITORY_NAME=${REPOSITORY_NAME}" >> $GITHUB_ENV
 
       - name: Checkout the code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1000  # should be enough to reach the most recent tag
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -42,14 +42,13 @@ jobs:
           # installation problems if out of date.
           python -m pip install --upgrade pip setuptools numpy
 
-          pip install .
-          pip install -r requirements-dev.txt
+          pip install ".[docs]"
           pip list
 
       - name: Build Docs
         run: make -C docs/ html
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.REPOSITORY_NAME }}-docs
           path: docs/build/html/

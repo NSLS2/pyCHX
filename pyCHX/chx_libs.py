@@ -32,21 +32,11 @@ import skbeam.core.utils as utils
 #    - https://github.com/Nikea/xray-vision
 import xray_vision
 import xray_vision.mpl_plotting as mpl_plot
-
-# Import all the required packages for  Data Analysis
-from databroker import Broker
-from databroker.assets.path_only_handlers import RawHandler
-
-# edit handlers here to switch to PIMS or dask
-# this does the databroker import
-# from chxtools.handlers import EigerHandler
-from eiger_io.fs_handler import EigerHandler
 from IPython.core.magics.display import Javascript
 from lmfit import Model, Parameter, Parameters, minimize, report_fit
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure
-from modest_image import imshow
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pandas import DataFrame
 from PIL import Image
@@ -56,7 +46,15 @@ from tqdm import tqdm
 from xray_vision.mask.manual_mask import ManualMask
 from xray_vision.mpl_plotting import speckle
 
-db = Broker.named("chx")
+from pyCHX._optional import imshow
+from pyCHX.chx_handlers import EigerHandler, _missing_dependency_stub, db
+
+try:
+    from databroker import Broker
+    from databroker.assets.path_only_handlers import RawHandler
+except ImportError:
+    Broker = _missing_dependency_stub("Broker", "databroker")
+    RawHandler = _missing_dependency_stub("RawHandler", "databroker")
 
 mcolors = itertools.cycle(["b", "g", "r", "c", "m", "y", "k", "darkgoldenrod", "oldlace", "brown", "dodgerblue"])
 markers = itertools.cycle(list(plt.Line2D.filled_markers))
@@ -441,3 +439,78 @@ color_list_cur_hdr_goldish = [
     [255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0],  # white
 ]
 cmap_hdr_goldish = mpl.colors.LinearSegmentedColormap.from_list("cmap_hdr_goldish", color_list_cur_hdr_goldish)
+
+
+__all__ = [
+    "Broker",
+    "DataFrame",
+    "EigerHandler",
+    "Figure",
+    "Image",
+    "Javascript",
+    "LogNorm",
+    "ManualMask",
+    "Model",
+    "Parameter",
+    "Parameters",
+    "RUN_GUI",
+    "RawHandler",
+    "cmap_albula",
+    "cmap_albula_r",
+    "cmap_cyclic_spectrum",
+    "cmap_hdr_albula",
+    "cmap_hdr_goldish",
+    "cmap_jet_extended",
+    "cmap_vge",
+    "cmap_vge_hdr",
+    "collections",
+    "color_list_cur_hdr_goldish",
+    "color_list_cyclic_spectrum",
+    "color_list_hdr_albula",
+    "color_list_jet_extended",
+    "color_list_vge",
+    "color_list_vge_hdr",
+    "colors",
+    "colors_",
+    "colors_copy",
+    "copy",
+    "corr",
+    "datetime",
+    "db",
+    "disk",
+    "ellipse",
+    "getpass",
+    "gridspec",
+    "h5py",
+    "imshow",
+    "itertools",
+    "line",
+    "line_aa",
+    "lstyles",
+    "make_axes_locatable",
+    "markers",
+    "markers_",
+    "markers_copy",
+    "mcm",
+    "mcolors",
+    "minimize",
+    "mpl",
+    "mpl_plot",
+    "multi_tau_lags",
+    "np",
+    "os",
+    "pickle",
+    "pims",
+    "plt",
+    "polygon",
+    "random",
+    "report_fit",
+    "roi",
+    "speckle",
+    "sys",
+    "time",
+    "tqdm",
+    "utils",
+    "warnings",
+    "xray_vision",
+]

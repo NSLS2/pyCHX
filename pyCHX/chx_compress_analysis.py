@@ -3,9 +3,12 @@ from __future__ import absolute_import, division, print_function
 import logging
 
 import matplotlib.pyplot as plt
-from modest_image import imshow
+import numpy as np
+import skbeam.core.roi as roi
+from matplotlib.figure import Figure
 from tqdm import tqdm
 
+from pyCHX._optional import imshow
 from pyCHX.chx_compress import Multifile as _Multifile
 from pyCHX.chx_compress import compress_eigerdata as _compress_eigerdata
 from pyCHX.chx_compress import get_avg_imgc
@@ -16,14 +19,7 @@ from pyCHX.chx_generic_functions import find_bad_pixels_FD, save_arrays
 
 # from pyCHX.chx_generic_functions import (get_circular_average)
 # from pyCHX.XPCS_SAXS import (get_circular_average)
-from pyCHX.chx_libs import (
-    RUN_GUI,
-    Figure,
-    colors,
-    markers,
-    np,
-    roi,
-)
+from pyCHX.chx_libs import RUN_GUI, colors, markers
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +173,7 @@ def plot_waterfallc(
     return_fig=False,
     cmap="viridis",
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """plot waterfall for a giving compressed file
 
