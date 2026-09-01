@@ -21,7 +21,13 @@ exclude = '''
 
 [tool.pytest.ini_options]
 filterwarnings = [
-    "ignore:`json_encoders` is deprecated.*:pydantic.warnings.PydanticDeprecatedSince20",
+    "ignore:`json_encoders` is deprecated.*:DeprecationWarning",
     "ignore:.*deprecated - use .*:pyparsing.warnings.PyparsingDeprecationWarning:matplotlib\\..*",
     "ignore:In databroker 2.x, there are separate notions.*:UserWarning:databroker\\.v1",
 ]
+markers = [
+    "portable: tests that require no CHX services or facility-only dependencies",
+    "mocked_facility: facility integration tests using local fakes only",
+    "live_facility: opt-in tests that may connect to CHX services",
+]
+addopts = "-m 'not live_facility'"

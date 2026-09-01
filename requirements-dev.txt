@@ -1,14 +1,17 @@
 # These are required for developing the package (running the tests, building
 # the documentation) but not necessarily required for _using_ it.
-black
+-r requirements.txt
+
+black==26.5.1
 codecov
 coverage
-flake8
-isort
+flake8==7.3.0
+isort==9.0.1
 nbstripout
 pre-commit
 pre-commit-hooks
 pytest
+pyOlog
 sphinx
 twine
 # These are dependencies of various sphinx extensions for documentation.
