@@ -48,7 +48,8 @@ dependencies = [
 
 [project.optional-dependencies]
 facility = [
-    "databroker>=1.2,<3",
+    # The pinned eiger-io reader imports databroker.assets.handlers.
+    "databroker[back-compat]>=1.2,<3",
     "pyOlog>=4.5,<5",
 ]
 test = [
