@@ -90,7 +90,7 @@ import sys
 
 class BlockFacilityImports(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in {'databroker', 'eiger_io', 'pyOlog'}:
+        if fullname.split('.')[0] in {'databroker', 'eiger_io', 'modest_image', 'pyOlog'}:
             raise ModuleNotFoundError(fullname)
         return None
 

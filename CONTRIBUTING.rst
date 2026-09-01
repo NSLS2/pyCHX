@@ -41,9 +41,8 @@ Local Development
 
 4. Install the runtime and development dependencies::
 
-    $ python -m pip install -r requirements.txt
-    $ python -m pip install -r requirements-dev.txt
-    $ python -m pip install -e .
+    $ python -m pip install --group facility-source
+    $ python -m pip install -e ".[test,docs,facility]"
 
 5. Create a branch for local development::
 

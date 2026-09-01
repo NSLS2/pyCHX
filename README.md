@@ -5,13 +5,15 @@ and analysis at the NSLS-II Coherent Hard X-ray Scattering (CHX) beamline.
 
 ## Installation
 
-Clone the repository and install its dependencies in a Python environment:
+Install the published package in a Python 3.11 or newer environment:
 
 ```bash
-git clone https://github.com/NSLS2/pyCHX.git
-cd pyCHX
-python -m pip install -r requirements.txt
-python -m pip install .
+python -m pip install pyCHX
 ```
+
+CHX catalog and Olog access can be added with
+`python -m pip install 'pyCHX[facility]'`. For a source checkout, install the
+pinned Eiger and ModestImage implementations with
+`python -m pip install --group facility-source`.
 
 See [CONTRIBUTING.rst](CONTRIBUTING.rst) for development setup and checks.

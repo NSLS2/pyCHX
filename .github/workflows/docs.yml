@@ -42,8 +42,7 @@ jobs:
           # installation problems if out of date.
           python -m pip install --upgrade pip setuptools numpy
 
-          pip install .
-          pip install -r requirements-dev.txt
+          pip install ".[docs]"
           pip list
 
       - name: Build Docs

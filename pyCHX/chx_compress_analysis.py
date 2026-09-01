@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import skbeam.core.roi as roi
 from matplotlib.figure import Figure
-from modest_image import imshow
 from tqdm import tqdm
 
+from pyCHX._optional import imshow
 from pyCHX.chx_compress import Multifile as _Multifile
 from pyCHX.chx_compress import compress_eigerdata as _compress_eigerdata
 from pyCHX.chx_compress import get_avg_imgc
@@ -173,7 +173,7 @@ def plot_waterfallc(
     return_fig=False,
     cmap="viridis",
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """plot waterfall for a giving compressed file
 

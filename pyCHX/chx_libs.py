@@ -37,7 +37,6 @@ from lmfit import Model, Parameter, Parameters, minimize, report_fit
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure
-from modest_image import imshow
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pandas import DataFrame
 from PIL import Image
@@ -47,6 +46,7 @@ from tqdm import tqdm
 from xray_vision.mask.manual_mask import ManualMask
 from xray_vision.mpl_plotting import speckle
 
+from pyCHX._optional import imshow
 from pyCHX.chx_handlers import EigerHandler, _missing_dependency_stub, db
 
 try:

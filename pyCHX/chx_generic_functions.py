@@ -22,7 +22,6 @@ import xray_vision.mpl_plotting as mpl_plot
 from lmfit import Model
 from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure
-from modest_image import imshow
 from pandas import DataFrame
 from PIL import Image
 from scipy.special import erf
@@ -31,6 +30,7 @@ from skimage.draw import disk, ellipse, polygon
 from skimage.filters import prewitt
 from tqdm import tqdm
 
+from pyCHX._optional import imshow
 from pyCHX.chx_handlers import db
 from pyCHX.chx_libs import RUN_GUI, cmap_albula, cmap_vge_hdr, colors, colors_, markers_
 

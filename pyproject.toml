@@ -1,5 +1,96 @@
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyCHX"
+dynamic = ["version"]
+description = "CHX XPCS data analysis tools"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [
+    {name = "Brookhaven National Laboratory - CHX Beamline"},
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "area-detector-handlers>=0.0.5",
+    "dask[array]>=2023.1",
+    "dill>=0.3",
+    "event-model>=1.19",
+    "h5py>=3.8",
+    "historydict>=1.2",
+    "ipython>=8",
+    "lmfit>=1.1,<2",
+    "matplotlib>=3.6,<4",
+    "numpy>=1.23,<3",
+    "pandas>=1.5,<4",
+    "pillow>=9",
+    "pims>=0.6,<0.8",
+    "pytz>=2022.1",
+    "reportlab>=3.6",
+    "scikit-beam>=0.0.27,<0.1",
+    "scikit-image>=0.20,<1",
+    "scipy>=1.9,<2",
+    "tifffile>=2022.8",
+    "tqdm>=4.64",
+    "xray-vision>=0.1.1,<0.2",
+]
+
+[project.optional-dependencies]
+facility = [
+    "databroker>=1.2,<3",
+    "pyOlog>=4.5,<5",
+]
+test = [
+    "black==26.5.1",
+    "build>=1.2",
+    "coverage[toml]>=7",
+    "flake8==7.3.0",
+    "isort==9.0.1",
+    "pre-commit>=4",
+    "pytest>=8,<10",
+    "twine>=6",
+]
+docs = [
+    "numpydoc>=1.6",
+    "sphinx>=7",
+    "sphinx-copybutton>=0.5",
+    "sphinx-rtd-theme>=2",
+]
+
+[dependency-groups]
+# These packages do not have suitable PyPI releases. This source-only group is
+# intentionally excluded from wheel and sdist metadata.
+facility-source = [
+    "eiger-io @ git+https://github.com/NSLS-II-CHX/eiger-io.git@cb13bdc336e445697e6483556116aaba0368a5d3",
+    "ModestImage @ git+https://github.com/ChrisBeaumont/mpl-modest-image.git@4174514a9ce7f4160fb6cbd200df6897694e0ac3",
+]
+
+[project.urls]
+Homepage = "https://github.com/NSLS2/pyCHX"
+Repository = "https://github.com/NSLS2/pyCHX"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["pyCHX*"]
+exclude = ["pyCHX.tests*"]
+
+[tool.setuptools_scm]
+fallback_version = "0+unknown"
+
 [tool.black]
 line-length = 115
+target-version = ["py311"]
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -12,9 +103,6 @@ exclude = '''
   | buck-out
   | build
   | dist
-
-  # The following are specific to Black, you probably don't want those.
-  | blib2to3
   | tests/data
 )/
 '''

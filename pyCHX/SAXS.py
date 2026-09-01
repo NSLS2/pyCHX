@@ -259,7 +259,7 @@ def get_form_factor_fit_lmfit(
     num_points=20,
     spread=5,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     YG Dev@CHX 2019/8/1
@@ -386,7 +386,7 @@ def get_form_factor_fit2(
     spread=5,
     bounds=None,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor
@@ -528,7 +528,7 @@ def get_form_factor_fit(
     fit_func="G",
     fit_power=0,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor for GUI
@@ -679,7 +679,7 @@ def fit_form_factor(
     fit_func="G",
     return_fig=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor
@@ -728,7 +728,7 @@ def fit_form_factor2(
     function="poly_sphere",
     fit_func="G",
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Fit form factor

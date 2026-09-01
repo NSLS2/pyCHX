@@ -13,10 +13,10 @@ import skbeam.core.roi as roi
 from matplotlib import gridspec
 from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure
-from modest_image import imshow
 from skbeam.core.utils import multi_tau_lags
 from tqdm import tqdm
 
+from pyCHX._optional import imshow
 from pyCHX.chx_libs import RUN_GUI
 from pyCHX.chx_libs import colors
 from pyCHX.chx_libs import colors as colors_array
@@ -530,7 +530,7 @@ def show_g12q_aged_g2(
     uid="uid",
     path="",
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Octo 20, 2017, add taus_aged option
@@ -1175,7 +1175,7 @@ def show_C12(
     qlabel=None,
     show_colorbar=True,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     plot one-q of two-time correlation function

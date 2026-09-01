@@ -436,7 +436,7 @@ def get_circular_average(
     plot_=False,
     save=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """get a circular average of an image
     Parameters
@@ -1012,7 +1012,7 @@ def get_t_ang(
     plot_=False,
     save=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """Get t-dependent angule intensity
 

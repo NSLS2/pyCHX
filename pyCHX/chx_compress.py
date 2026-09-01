@@ -1423,7 +1423,7 @@ def get_each_frame_intensityc(
     bad_frame_list=None,
     save=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """Get the total intensity of each frame by sampling every N frames
     Also get bad_frame_list by check whether above  bad_pixel_threshold
