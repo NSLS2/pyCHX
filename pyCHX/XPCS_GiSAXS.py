@@ -2527,7 +2527,7 @@ def multi_uids_gisaxs_xpcs_analysis(
             if imgs != 0:
                 _ = len(imgs)
                 md_ = imgs.md
-                timeperframe = md["frame_time"]
+                timeperframe = md_["frame_time"]
                 useful_uids[run_seq + 1][i] = uid
 
                 imgsr = reverse_updown(imgs)
