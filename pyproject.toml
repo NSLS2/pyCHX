@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77", "setuptools-scm>=8"]
+requires = ["setuptools>=84.0.0", "setuptools-scm>=10.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -23,52 +23,52 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "area-detector-handlers>=0.0.5",
-    "dask[array]>=2023.1",
-    "dill>=0.3",
-    "event-model>=1.19",
-    "h5py>=3.8",
-    "historydict>=1.2",
-    "ipython>=8",
-    "lmfit>=1.1,<2",
-    "matplotlib>=3.6,<4",
-    "numpy>=1.23,<3",
-    "pandas>=1.5,<4",
-    "pillow>=9",
-    "pims>=0.6,<0.8",
-    "pytz>=2022.1",
-    "reportlab>=3.6",
+    "area-detector-handlers>=0.0.10",
+    "dask[array]>=2026.8.0",
+    "dill>=0.4.1",
+    "event-model>=1.24.0",
+    "h5py>=3.16.0",
+    "historydict>=1.2.6",
+    "ipython>=9.17.0",
+    "lmfit>=1.3.4,<2",
+    "matplotlib>=3.11.1,<4",
+    "numpy>=2.4.6,<3",
+    "pandas>=3.0.5,<4",
+    "pillow>=12.3.0",
+    "pims>=0.7,<0.8",
+    "pytz>=2026.3.post1",
+    "reportlab>=5.0.1",
     "scikit-beam>=0.0.27,<0.1",
-    "scikit-image>=0.20,<1",
-    "scipy>=1.9,<2",
-    "tifffile>=2022.8",
-    "tqdm>=4.64",
+    "scikit-image>=0.26.0,<1",
+    "scipy>=1.17.1,<2",
+    "tifffile>=2026.3.3",
+    "tqdm>=4.70.0",
     "xray-vision>=0.1.1,<0.2",
 ]
 
 [project.optional-dependencies]
 facility = [
     # The pinned eiger-io reader imports databroker.assets.handlers.
-    "databroker[back-compat]>=1.2,<3",
-    "pyOlog>=4.5,<5",
+    "databroker[back-compat]>=2.0.1,<3",
+    "pyOlog>=4.5.1,<5",
 ]
 test = [
     "black==26.5.1",
-    "build>=1.2",
-    "coverage[toml]>=7",
+    "build>=1.6.0",
+    "coverage[toml]>=7.16.0",
     "flake8==7.3.0",
-    "hdf5plugin>=4",
+    "hdf5plugin>=7.0.0",
     "isort==9.0.1",
-    "pre-commit>=4",
-    "pytest>=8,<10",
-    "ruff==0.16.0",
-    "twine>=6",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1,<10",
+    "ruff==0.16.5",
+    "twine>=7.0.0",
 ]
 docs = [
-    "numpydoc>=1.6",
-    "sphinx>=7",
-    "sphinx-copybutton>=0.5",
-    "sphinx-rtd-theme>=2",
+    "numpydoc>=1.10.0",
+    "sphinx>=9.0.4",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-rtd-theme>=3.1.0",
 ]
 
 [dependency-groups]
