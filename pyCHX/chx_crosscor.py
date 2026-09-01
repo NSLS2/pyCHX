@@ -27,7 +27,7 @@ except ImportError:
         return iterator
 
 
-from scipy.fftpack.helper import next_fast_len
+from scipy.fftpack import next_fast_len
 
 
 def get_cor_region(cor, cij, qid, fitw):

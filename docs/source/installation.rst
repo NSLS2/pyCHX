@@ -2,6 +2,9 @@
 Installation
 ============
 
-At the command line::
+Clone the repository and install its dependencies in a Python environment::
 
-    $ pip install pyCHX
+    $ git clone https://github.com/NSLS2/pyCHX.git
+    $ cd pyCHX
+    $ python -m pip install -r requirements.txt
+    $ python -m pip install .

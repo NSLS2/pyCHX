@@ -68,7 +68,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "pyCHX"
-copyright = "2023, Brookhaven National Laboratory"
+copyright = "2026, Brookhaven National Laboratory"
 author = "Brookhaven National Laboratory"
 
 # The version info for the project you're documenting, acts as replacement for

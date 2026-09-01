@@ -182,7 +182,7 @@ def compress_eigerdata(
                     data_path=data_path,
                     images_per_file=images_per_file,
                     copy_rawdata=copy_rawdata,
-                    new_path=new_path
+                    new_path=new_path,
                 )
             else:
                 return init_compress_eigerdata(
@@ -327,7 +327,7 @@ def para_compress_eigerdata(
 
     if cpu_core_number == 0:
         cpu_core_number = cpu_count()
-        
+
     N = int(np.ceil(N / bins))
     Nf = int(np.ceil(N / num_sub))
     if Nf > cpu_core_number:
@@ -475,7 +475,7 @@ def para_segment_compress_eigerdata(
         fns = [filename + "_temp-%i.tmp" % i for i in inputs]
         # print( nr, inputs, )
         pool = Pool(processes=len(inputs))  # , maxtasksperchild=1000 )
-        print( 'Pool processes: %s'%len(inputs) )
+        print("Pool processes: %s" % len(inputs))
         for i in inputs:
             if i * num_sub <= N:
                 result[i] = pool.apply_async(

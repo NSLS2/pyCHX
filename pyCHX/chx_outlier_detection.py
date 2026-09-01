@@ -1,9 +1,11 @@
-import numpy as np
 import matplotlib.pyplot as plt
-try: # some genius moved roi within skbeam....
+import numpy as np
+
+try:  # some genius moved roi within skbeam....
     from skbeam.core.utils import roi
 except:
-    from skbeam.core import roi 
+    from skbeam.core import roi
+
 
 def is_outlier(points, thresh=3.5, verbose=False):
     """MAD test"""
@@ -82,7 +84,7 @@ def outlier_mask(
                 print("ROI #%s: no outliers detected" % rn)
 
         ### MAKE SURE we don't REMOVE more than x percent of the pixels in the roi
-        
+
         if verbose:
             print("fraction of pixel values detected as outliers: %s" % np.round(outlier_fraction, 2))
         if outlier_fraction > maximum_outlier_fraction:

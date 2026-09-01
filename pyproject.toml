@@ -18,3 +18,10 @@ exclude = '''
   | tests/data
 )/
 '''
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:`json_encoders` is deprecated.*:pydantic.warnings.PydanticDeprecatedSince20",
+    "ignore:.*deprecated - use .*:pyparsing.warnings.PyparsingDeprecationWarning:matplotlib\\..*",
+    "ignore:In databroker 2.x, there are separate notions.*:UserWarning:databroker\\.v1",
+]

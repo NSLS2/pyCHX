@@ -1,9 +1,10 @@
 from pyOlog import Attachment, LogEntry, OlogClient, SimpleOlogClient
 from pyOlog.OlogDataTypes import Logbook
-olog_client = SimpleOlogClient(url='https://epics-services-chx.nsls2.bnl.local:38981/Olog')
-#print("-> Trying public URL of Olog per Tom Caswell's suggestion")
-#olog_client = SimpleOlogClient(url='https://epics-services.nsls2.bnl.gov/chx_logbook/')
-#olog_client = SimpleOlogClient(url='epics-services-chx.nsls2.bnl.local')
+
+olog_client = SimpleOlogClient(url="https://epics-services-chx.nsls2.bnl.local:38981/Olog")
+# print("-> Trying public URL of Olog per Tom Caswell's suggestion")
+# olog_client = SimpleOlogClient(url='https://epics-services.nsls2.bnl.gov/chx_logbook/')
+# olog_client = SimpleOlogClient(url='epics-services-chx.nsls2.bnl.local')
 
 
 def create_olog_entry(text, logbooks="Data Acquisition"):
@@ -53,7 +54,8 @@ def update_olog_uid_with_file(uid, text, filename, append_name=""):
         copyfile(filename, npname)
         atch = [Attachment(open(npname, "rb"))]
         print(f"Append {append_name} to the filename.")
-        update_olog_uid(olog_client,uid=uid, text=text, attachments=atch)
+        update_olog_uid(olog_client, uid=uid, text=text, attachments=atch)
+
 
 def update_olog_logid_with_file(logid, text, filename=None, verbose=False):
     """
@@ -100,7 +102,7 @@ def update_olog_id(olog_client, logid, text, attachments, verbose=True):
 
     update_olog_id(logid=29327, text='add_test_atch', attachmenents=atch)
     """
-    client = olog_client.session   # This is an instance of OlogClient
+    client = olog_client.session  # This is an instance of OlogClient
     url = client._url
 
     old_text = olog_client.find(id=logid)[0]["text"]
@@ -113,6 +115,7 @@ def update_olog_id(olog_client, logid, text, attachments, verbose=True):
     if verbose:
         print(f"The url={url} was successfully updated with {text} and with " f"the attachments")
     return old_text
+
 
 def update_olog_uid(olog_client, uid, text, attachments):
     """
@@ -135,6 +138,8 @@ def update_olog_uid(olog_client, uid, text, attachments):
     atch = [Attachment(open(filename1, 'rb'))]
     update_olog_uid(uid='af8f66', text='Add xpcs pdf report', attachments=atch)
     """
-    logid = olog_client.find(search=f"*{uid}*")[-1]["id"]  # test: attach to FIRST occurance of this uid, which is when the data was actually created
-    #logid = olog_client.find(search=f"*{uid}*")[0]["id"]
+    logid = olog_client.find(search=f"*{uid}*")[-1][
+        "id"
+    ]  # test: attach to FIRST occurance of this uid, which is when the data was actually created
+    # logid = olog_client.find(search=f"*{uid}*")[0]["id"]
     update_olog_id(olog_client, logid, text, attachments)

@@ -80,7 +80,6 @@ def add_image_string(
             return 100
 
 
-
 class create_pdf_report(object):
     """Aug 16, YG@CHX-NSLS-II
      Create a pdf report by giving data_dir, uid, out_dir

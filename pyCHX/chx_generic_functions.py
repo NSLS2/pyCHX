@@ -866,7 +866,10 @@ def save_oavs_tifs(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1
         plt.axis("off")
     plt.savefig(data_dir + "uid=%s_OVA_images.png" % uid)
 
-def save_oavs_tifs_v2(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1, threshold=0,cross=[685, 440, 50]):
+
+def save_oavs_tifs_v2(
+    uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1, threshold=0, cross=[685, 440, 50]
+):
     """
     save OAV images collected for a uid as an 'aggregate' image that can be attached to Olog (attaching is not part of this function)
     Adds time stamps for series of OAV images
@@ -878,32 +881,32 @@ def save_oavs_tifs_v2(uid, data_dir, brightness_scale=1, scalebar_size=100, scal
     scale/threshold: manipulation of image intensity, enhancement of areas (currently not implemented)
     01/28/2025 by LW
     """
-    h=db[uid].v2.start
-    detectors=h['detectors']
+    h = db[uid].v2.start
+    detectors = h["detectors"]
     for d in detectors:
-        if 'oav' in d or 'OAV' in d:
-            oav_det=d
-            oav_cam = '%s_image'%d
-             
+        if "oav" in d or "OAV" in d:
+            oav_det = d
+            oav_cam = "%s_image" % d
+
     oavs = list(db[uid].data(oav_cam))[0]
-    res_key=None
+    res_key = None
     for k in h.keys():
-        if 'OAV' in k and 'resolution' in k:
+        if "OAV" in k and "resolution" in k:
             res_key = k
     try:
-            pixel_scalebar = np.ceil(scalebar_size / h[res_key])
+        pixel_scalebar = np.ceil(scalebar_size / h[res_key])
     except:
         pixel_scalebar = None
         print("No OAV resolution is available.")
     text_string = "%s $\mu$m" % scalebar_size
-    oav_period=np.array(db[uid].v2['primary']['config'][oav_det]['%s_cam_acquire_period'%oav_det])[0]
-    oav_expt=np.array(db[uid].v2['primary']['config'][oav_det]['%s_cam_acquire_time'%oav_det])[0]
-    
+    oav_period = np.array(db[uid].v2["primary"]["config"][oav_det]["%s_cam_acquire_period" % oav_det])[0]
+    oav_expt = np.array(db[uid].v2["primary"]["config"][oav_det]["%s_cam_acquire_time" % oav_det])[0]
+
     oav_times = []
     for i in range(len(oavs)):
         oav_times.append(oav_expt + i * oav_period)
     fig = plt.subplots(int(np.ceil(len(oavs) / 3)), 3, figsize=(3 * 5.08, int(np.ceil(len(oavs) / 3)) * 4))
-    pc=1
+    pc = 1
     for m in range(len(oavs)):
         plt.subplot(int(np.ceil(len(oavs) / 3)), 3, m + 1)
         # plt.subplots(figsize=(5.2,4))
@@ -916,7 +919,7 @@ def save_oavs_tifs_v2(uid, data_dir, brightness_scale=1, scalebar_size=100, scal
         # rgb_cont_img[ind,0]=1000
         if brightness_scale != 1:
             rgb_cont_img = scale_rgb(rgb_cont_img, scale=brightness_scale)
-    
+
         plt.imshow(rgb_cont_img, interpolation="none", resample=True, cmap="gray")
         plt.axis("equal")
         plt.plot([cross[0] - cross[2] / 2, cross[0] + cross[2] / 2], [cross[1], cross[1]], "r-")
@@ -925,8 +928,9 @@ def save_oavs_tifs_v2(uid, data_dir, brightness_scale=1, scalebar_size=100, scal
             plt.plot([1100, 1100 + pixel_scalebar], [150, 150], "r-", linewidth=5)  # scale bar.
             plt.text(1000, 50, text_string, fontsize=14, color="r")
         plt.text(600, 50, str(oav_times[m])[:5] + " [s]", fontsize=14, color="r")
-        plt.axis("off");pc+=1
-    for i in range(int(np.ceil(len(oavs) / 3))* 3-pc+1):
+        plt.axis("off")
+        pc += 1
+    for i in range(int(np.ceil(len(oavs) / 3)) * 3 - pc + 1):
         plt.subplot(int(np.ceil(len(oavs) / 3)), 3, pc)
         plt.axis("off")
     plt.savefig(data_dir + "uid=%s_OVA_images.png" % uid)
@@ -3512,30 +3516,32 @@ def get_sid_filenames_v2(run):
     01/26/2025 function by Dan Allan, modified by LW to handle Eiger + oav
     """
     from pathlib import Path
+
     import event_model
     from area_detector_handlers.eiger import EigerHandler
-    
+
     run = run.v2
-    sid = run.start['scan_id']
-    uid = run.start['uid']
+    sid = run.start["scan_id"]
+    uid = run.start["uid"]
     resources = [doc for name, doc in run.documents() if name == "resource"]
     resource = None
     for r in resources:
-        if r['spec'] in list(['AD_EIGER2']):
+        if r["spec"] in list(["AD_EIGER2"]):
             resource = r
     if resource is None:
         raise ValueError(f"No AD_EIGER2 resource found for run {uid}")
     datum_pages = [doc for name, doc in run.documents() if name == "datum_page"]
-    handler = EigerHandler(str(Path(resource['root'], resource['resource_path'])), **resource['resource_kwargs'])
+    handler = EigerHandler(str(Path(resource["root"], resource["resource_path"])), **resource["resource_kwargs"])
     datums = []
     for datum_page in datum_pages:
         for datum in event_model.unpack_datum_page(datum_page):
-            if 'seq_id' in datum['datum_kwargs'].keys():
+            if "seq_id" in datum["datum_kwargs"].keys():
                 datums.append(datum)
     datum_set = sorted(set(handler.get_file_list([datum["datum_kwargs"] for datum in datums])))
     for datum in datum_set:
         if "_master.h5" in datum:
             return sid, uid, datum
+
 
 def get_sid_filenames_v3(run):
     """
@@ -3546,16 +3552,15 @@ def get_sid_filenames_v3(run):
     01/26/2025 based on get_sid_filenames_v2 by Dan Allan, modified by LW to handle Eiger +oav as detectors and using md['sequence_id'] from 'series'
     """
     run = run.v2
-    sid = run.start['scan_id']
-    uid = run.start['uid']
+    sid = run.start["scan_id"]
+    uid = run.start["uid"]
     resources = [doc for name, doc in run.documents() if name == "resource"]
     for r in resources:
-        if r['spec'] in list(['AD_EIGER2']):
+        if r["spec"] in list(["AD_EIGER2"]):
             resource = r
-    if 'eiger' in  resource['root']:
-        datum = '%s/%s_%s_master.h5'%(resource['root'],resource['resource_path'],run.start['sequence id'])
+    if "eiger" in resource["root"]:
+        datum = "%s/%s_%s_master.h5" % (resource["root"], resource["resource_path"], run.start["sequence id"])
     return sid, uid, datum
-                
 
 
 def load_dask_data(uid, detector, mask_path_full, reverse=False, rot90=False):
@@ -3587,15 +3592,10 @@ def load_dask_data(uid, detector, mask_path_full, reverse=False, rot90=False):
         "beam_center_y": "beam_center_y",
     }
 
-    det_mapping = {
-        "eiger4m": "eiger4m",
-        "eiger1m": "eiger1m",
-        "eiger500k": "eiger500K",
-        "eiger500K": "eiger500K"
-    }
-    
+    det_mapping = {"eiger4m": "eiger4m", "eiger1m": "eiger1m", "eiger500k": "eiger500K", "eiger500K": "eiger500K"}
+
     det_short = next((short for key, short in det_mapping.items() if key in det), None)
-    
+
     img_md = {}
     for k in list(img_md_dict.keys()):
         img_md[k] = hdr.config_data(det)["primary"][0]["%s_%s" % (det, img_md_dict[k])]

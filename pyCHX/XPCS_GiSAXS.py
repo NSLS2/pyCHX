@@ -4,8 +4,6 @@ yuzhang@bnl.gov
 This module is for the GiSAXS XPCS analysis
 """
 
-
-
 from skbeam.core.accumulators.binned_statistic import BinnedStatistic1D, BinnedStatistic2D
 
 from pyCHX.chx_compress import (
@@ -1431,7 +1429,7 @@ def show_qzr_roi(
     save=False,
     return_fig=False,
     *argv,
-    **kwargs
+    **kwargs,
 ):
     """
     Dec 16, 2015, Y.G.@CHX
@@ -2172,6 +2170,7 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
 
 
 # GiSAXS End
+
 
 def get_each_box_mean_intensity(data_series, box_mask, sampling, timeperframe, plot_=True, *argv, **kwargs):
     """Dec 16, 2015, Y.G.@CHX
