@@ -4,17 +4,14 @@ yuzhang@bnl.gov
 This module is for the static SAXS analysis, such as fit form factor
 """
 
-# import numpy as np
+import matplotlib.pyplot as plt
+import numpy as np
+import skbeam.core.utils as utils
 from lmfit import Model, Parameters, minimize
 from scipy.optimize import leastsq
 from scipy.special import gamma
 
 from pyCHX.chx_generic_functions import find_index, plot1D, show_img
-
-# import matplotlib as mpl
-# import matplotlib.pyplot as plt
-# from matplotlib.colors import LogNorm
-from pyCHX.chx_libs import *
 
 
 def mono_sphere_form_factor_intensity(x, radius, delta_rho=100, fit_func="G"):

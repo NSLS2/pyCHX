@@ -26,9 +26,8 @@ from numpy import (
     zeros,
     zeros_like,
 )
+from skbeam.core.utils import multi_tau_lags
 from tqdm import tqdm
-
-from pyCHX.chx_libs import multi_tau_lags
 
 
 def get_timepixel_data(data_dir, filename, time_unit=1):

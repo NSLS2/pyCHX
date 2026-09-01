@@ -3,6 +3,9 @@ from __future__ import absolute_import, division, print_function
 import logging
 
 import matplotlib.pyplot as plt
+import numpy as np
+import skbeam.core.roi as roi
+from matplotlib.figure import Figure
 from modest_image import imshow
 from tqdm import tqdm
 
@@ -16,14 +19,7 @@ from pyCHX.chx_generic_functions import find_bad_pixels_FD, save_arrays
 
 # from pyCHX.chx_generic_functions import (get_circular_average)
 # from pyCHX.XPCS_SAXS import (get_circular_average)
-from pyCHX.chx_libs import (
-    RUN_GUI,
-    Figure,
-    colors,
-    markers,
-    np,
-    roi,
-)
+from pyCHX.chx_libs import RUN_GUI, colors, markers
 
 logger = logging.getLogger(__name__)
 

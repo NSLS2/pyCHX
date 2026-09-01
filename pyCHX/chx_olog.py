@@ -1,145 +1,123 @@
-from pyOlog import Attachment, LogEntry, SimpleOlogClient
-from pyOlog.OlogDataTypes import Logbook
+"""CHX Olog helpers with lazy client construction."""
 
-olog_client = SimpleOlogClient(url="https://epics-services-chx.nsls2.bnl.local:38981/Olog")
-# print("-> Trying public URL of Olog per Tom Caswell's suggestion")
-# olog_client = SimpleOlogClient(url='https://epics-services.nsls2.bnl.gov/chx_logbook/')
-# olog_client = SimpleOlogClient(url='epics-services-chx.nsls2.bnl.local')
+from __future__ import annotations
+
+from functools import lru_cache
+from shutil import copyfile
+
+OLOG_URL = "https://epics-services-chx.nsls2.bnl.local:38981/Olog"
+
+
+def _missing_dependency_stub(symbol: str):
+    message = f"{symbol} requires the optional 'pyOlog' dependency. " "Install pyCHX with the 'facility' extra."
+
+    class MissingOptionalDependency:
+        def __init__(self, *args, **kwargs):
+            raise ImportError(message)
+
+    MissingOptionalDependency.__name__ = symbol
+    MissingOptionalDependency.__qualname__ = symbol
+    MissingOptionalDependency.__doc__ = message
+    return MissingOptionalDependency
+
+
+try:
+    from pyOlog import Attachment, LogEntry, SimpleOlogClient
+    from pyOlog.OlogDataTypes import Logbook
+except ImportError:
+    Attachment = _missing_dependency_stub("Attachment")
+    LogEntry = _missing_dependency_stub("LogEntry")
+    Logbook = _missing_dependency_stub("Logbook")
+    SimpleOlogClient = _missing_dependency_stub("SimpleOlogClient")
+
+
+@lru_cache(maxsize=1)
+def get_olog_client(url: str = OLOG_URL):
+    """Construct and cache the Olog client on first use."""
+    return SimpleOlogClient(url=url)
+
+
+class _LazyOlogClient:
+    """Compatibility proxy for code that imported ``olog_client``."""
+
+    def __getattr__(self, name):
+        return getattr(get_olog_client(), name)
+
+    def __repr__(self):
+        return "<OlogClient (lazy)>"
+
+
+olog_client = _LazyOlogClient()
 
 
 def create_olog_entry(text, logbooks="Data Acquisition"):
-    """
-    Create a log entry to xf11id.
-
-    Parameters
-    ----------
-    text : str
-        the text string to add to the logbook
-    logbooks : str, optional
-        the name of the logbook to update
-
-    Returns
-    -------
-    eid : the entry id returned from the Olog server
-    """
-    eid = olog_client.log(text, logbooks=logbooks)
-    return eid
+    """Create an entry in the CHX Olog."""
+    return get_olog_client().log(text, logbooks=logbooks)
 
 
 def update_olog_uid_with_file(uid, text, filename, append_name=""):
-    """
-    Attach text and file (with filename) to CHX olog with entry defined by uid.
-
-    Parameters
-    ----------
-    uid : str
-        string of unique id
-    text : str
-        string to put into olog book
-    filename : str
-        file name
-    append_name : str
-        first try to attach olog with the file, if there is already a same file
-        in attached file, copy the file with different filename (append
-        append_name), and then attach to olog
-    """
+    """Attach text and a file to the CHX Olog entry containing *uid*."""
+    client = get_olog_client()
     atch = [Attachment(open(filename, "rb"))]
-
     try:
-        update_olog_uid(olog_client, uid=uid, text=text, attachments=atch)
+        update_olog_uid(client, uid=uid, text=text, attachments=atch)
     except Exception:
-        from shutil import copyfile
-
-        npname = f"{filename[:-4]}_{append_name}.pdf"
-        copyfile(filename, npname)
-        atch = [Attachment(open(npname, "rb"))]
+        new_name = f"{filename[:-4]}_{append_name}.pdf"
+        copyfile(filename, new_name)
+        atch = [Attachment(open(new_name, "rb"))]
         print(f"Append {append_name} to the filename.")
-        update_olog_uid(olog_client, uid=uid, text=text, attachments=atch)
+        update_olog_uid(client, uid=uid, text=text, attachments=atch)
 
 
 def update_olog_logid_with_file(logid, text, filename=None, verbose=False):
-    """
-    Attach text and file (with filename) to CHX olog with entry defined by
-    logid.
-
-    Parameters
-    ----------
-    logid : str
-        the log entry id
-    text : str
-        string to put into olog book
-    filename : str
-        file name
-    """
-    if filename is not None:
-        atch = [Attachment(open(filename, "rb"))]
-    else:
-        atch = None
+    """Attach text and optionally a file to an Olog entry."""
+    attachments = [Attachment(open(filename, "rb"))] if filename is not None else None
     try:
-        update_olog_id(olog_client, logid=logid, text=text, attachments=atch, verbose=verbose)
+        update_olog_id(
+            get_olog_client(),
+            logid=logid,
+            text=text,
+            attachments=attachments,
+            verbose=verbose,
+        )
     except Exception:
         pass
 
 
-def update_olog_id(olog_client, logid, text, attachments, verbose=True):
-    """
-    Update olog book logid entry with text and attachments files.
-
-    Parameters
-    ----------
-    logid : integer
-        the log entry id
-    text : str
-        the text to update, will add this text to the old text
-    attachments : ???
-        add new attachment files
-
-    Example
-    -------
-    filename1 = ('/XF11ID/analysis/2016_2/yuzhang/Results/August/af8f66/'
-                 'Report_uid=af8f66.pdf')
-    atch = [Attachment(open(filename1, 'rb'))]
-
-    update_olog_id(logid=29327, text='add_test_atch', attachmenents=atch)
-    """
-    client = olog_client.session  # This is an instance of OlogClient
+def update_olog_id(olog_client=None, logid=None, text=None, attachments=None, verbose=True):
+    """Append text and attachments to an Olog entry selected by ID."""
+    if olog_client is None:
+        olog_client = get_olog_client()
+    client = olog_client.session
     url = client._url
-
     old_text = olog_client.find(id=logid)[0]["text"]
-    upd = LogEntry(
+    update = LogEntry(
         text=f"{old_text}\n{text}",
         attachments=attachments,
         logbooks=[Logbook(name="Operations", owner=None, active=True)],
     )
-    client.updateLog(logid, upd)
+    client.updateLog(logid, update)
     if verbose:
-        print(f"The url={url} was successfully updated with {text} and with " f"the attachments")
+        print(f"The url={url} was successfully updated with {text} and with the attachments")
     return old_text
 
 
-def update_olog_uid(olog_client, uid, text, attachments):
-    """
-    Update olog book logid entry cotaining uid string with text and attachments
-    files.
+def update_olog_uid(olog_client=None, uid=None, text=None, attachments=None):
+    """Append text and attachments to the Olog entry containing *uid*."""
+    if olog_client is None:
+        olog_client = get_olog_client()
+    logid = olog_client.find(search=f"*{uid}*")[-1]["id"]
+    return update_olog_id(olog_client, logid, text, attachments)
 
-    Parameters
-    ----------
-    uid: str
-        the uid of a scan or a specficial string (only gives one log entry)
-    text: str
-        the text to update, will add this text to the old text
-    attachments: ???
-        add new attachment files
 
-    Example
-    -------
-    filename1 = ('/XF11ID/analysis/2016_2/yuzhang/Results/August/af8f66/'
-                 'Report_uid=af8f66.pdf')
-    atch = [Attachment(open(filename1, 'rb'))]
-    update_olog_uid(uid='af8f66', text='Add xpcs pdf report', attachments=atch)
-    """
-    logid = olog_client.find(search=f"*{uid}*")[-1][
-        "id"
-    ]  # test: attach to FIRST occurance of this uid, which is when the data was actually created
-    # logid = olog_client.find(search=f"*{uid}*")[0]["id"]
-    update_olog_id(olog_client, logid, text, attachments)
+__all__ = [
+    "Attachment",
+    "LogEntry",
+    "create_olog_entry",
+    "get_olog_client",
+    "olog_client",
+    "update_olog_id",
+    "update_olog_logid_with_file",
+    "update_olog_uid",
+    "update_olog_uid_with_file",
+]
