@@ -363,22 +363,26 @@ def para_compress_eigerdata(
     res_ = [results[k].get() for k in list(sorted(results.keys()))]
     imgsum = np.zeros(N)
     bad_frame_list = np.zeros(N, dtype=bool)
-    good_count = 1
+    good_count = 0
     for i in range(Nf):
         mask_, avg_img_, imgsum_, bad_frame_list_ = res_[i]
         imgsum[i * num_sub : (i + 1) * num_sub] = imgsum_
         bad_frame_list[i * num_sub : (i + 1) * num_sub] = bad_frame_list_
+        segment_good_count = len(imgsum_) - np.count_nonzero(bad_frame_list_)
         if i == 0:
             mask = mask_
-            avg_img = np.zeros_like(avg_img_)
+            avg_img = np.zeros_like(avg_img_, dtype=np.float64)
         else:
             mask *= mask_
-        if not np.sum(np.isnan(avg_img_)):
-            avg_img += avg_img_
-            good_count += 1
+        if segment_good_count and not np.any(np.isnan(avg_img_)):
+            avg_img += avg_img_ * segment_good_count
+            good_count += segment_good_count
 
     bad_frame_list = np.where(bad_frame_list)[0]
-    avg_img /= good_count
+    if good_count:
+        avg_img /= good_count
+    else:
+        avg_img.fill(np.nan)
 
     if len(bad_frame_list):
         print("Bad frame list are: %s" % bad_frame_list)
@@ -1036,6 +1040,17 @@ class Multifile:
     def rdrawframe(self, n):
         if self.seekimg(n) != -1:
             return self._readImageRaw()
+
+    def close(self):
+        """Close the compressed-data file."""
+        self.FID.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+        return False
 
 
 class Multifile_Bins(object):

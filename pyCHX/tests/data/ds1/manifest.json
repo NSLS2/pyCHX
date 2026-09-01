@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "scan_id": 216964,
+  "uid": "6323cb44-3596-48cc-87ef-620ec7eda4c7",
+  "detector": "eiger500K_single_image",
+  "frame_count": 50,
+  "images_per_file": 10,
+  "raw_frame_shape": [514, 1030],
+  "analysis_frame_shape": [1030, 514],
+  "transform": {
+    "reverse": true,
+    "rot90": true
+  },
+  "compression": {
+    "bad_pixel_threshold": 100000000000000.0,
+    "bins": 1,
+    "bytes_per_pixel": 4,
+    "hot_pixel_threshold": 1073741824,
+    "num_sub": 100,
+    "num_max_parallel_processes": 500,
+    "parallel": true
+  },
+  "compression_header": {
+    "beam_center_x": 511.0,
+    "beam_center_y": 496.0,
+    "count_time": 0.049997,
+    "detector_distance": 16016.84203,
+    "frame_time": 0.05,
+    "incident_wavelength": 1.284810346,
+    "x_pixel_size": 0.000075,
+    "y_pixel_size": 0.000075
+  },
+  "compressed_sha256": "7dcaa9f833e7cbdf4d332c27665f42bb0e65b0b1b8a1f4e7f67ecac002c4f80e",
+  "analysis": {
+    "center": [496, 511],
+    "dpix": 0.075,
+    "detector_distance": 16016.84203,
+    "wavelength": 1.284810346,
+    "exposure_time": 0.049997,
+    "time_per_frame": 0.05,
+    "g2_buffers": 8,
+    "g2_levels": 4,
+    "roi_count": 12
+  },
+  "legacy_reference_corrections": {
+    "average_image_scale": 2.0,
+    "iq_scale": 2.0
+  }
+}

@@ -54,6 +54,7 @@ test = [
     "build>=1.2",
     "coverage[toml]>=7",
     "flake8==7.3.0",
+    "hdf5plugin>=4",
     "isort==9.0.1",
     "pre-commit>=4",
     "pytest>=8,<10",
@@ -116,6 +117,7 @@ filterwarnings = [
 markers = [
     "portable: tests that require no CHX services or facility-only dependencies",
     "mocked_facility: facility integration tests using local fakes only",
+    "data_regression: offline tests using bundled detector data and facility file readers",
     "live_facility: opt-in tests that may connect to CHX services",
 ]
 addopts = "-m 'not live_facility'"
