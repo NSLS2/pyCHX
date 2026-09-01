@@ -111,7 +111,8 @@ def Correct_Overlap_Images_Intensities(
     dataM = {}
 
     for i in range(len(infiles)):
-        d = np.array(PIL.Image.open(infiles[i]).convert("I")).T / 1.0
+        with PIL.Image.open(infiles[i]) as image:
+            d = np.array(image.convert("I")).T / 1.0
         if i == 0:
             M, N = d.shape[0], d.shape[1]
             data = np.zeros([M, N * Nf - w * (Nf - 1)])
@@ -254,7 +255,8 @@ def plot_qmap_in_folder(inDir):
             if "npy" in s:
                 d = np.load(s)  # * qmask
             if "pkl" in s:
-                xs, zs = cpl.load(open(s, "rb"))
+                with open(s, "rb") as stream:
+                    xs, zs = cpl.load(stream)
         show_img(
             d,
             logs=False,
@@ -490,38 +492,53 @@ def stitch_WAXS_in_Qspace_CHX(
         print(rangeq_xy, rangeq_zy, rangeq_zx)
 
         remesh_dataxy, xbins, ybins = np.histogram2d(
-            QX, QY, bins=bins_xy, range=rangeq_xy, normed=False, weights=D
+            QX, QY, bins=bins_xy, range=rangeq_xy, density=False, weights=D
         )
         # Normalize by the binning
         num_per_binxy, xbins, ybins = np.histogram2d(
-            QX, QY, bins=bins_xy, range=rangeq_xy, normed=False, weights=None
+            QX, QY, bins=bins_xy, range=rangeq_xy, density=False, weights=None
         )
         Intensity_map_XY += remesh_dataxy
         count_map_XY += num_per_binxy
 
         remesh_datazy, zbins, ybins = np.histogram2d(
-            QZ, QY, bins=bins_zy, range=rangeq_zy, normed=False, weights=D
+            QZ, QY, bins=bins_zy, range=rangeq_zy, density=False, weights=D
         )
         # Normalize by the binning
         num_per_binzy, zbins, ybins = np.histogram2d(
-            QZ, QY, bins=bins_zy, range=rangeq_zy, normed=False, weights=None
+            QZ, QY, bins=bins_zy, range=rangeq_zy, density=False, weights=None
         )
         Intensity_map_ZY += remesh_datazy
         count_map_ZY += num_per_binzy
 
         remesh_datazx, zbins, xbins = np.histogram2d(
-            QZ, QX, bins=bins_zx, range=rangeq_zx, normed=False, weights=D
+            QZ, QX, bins=bins_zx, range=rangeq_zx, density=False, weights=D
         )
         # Normalize by the binning
         num_per_binzx, zbins, xbins = np.histogram2d(
-            QZ, QX, bins=bins_zx, range=rangeq_zx, normed=False, weights=None
+            QZ, QX, bins=bins_zx, range=rangeq_zx, density=False, weights=None
         )
         Intensity_map_ZX += remesh_datazx
         count_map_ZX += num_per_binzx
 
         # Intensity_mapN[i]     = np.nan_to_num( remesh_data/num_per_bin     )
-    Intensity_map_XY = np.nan_to_num(Intensity_map_XY / count_map_XY)
-    Intensity_map_ZY = np.nan_to_num(Intensity_map_ZY / count_map_ZY)
-    Intensity_map_ZX = np.nan_to_num(Intensity_map_ZX / count_map_ZX)
+    Intensity_map_XY = np.divide(
+        Intensity_map_XY,
+        count_map_XY,
+        out=np.zeros_like(Intensity_map_XY),
+        where=count_map_XY != 0,
+    )
+    Intensity_map_ZY = np.divide(
+        Intensity_map_ZY,
+        count_map_ZY,
+        out=np.zeros_like(Intensity_map_ZY),
+        where=count_map_ZY != 0,
+    )
+    Intensity_map_ZX = np.divide(
+        Intensity_map_ZX,
+        count_map_ZX,
+        out=np.zeros_like(Intensity_map_ZX),
+        where=count_map_ZX != 0,
+    )
 
     return Intensity_map_XY, Intensity_map_ZY, Intensity_map_ZX, qxs, qys, qzs

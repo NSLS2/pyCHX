@@ -19,6 +19,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "area-detector-handlers>=0.0.5",
@@ -46,7 +48,8 @@ dependencies = [
 
 [project.optional-dependencies]
 facility = [
-    "databroker>=1.2,<3",
+    # The pinned eiger-io reader imports databroker.assets.handlers.
+    "databroker[back-compat]>=1.2,<3",
     "pyOlog>=4.5,<5",
 ]
 test = [
@@ -54,9 +57,11 @@ test = [
     "build>=1.2",
     "coverage[toml]>=7",
     "flake8==7.3.0",
+    "hdf5plugin>=4",
     "isort==9.0.1",
     "pre-commit>=4",
     "pytest>=8,<10",
+    "ruff==0.16.0",
     "twine>=6",
 ]
 docs = [
@@ -109,6 +114,9 @@ exclude = '''
 
 [tool.pytest.ini_options]
 filterwarnings = [
+    "error::DeprecationWarning:pyCHX\\..*",
+    "error::FutureWarning:pyCHX\\..*",
+    "error::PendingDeprecationWarning:pyCHX\\..*",
     "ignore:`json_encoders` is deprecated.*:DeprecationWarning",
     "ignore:.*deprecated - use .*:pyparsing.warnings.PyparsingDeprecationWarning:matplotlib\\..*",
     "ignore:In databroker 2.x, there are separate notions.*:UserWarning:databroker\\.v1",
@@ -116,6 +124,17 @@ filterwarnings = [
 markers = [
     "portable: tests that require no CHX services or facility-only dependencies",
     "mocked_facility: facility integration tests using local fakes only",
+    "data_regression: offline tests using bundled detector data and facility file readers",
     "live_facility: opt-in tests that may connect to CHX services",
 ]
 addopts = "-m 'not live_facility'"
+
+[tool.coverage.run]
+branch = true
+source = ["pyCHX"]
+
+[tool.coverage.report]
+fail_under = 16
+show_missing = true
+omit = ["pyCHX/tests/*"]
+exclude_also = ["if __name__ == .__main__.:"]

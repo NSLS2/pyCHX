@@ -44,14 +44,18 @@ def add_one_line_string(c, s, top, left=30, fontsize=11):
     c.drawString(left, top, s)
 
 
+def _image_aspect_ratio(filename):
+    with Image.open(filename) as image:
+        return float(image.size[1]) / image.size[0]
+
+
 def add_image_string(
     c, imgf, data_dir, img_left, img_top, img_height, str1_left, str1_top, str1, str2_left, str2_top, return_=False
 ):
 
     image = data_dir + imgf
     if os.path.exists(image):
-        im = Image.open(image)
-        ratio = float(im.size[1]) / im.size[0]
+        ratio = _image_aspect_ratio(image)
         height = img_height
         width = height / ratio
         # if width>400:
@@ -863,8 +867,7 @@ class create_pdf_report(object):
         # print(self.data_dir + imgf)
 
         if os.path.exists(self.data_dir + imgf):
-            im = Image.open(self.data_dir + imgf)
-            ratio = float(im.size[1]) / im.size[0]
+            ratio = _image_aspect_ratio(self.data_dir + imgf)
             img_width = 600
             img_height = img_width * ratio  # img_height
             # width = height/ratio
@@ -1109,8 +1112,7 @@ class create_pdf_report(object):
         image = self.data_dir + imgf
         if not os.path.exists(image):
             image = self.data_dir + self.g2_file
-        im = Image.open(image)
-        ratio = float(im.size[1]) / im.size[0]
+        ratio = _image_aspect_ratio(image)
         height = 300
         c.drawImage(image, 1, top, width=height / ratio, height=height, mask="auto")
         # c.drawImage( image, 1, top,  width= height/ratio,height=height, mask= None )
@@ -1127,8 +1129,7 @@ class create_pdf_report(object):
         imgf = self.q_rate_file
         image = self.data_dir + imgf
         if os.path.exists(image):
-            im = Image.open(image)
-            ratio = float(im.size[1]) / im.size[0]
+            ratio = _image_aspect_ratio(image)
             height = 180
             c.drawImage(image, 350, top, width=height / ratio, height=height, mask="auto")
 
@@ -1311,8 +1312,7 @@ class create_pdf_report(object):
         # print( self.data_dir + self.dose_file)
         if os.path.exists(self.data_dir + imgf):
             # print( self.dose_file)
-            im = Image.open(self.data_dir + imgf)
-            ratio = float(im.size[1]) / im.size[0]
+            ratio = _image_aspect_ratio(self.data_dir + imgf)
             width = img_height / ratio
             # print(width)
             if width > 450:
@@ -1534,8 +1534,7 @@ class create_pdf_report(object):
             # add xsvs fit
             imgf = self.xsvs_fit_file
             image = self.data_dir + imgf
-            im = Image.open(image)
-            ratio = float(im.size[1]) / im.size[0]
+            ratio = _image_aspect_ratio(image)
             height = 300
             c.drawImage(image, 100, top, width=height / ratio, height=height, mask=None)
             c.setFont("Helvetica", 16)
@@ -1548,8 +1547,7 @@ class create_pdf_report(object):
             # add contrast fit
             imgf = self.contrast_file
             image = self.data_dir + imgf
-            im = Image.open(image)
-            ratio = float(im.size[1]) / im.size[0]
+            ratio = _image_aspect_ratio(image)
             height = 300
             c.drawImage(image, 100, top, width=height / ratio, height=height, mask=None)
 
@@ -1866,7 +1864,10 @@ def recursively_save_dict_contents_to_group(h5file, path, dic):
         ):  # removed depreciated np.float LW @06/11/2023
             # print( 'here' )
             h5file[path + key] = item
-            if not h5file[path + key].value == item:
+            stored = h5file[path + key][()]
+            if isinstance(item, str) and isinstance(stored, bytes):
+                stored = stored.decode()
+            if not stored == item:
                 raise ValueError("The data representation in the HDF5 file does not match the original dict.")
         # save numpy arrays
         elif isinstance(item, np.ndarray):
@@ -1875,7 +1876,7 @@ def recursively_save_dict_contents_to_group(h5file, path, dic):
             except Exception:
                 item = np.array(item).astype("|S9")
                 h5file[path + key] = item
-            if not np.array_equal(h5file[path + key].value, item):
+            if not np.array_equal(h5file[path + key][()], item):
                 raise ValueError("The data representation in the HDF5 file does not match the original dict.")
         # save dictionaries
         elif isinstance(item, dict):
@@ -1891,7 +1892,10 @@ def recursively_load_dict_contents_from_group(h5file, path):
     ans = {}
     for key, item in h5file[path].items():
         if isinstance(item, h5py._hl.dataset.Dataset):
-            ans[key] = item.value
+            value = item[()]
+            if isinstance(value, bytes):
+                value = value.decode()
+            ans[key] = value
         elif isinstance(item, h5py._hl.group.Group):
             ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + "/")
     return ans

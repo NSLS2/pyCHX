@@ -19,6 +19,7 @@ from skbeam.core.accumulators.binned_statistic import BinnedStatistic1D, BinnedS
 
 from pyCHX.chx_compress import Multifile, compress_eigerdata, get_avg_imgc
 from pyCHX.chx_correlationc import cal_g2c
+from pyCHX.chx_correlationp import cal_g2p
 from pyCHX.chx_generic_functions import (
     apply_mask,
     cal_g2,
@@ -32,6 +33,7 @@ from pyCHX.chx_generic_functions import (
 )
 from pyCHX.chx_handlers import db
 from pyCHX.chx_libs import colors, markers
+from pyCHX.config import get_compressed_data_dir
 
 
 def get_gisaxs_roi2(qr_edge, qz_edge, qr_map, qz_map, mask=None, qval_dict=None):
@@ -339,9 +341,7 @@ def get_t_qrc(FD, frame_edge, Qr, Qz, qr, qz, mask=None, path=None, uid=None, sa
     qrt_pds.columns = columns
     if save:
         if path is None:
-            path = setup_pargs["path"]
-        if uid is None:
-            uid = setup_pargs["uid"]
+            path = ""
         filename = os.path.join(path, "%s_qrt_pds.csv" % (uid))
         qrt_pds.to_csv(filename)
         print("The qr~time is saved in %s with filename as %s_qrt_pds.csv" % (path, uid))
@@ -414,6 +414,9 @@ def plot_t_qrc(qr_1d, frame_edge, save=False, pargs=None, fontsize=8, *argv, **k
 
     """
 
+    if pargs is None:
+        pargs = {}
+
     fig, ax = plt.subplots(figsize=(8, 6))
     Nt = qr_1d.shape[1]
     q = qr_1d[:, 0]
@@ -430,20 +433,20 @@ def plot_t_qrc(qr_1d, frame_edge, save=False, pargs=None, fontsize=8, *argv, **k
         ax.set_ylim(kwargs["ylim"])
 
     ax.legend(loc="best", fontsize=fontsize)
-    uid = pargs["uid"]
+    uid = pargs.get("uid", "uid")
     title = ax.set_title("uid= %s--t~I(q)" % uid)
     title.set_y(1.01)
     if save:
         # dt =datetime.now()
         # CurTime = '%s%02d%02d-%02d%02d-' % (dt.year, dt.month, dt.day,dt.hour,dt.minute)
-        path = pargs["path"]
-        uid = pargs["uid"]
+        path = pargs.get("path", "")
+        uid = pargs.get("uid", "uid")
         # fp = path + 'uid= %s--Iq~t-'%uid + CurTime + '.png'
         fp = path + "uid=%s--Iq-t-" % uid + ".png"
         fig.savefig(fp, dpi=fig.dpi)
 
         save_arrays(
-            np.vstack([q, np.array(iqs)]).T,
+            np.asarray(qr_1d),
             label=["q_A-1"] + ["Fram-%s-%s" % (t[0], t[1]) for t in frame_edge],
             filename="uid=%s-q-Iqt" % uid,
             path=path,
@@ -458,14 +461,14 @@ def plot_t_qrc(qr_1d, frame_edge, save=False, pargs=None, fontsize=8, *argv, **k
 def make_gisaxs_grid(qr_w=10, qz_w=12, dim_r=100, dim_z=120):
     """Dec 16, 2015, Y.G.@CHX"""
     y, x = np.indices([dim_z, dim_r])
-    Nr = int(dim_r / qp_w)
+    Nr = int(dim_r / qr_w)
     Nz = int(dim_z / qz_w)
     _ = Nr * Nz
 
     ind = 1
-    for i in range(0, Nr):
-        for j in range(0, Nz):
-            y[qr_w * i : qr_w * (i + 1), qz_w * j : qz_w * (j + 1)] = ind
+    for j in range(0, Nz):
+        for i in range(0, Nr):
+            y[qz_w * j : qz_w * (j + 1), qr_w * i : qr_w * (i + 1)] = ind
             ind += 1
     return y
 
@@ -512,7 +515,7 @@ def convert_Qmap(img, qx_map, qy_map=None, bins=None, rangeq=None, mask=None, st
     return remesh_data, xbins, ybins
 
 
-def get_refl_xy(inc_ang, inc_phi, inc_x0, inc_y0, pixelsize=[0.075, 0.075], Lsd=5000):
+def get_refl_xy(inc_ang, inc_phi, inc_x0, inc_y0, pixelsize=(0.075, 0.075), Lsd=5000):
     """
     Input:
         inc_angle: deg,
@@ -532,7 +535,7 @@ def get_refl_xy(inc_ang, inc_phi, inc_x0, inc_y0, pixelsize=[0.075, 0.075], Lsd=
 
 
 def get_alphaf_thetaf(
-    inc_x0, inc_y0, inc_ang, inc_phi=0, pixelsize=[0.075, 0.075], Lsd=5000, dimx=2070.0, dimy=2167.0
+    inc_x0, inc_y0, inc_ang, inc_phi=0, pixelsize=(0.075, 0.075), Lsd=5000, dimx=2070.0, dimy=2167.0
 ):
     """Nov 19, 2018@SMI to get alphaf and thetaf for gi scattering
     Input:
@@ -589,7 +592,7 @@ def convert_gisaxs_pixel_to_q2(
     return qx * pref, qy * pref, qr * pref, qz * pref
 
 
-def get_incident_angles(inc_x0, inc_y0, refl_x0, refl_y0, pixelsize=[75, 75], Lsd=5.0):
+def get_incident_angles(inc_x0, inc_y0, refl_x0, refl_y0, pixelsize=(75, 75), Lsd=5.0):
     """
     Dec 16, 2015, Y.G.@CHX
     giving: incident beam center: bcenx,bceny
@@ -610,7 +613,7 @@ def get_incident_angles(inc_x0, inc_y0, refl_x0, refl_y0, pixelsize=[75, 75], Ls
 
 
 def get_reflected_angles(
-    inc_x0, inc_y0, refl_x0, refl_y0, thetai=0.0, pixelsize=[75, 75], Lsd=5.0, dimx=2070.0, dimy=2167.0
+    inc_x0, inc_y0, refl_x0, refl_y0, thetai=0.0, pixelsize=(75, 75), Lsd=5.0, dimx=2070.0, dimy=2167.0
 ):
     """Dec 16, 2015, Y.G.@CHX
     giving: incident beam center: bcenx,bceny
@@ -636,7 +639,7 @@ def get_reflected_angles(
 
 
 def convert_gisaxs_pixel_to_q(
-    inc_x0, inc_y0, refl_x0, refl_y0, pixelsize=[75, 75], Lsd=5.0, dimx=2070.0, dimy=2167.0, thetai=0.0, lamda=1.0
+    inc_x0, inc_y0, refl_x0, refl_y0, pixelsize=(75, 75), Lsd=5.0, dimx=2070.0, dimy=2167.0, thetai=0.0, lamda=1.0
 ):
     """
     Dec 16, 2015, Y.G.@CHX
@@ -1966,6 +1969,13 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
     alpha = np.zeros(num_rings)  # alpha
     baseline = np.zeros(num_rings)  # baseline
 
+    if "fit_variables" in kwargs:
+        additional_var = kwargs["fit_variables"]
+        # print ( additional_var   )
+        _vars = [k for k in list(additional_var.keys()) if additional_var[k] is False]
+    else:
+        _vars = []
+
     if function == "simple_exponential" or function == "simple":
         _vars = np.unique(_vars + ["alpha"])
         mod = Model(stretched_auto_corr_scat_factor)  # ,  independent_vars= list( _vars)   )
@@ -1974,10 +1984,7 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
         mod = Model(stretched_auto_corr_scat_factor)  # ,  independent_vars=  _vars)
 
     else:
-        print(
-            "The %s is not supported.The supported functions include simple_exponential and stretched_exponential"
-            % function
-        )
+        raise ValueError(f"{function} is not supported; use 'simple_exponential' or 'stretched_exponential'")
 
     # mod.set_param_hint( 'beta', value = 0.05 )
     # mod.set_param_hint( 'alpha', value = 1.0 )
@@ -1987,13 +1994,6 @@ def fit_gisaxs_g2(g2, res_pargs, function="simple_exponential", one_plot=False, 
     mod.set_param_hint("beta", min=0.0)
     mod.set_param_hint("alpha", min=0.0)
     mod.set_param_hint("relaxation_rate", min=0.0)
-
-    if "fit_variables" in kwargs:
-        additional_var = kwargs["fit_variables"]
-        # print ( additional_var   )
-        _vars = [k for k in list(additional_var.keys()) if additional_var[k] is False]
-    else:
-        _vars = []
 
     if "guess_values" in kwargs:
         if "beta" in list(kwargs["guess_values"].keys()):
@@ -2240,7 +2240,7 @@ def fit_qr_qz_rate(qr, qz, rate, plot_=True, *argv, **kwargs):
                 Otherwise, power is variable.
     """
     power_variable = False
-    x = qr
+    x = np.asarray(qr)
     if "fit_range" in kwargs.keys():
         fit_range = kwargs["fit_range"]
     else:
@@ -2256,14 +2256,10 @@ def fit_qr_qz_rate(qr, qz, rate, plot_=True, *argv, **kwargs):
     else:
         path = ""
 
-    if fit_range is not None:
-        y = rate[fit_range[0] : fit_range[1]]
-        x = q[fit_range[0] : fit_range[1]]
-
     mod = Model(power_func)
     # mod.set_param_hint( 'power',   min=0.5, max= 10 )
     # mod.set_param_hint( 'D0',   min=0 )
-    pars = mod.make_params(power=2, D0=1 * 10 ^ (-5))
+    pars = mod.make_params(power=2, D0=1e-5)
     if power_variable:
         pars["power"].vary = True
     else:
@@ -2275,15 +2271,23 @@ def fit_qr_qz_rate(qr, qz, rate, plot_=True, *argv, **kwargs):
     power = 2  # np.zeros( Nqz )
 
     res = []
+    fitted_rates = []
     for i, qz_ in enumerate(qz):
         try:
             y = np.array(rate["rate"][i * Nqr : (i + 1) * Nqr])
         except Exception:
             y = np.array(rate[i * Nqr : (i + 1) * Nqr])
 
+        fit_x = x
+        if fit_range is not None:
+            start, stop = fit_range
+            fit_x = x[start:stop]
+            y = y[start:stop]
+
         # print( len(x), len(y) )
-        _result = mod.fit(y, pars, x=x)
+        _result = mod.fit(y, pars, x=fit_x)
         res.append(_result)
+        fitted_rates.append(y)
         D0[i] = _result.best_values["D0"]
         # power[i] = _result.best_values['power']
         print("The fitted diffusion coefficient D0 is:  %.3e   A^2S-1" % D0[i])
@@ -2292,8 +2296,9 @@ def fit_qr_qz_rate(qr, qz, rate, plot_=True, *argv, **kwargs):
         fig, ax = plt.subplots()
         plt.title("Q%s-Rate--uid= %s_Fit" % (power, uid), fontsize=20, y=1.06)
         for i, qz_ in enumerate(qz):
-            ax.plot(x**power, y, marker="o", label=r"$q_z=%.5f$" % qz_)
-            ax.plot(x**power, res[i].best_fit, "-r")
+            fit_x = x if fit_range is None else x[slice(*fit_range)]
+            ax.plot(fit_x**power, fitted_rates[i], marker="o", label=r"$q_z=%.5f$" % qz_)
+            ax.plot(fit_x**power, res[i].best_fit, "-r")
             txts = r"$D0: %.3e$" % D0[i] + r" $A^2$" + r"$s^{-1}$"
             dy = 0.1
             ax.text(x=0.15, y=0.65 - dy * i, s=txts, fontsize=14, transform=ax.transAxes)
@@ -2522,13 +2527,14 @@ def multi_uids_gisaxs_xpcs_analysis(
             if imgs != 0:
                 _ = len(imgs)
                 md_ = imgs.md
+                timeperframe = md["frame_time"]
                 useful_uids[run_seq + 1][i] = uid
 
                 imgsr = reverse_updown(imgs)
                 _ = apply_mask(imgsr, maskr)
 
                 if compress:
-                    filename = "/XF11ID/analysis/Compressed_Data" + "/uid_%s.cmp" % uid
+                    filename = os.path.join(get_compressed_data_dir(), "uid_%s.cmp" % uid)
                     maskr, avg_imgr, imgsum, bad_frame_list = compress_eigerdata(
                         imgsr,
                         maskr,
@@ -2595,7 +2601,7 @@ def multi_uids_gisaxs_xpcs_analysis(
 
                     # good_start = check_shutter_open( imgsra,  min_inten=5, time_edge = [0,10], plot_ = False )
                     good_start = 0
-                    good_series = apply_mask(imgsar[good_start:], maskr)
+                    good_series = apply_mask(imgsr[good_start:], maskr)
                     imgsum, bad_frame_list = get_each_frame_intensity(
                         good_series, sampling=sampling, bad_pixel_threshold=1.2e8, plot_=False, uid=uid
                     )
@@ -2609,7 +2615,7 @@ def multi_uids_gisaxs_xpcs_analysis(
                         good_series, box_maskr, bad_image_process, bad_frame_list, good_start, num_buf=8
                     )
                     if len(lag_steps) < len(lag_steps_):
-                        lag_steps = lag_step_
+                        lag_steps = lag_steps_
 
                 taus_ = lag_steps_ * timeperframe
                 taus = lag_steps * timeperframe

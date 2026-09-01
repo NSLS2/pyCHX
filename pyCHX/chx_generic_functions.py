@@ -160,7 +160,7 @@ def plot_xy_with_fit(
     cen_std,
     wid,
     wid_std,
-    xlim=[1e-3, 0.01],
+    xlim=(1e-3, 0.01),
     xlabel="q (" r"$\AA^{-1}$)",
     ylabel="I(q)",
     filename=None,
@@ -221,9 +221,8 @@ def append_txtfile(filename, data, fmt="%s", *argv, **kwargs):
         )
         print("create new file")
 
-    f = open(filename, "a")
-    savetxt(f, data, fmt=fmt, *argv, **kwargs)
-    f.close()
+    with open(filename, "a") as stream:
+        savetxt(stream, data, fmt=fmt, *argv, **kwargs)
 
 
 def get_roi_mask_qval_qwid_by_shift(
@@ -499,6 +498,7 @@ def plot_q_g2fitpara_general(
     qth_interest=None,
     max_plotnum_fig=1600,
     qphi_analysis=False,
+    figsize=(10, 10),
     *argv,
     **kwargs,
 ):
@@ -746,7 +746,7 @@ def plot_q_rate_general(
     if plot_index_range is not None:
         d1, d2 = plot_index_range
         d2 = min(len(x) - 1, d2)
-        ax.set_xlim((x**power)[d1], (x**power)[d2])
+        ax.set_xlim(x[d1], x[d2])
         ax.set_ylim(y[d1], y[d2])
 
     if ylim is not None:
@@ -836,9 +836,20 @@ def plot_xy_x2(
         fig.savefig(fp, dpi=fig.dpi)
 
 
+def scale_rgb(image, scale=1):
+    """Scale RGB image brightness while preserving its numeric dtype."""
+    image = np.asarray(image)
+    scaled = image.astype(float) * scale
+    if np.issubdtype(image.dtype, np.integer):
+        limits = np.iinfo(image.dtype)
+        scaled = np.clip(scaled, limits.min, limits.max)
+    return scaled.astype(image.dtype, copy=False)
+
+
 def save_oavs_tifs(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1, threshold=0):
     """save oavs as png"""
     tifs = list(db[uid].data("OAV_image"))[0]
+    md = get_meta_data(uid)
     try:
         pixel_scalebar = np.ceil(scalebar_size / md["OAV resolution um_pixel"])
     except Exception:
@@ -888,7 +899,7 @@ def save_oavs_tifs(uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1
 
 
 def save_oavs_tifs_v2(
-    uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1, threshold=0, cross=[685, 440, 50]
+    uid, data_dir, brightness_scale=1, scalebar_size=100, scale=1, threshold=0, cross=(685, 440, 50)
 ):
     """
     save OAV images collected for a uid as an 'aggregate' image that can be attached to Olog (attaching is not part
@@ -1002,7 +1013,7 @@ def evalue_array(array, verbose=True):
     return _min, _max, avg, std
 
 
-def find_good_xpcs_uids(fuids, Nlim=100, det=["4m", "1m", "500"]):
+def find_good_xpcs_uids(fuids, Nlim=100, det=("4m", "1m", "500")):
     """Y.G., Dev Nov 1, 2018 Find the good xpcs series
     Input:
         fuids: list, a list of full uids
@@ -1118,13 +1129,10 @@ def lin2log_g2(lin_tau, lin_g2, num_points=False):
 
 
 def get_eigerImage_per_file(data_fullpath):
-    f = h5py.File(data_fullpath)
-    dset_keys = list(f["/entry/data"].keys())
-    dset_keys.sort()
-    dset_root = "/entry/data"
-    dset_keys = [dset_root + "/" + dset_key for dset_key in dset_keys]
-    dset = f[dset_keys[0]]
-    return len(dset)
+    with h5py.File(data_fullpath) as handle:
+        dset_keys = sorted(handle["/entry/data"].keys())
+        dset = handle[f"/entry/data/{dset_keys[0]}"]
+        return len(dset)
 
 
 def copy_data(old_path, new_path="/tmp_data/data/"):
@@ -1164,7 +1172,7 @@ def delete_data(old_path, new_path="/tmp_data/data/"):
 
 
 def show_tif_series(
-    tif_series, Nx=None, center=None, w=50, vmin=None, vmax=None, cmap=cmap_vge_hdr, logs=False, figsize=[10, 16]
+    tif_series, Nx=None, center=None, w=50, vmin=None, vmax=None, cmap=cmap_vge_hdr, logs=False, figsize=(10, 16)
 ):
     """
     tif_series: list of 2D tiff images
@@ -1343,6 +1351,8 @@ def create_seg_ring(ring_edges, ang_edges, mask, setup_pargs):
 
     """
 
+    from pyCHX.XPCS_SAXS import combine_two_roi_mask, get_angular_mask, get_ring_mask
+
     roi_mask_qr, qr, qr_edge = get_ring_mask(
         mask,
         inner_radius=None,
@@ -1361,7 +1371,7 @@ def create_seg_ring(ring_edges, ang_edges, mask, setup_pargs):
         width=None,
         edges=np.array(ang_edges),
         num_angles=None,
-        center=center,
+        center=setup_pargs["center"],
         flow_geometry=False,
     )
 
@@ -1371,7 +1381,7 @@ def create_seg_ring(ring_edges, ang_edges, mask, setup_pargs):
     return roi_mask, qval_dict
 
 
-def find_bad_pixels_FD(bad_frame_list, FD, img_shape=[514, 1030], threshold=15, show_progress=True):
+def find_bad_pixels_FD(bad_frame_list, FD, img_shape=(514, 1030), threshold=15, show_progress=True):
     """Designed to find bad pixel list in 500K
     threshold: the max intensity in 5K
     """
@@ -1411,6 +1421,9 @@ def get_q_iq_using_dynamic_mask(FD, mask, setup_pargs, bin_number=1, threshold=1
        iq_saxs: intenstity
        q_saxs:  q in A-1
     """
+    from pyCHX.chx_compress import get_avg_imgc
+    from pyCHX.XPCS_SAXS import get_circular_average
+
     beg = FD.beg
     _ = FD.end
     _ = FD.rdframe(beg).shape
@@ -1443,7 +1456,7 @@ def get_q_iq_using_dynamic_mask(FD, mask, setup_pargs, bin_number=1, threshold=1
     return qp_saxs, iq_saxs, q_saxs
 
 
-def get_waxs_beam_center(gamma, origin=[432, 363], Ldet=1495, pixel_size=75 * 1e-3):
+def get_waxs_beam_center(gamma, origin=(432, 363), Ldet=1495, pixel_size=75 * 1e-3):
     """YG Feb 10, 2018
      Calculate beam center for WAXS geometry by giving beam center at gamma=0 and the target gamma
     Input:
@@ -1642,10 +1655,11 @@ def load_pilatus(filename):
     """Y.G. Nov 1, 2017
     Load a pilatus 2D image
     """
-    return np.array(PIL.Image.open(filename).convert("I"))
+    with PIL.Image.open(filename) as image:
+        return np.array(image.convert("I"))
 
 
-def ls_dir(inDir, have_list=[], exclude_list=[]):
+def ls_dir(inDir, have_list=(), exclude_list=()):
     """Y.G. Aug 1, 2019
     List all filenames in a filefolder
     inDir: fullpath of the inDir
@@ -2274,8 +2288,8 @@ def validate_uid_dict(uid_dict):
     """
     badn = 0
     badlist = []
-    for k in list(uids.keys()):
-        for uid in uids[k]:
+    for k in list(uid_dict.keys()):
+        for uid in uid_dict[k]:
             flag = validate_uid(uid)
             if not flag:
                 badn += 1
@@ -2297,7 +2311,7 @@ def get_mass_center_one_roi(FD, roi_mask, roi_ind):
     n = 0
     for i in tqdm(range(FD.beg, FD.end, 1), desc="Get mass center of one ROI of each frame"):
         img = FD.rdframe(i) * m
-        c = scipy.ndimage.measurements.center_of_mass(img)
+        c = scipy.ndimage.center_of_mass(img)
         cx[n], cy[n] = int(c[0]), int(c[1])
         n += 1
     return cx, cy
@@ -2350,7 +2364,7 @@ def save_current_pipeline(NOTEBOOK_FULL_PATH, outDir):
     print("This pipeline: %s is saved in %s." % (fp, outDir))
 
 
-def plot_g1(taus, g2, g2_fit_paras, qr=None, ylim=[0, 1], title=""):
+def plot_g1(taus, g2, g2_fit_paras, qr=None, ylim=(0, 1), title=""):
     """Dev Apr 19, 2017,
     Plot one-time correlation, giving taus, g2, g2_fit"""
     noqs = g2.shape[1]
@@ -2466,7 +2480,7 @@ def create_folder(base_folder, sub_folder):
     return data_dir0
 
 
-def create_user_folder(CYCLE, username=None, default_dir="/XF11ID/analysis/"):
+def create_user_folder(CYCLE, username=None, default_dir=None):
     """
     Crate a folder for saving user data analysis result
     Input:
@@ -2475,6 +2489,10 @@ def create_user_folder(CYCLE, username=None, default_dir="/XF11ID/analysis/"):
     Return:
         Created folder name
     """
+    if default_dir is None:
+        from pyCHX.config import get_analysis_root
+
+        default_dir = get_analysis_root()
     if username != "Default":
         if username is None:
             username = getpass.getuser()
@@ -2568,7 +2586,7 @@ def get_series_g2_taus(fra_max_list, acq_time=1, max_fra_num=None, log_taus=True
     return tausd
 
 
-def check_lost_metadata(md, Nimg=None, inc_x0=None, inc_y0=None, pixelsize=7.5 * 10 * (-5)):
+def check_lost_metadata(md, Nimg=None, inc_x0=None, inc_y0=None, pixelsize=7.5e-5):
     """Y.G. Dec 31, 2016, check lost metadata
 
     Parameter:
@@ -2588,7 +2606,7 @@ def check_lost_metadata(md, Nimg=None, inc_x0=None, inc_y0=None, pixelsize=7.5 *
     if "number of images" not in list(md.keys()):
         md["number of images"] = Nimg
     if "x_pixel_size" not in list(md.keys()):
-        md["x_pixel_size"] = 7.5000004e-05
+        md["x_pixel_size"] = pixelsize
     dpix = md["x_pixel_size"] * 1000.0  # in mm, eiger 4m is 0.075 mm
     try:
         lambda_ = md["wavelength"]
@@ -2653,24 +2671,23 @@ def combine_images(filenames, outputfile, outsize=(2000, 2400)):
     hsize = int(outsize[1] / ny)
     for index, file in enumerate(filenames):
         path = os.path.expanduser(file)
-        img = Image.open(path)
-        bands = img.split()
-        ratio = img.size[1] / img.size[0]  # h/w
-        if hsize > basewidth * ratio:
-            basewidth_ = basewidth
-            hsize_ = int(basewidth * ratio)
-        else:
-            basewidth_ = int(hsize / ratio)
-            hsize_ = hsize
-        # print( index, file, basewidth, hsize )
-        size = (basewidth_, hsize_)
-        bands = [b.resize(size, Image.Resampling.BILINEAR) for b in bands]
-        img = Image.merge("RGBA", bands)
-        x = index % nx * basewidth
-        y = index // nx * hsize
-        w, h = img.size
-        # print('pos {0},{1} size {2},{3}'.format(x, y, w, h))
-        result.paste(img, (x, y, x + w, y + h))
+        with Image.open(path) as source:
+            ratio = source.size[1] / source.size[0]  # h/w
+            if hsize > basewidth * ratio:
+                basewidth_ = basewidth
+                hsize_ = int(basewidth * ratio)
+            else:
+                basewidth_ = int(hsize / ratio)
+                hsize_ = hsize
+            # print( index, file, basewidth, hsize )
+            size = (basewidth_, hsize_)
+            with source.convert("RGBA") as converted:
+                with converted.resize(size, Image.Resampling.BILINEAR) as image:
+                    x = index % nx * basewidth
+                    y = index // nx * hsize
+                    w, h = image.size
+                    # print('pos {0},{1} size {2},{3}'.format(x, y, w, h))
+                    result.paste(image, (x, y, x + w, y + h))
     result.save(outputfile, quality=100, optimize=True)
     print("The combined image is saved as: %s" % outputfile)
 
@@ -2847,6 +2864,7 @@ def check_bad_data_points(
     good_end=None,
     path=None,
     return_ylim=False,
+    uid="uid",
 ):
     """
     data: 1D array
@@ -3264,7 +3282,7 @@ def create_rectangle_mask(image, xcorners, ycorners):
     return bst_mask
 
 
-def create_multi_rotated_rectangle_mask(image, center=None, length=100, width=50, angles=[0]):
+def create_multi_rotated_rectangle_mask(image, center=None, length=100, width=50, angles=(0,)):
     """Developed at July 10, 2017 by Y.G.@CHX, NSLS2
      Create multi rectangle-shaped mask by rotating a rectangle with a list of angles
      The original rectangle is defined by four corners, i.e.,
@@ -3402,7 +3420,7 @@ def generate_edge(centers, width):
 
 
 def export_scan_scalar(
-    uid, x="dcm_b", y=["xray_eye1_stats1_total"], path="/XF11ID/analysis/2016_3/commissioning/Results/"
+    uid, x="dcm_b", y=("xray_eye1_stats1_total",), path="/XF11ID/analysis/2016_3/commissioning/Results/"
 ):
     """YG. 10/17/2016
     export uid data to a txt file
@@ -3446,10 +3464,9 @@ def get_flatfield(uid, reverse=False):
     sud = get_sid_filenames(db[uid])
     master_path = "%s_master.h5" % (sud[2][0])
     print(master_path)
-    f = h5py.File(master_path, "r")
     k = "entry/instrument/detector/detectorSpecific/"  # data_collection_date'
-    d = np.array(f[k]["flatfield"])
-    f.close()
+    with h5py.File(master_path, "r") as handle:
+        d = np.array(handle[k]["flatfield"])
     if reverse:
         d = reverse_updown(d)
 
@@ -3651,8 +3668,8 @@ def load_dask_data(uid, detector, mask_path_full, reverse=False, rot90=False):
     # load pixel mask from static location
     if got_pixel_mask:
         # json_open = open(_mask_path_ + "pixel_masks/pixel_mask_compression_%s.json" % detector.split("_")[0])
-        json_open = open(mask_path_full + "pixel_mask_compression_%s.json" % det_short)
-        mask_dict = json.load(json_open)
+        with open(mask_path_full + "pixel_mask_compression_%s.json" % det_short) as stream:
+            mask_dict = json.load(stream)
         img_md["pixel_mask"] = np.array(mask_dict["pixel_mask"])
         img_md["binary_mask"] = np.array(mask_dict["binary_mask"])
         del mask_dict
@@ -4055,7 +4072,8 @@ def show_img(
     if show_colorbar:
         cbar = fig.colorbar(im, extend="neither", spacing="proportional", orientation="vertical")
         cbar.ax.tick_params(labelsize=colorbar_fontsize)
-    fig.set_tight_layout(tight)
+    if tight:
+        fig.tight_layout()
     if save:
         if show_time:
             dt = datetime.now()
@@ -4210,7 +4228,7 @@ def plot1D(
 ###
 
 
-def check_shutter_open(data_series, min_inten=0, time_edge=[0, 10], plot_=False, *argv, **kwargs):
+def check_shutter_open(data_series, min_inten=0, time_edge=(0, 10), plot_=False, *argv, **kwargs):
     """Check the first frame with shutter open
 
     Parameters
@@ -4226,6 +4244,7 @@ def check_shutter_open(data_series, min_inten=0, time_edge=[0, 10], plot_=False,
     good_start = check_shutter_open( imgsa,  min_inten=5, time_edge = [0,20], plot_ = False )
 
     """
+    uid = kwargs.get("uid", "uid")
     imgsum = np.array([np.sum(img) for img in data_series[time_edge[0] : time_edge[1] : 1]])
     if plot_:
         fig, ax = plt.subplots()
@@ -5291,7 +5310,7 @@ def stretched_flow_para_function(x, beta, relaxation_rate, alpha, flow_velocity,
 
 
 def get_g2_fit_general_two_steps(
-    g2, taus, function="simple_exponential", second_fit_range=[0, 20], sequential_fit=False, *argv, **kwargs
+    g2, taus, function="simple_exponential", second_fit_range=(0, 20), sequential_fit=False, *argv, **kwargs
 ):
     """
     Fit g2 in two steps,
@@ -5412,9 +5431,11 @@ def get_g2_fit_general(
         mod = Model(flow_para_function_with_vibration)
 
     else:
-        print(
-            "The %s is not supported.The supported functions include simple_exponential and stretched_exponential"
-            % function
+        raise ValueError(
+            f"Unsupported correlation function {function!r}. "
+            "Choose simple_exponential, stretched_exponential, "
+            "stretched_vibration, flow_para_function, "
+            "flow_para_function_explicitq, or flow_para_function_with_vibration."
         )
 
     mod.set_param_hint("baseline", min=0.5, max=2.5)
@@ -5981,8 +6002,8 @@ def plot_g2_general(
                                     ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6, label=g2_labels[ki])
                                 else:
                                     ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6)
-                            ax.set_xscale("log", nonposx="clip")
-                        if nlst == 0:
+                            ax.set_xscale("log", nonpositive="clip")
+                        if g2_labels is not None and nlst == 0:
                             if l_ind == 0:
                                 ax.legend(loc="best", fontsize=8, fancybox=True, framealpha=0.5)
 
@@ -6004,8 +6025,8 @@ def plot_g2_general(
                             ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6)
                         else:
                             ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6, label=g2_labels[ki])
-                        ax.set_xscale("log", nonposx="clip")
-                    if l_ind == 0:
+                        ax.set_xscale("log", nonpositive="clip")
+                    if g2_labels is not None and l_ind == 0:
                         ax.legend(loc="best", fontsize=8, fancybox=True, framealpha=0.5)
 
             if fit_res_ is not None:
@@ -6106,8 +6127,7 @@ def plot_g2_general(
         fps.append(fp + ".png")
         # if num_long_i <= 16:
         if num_long_i <= max_plotnum_fig:
-            fig.set_tight_layout(True)
-            # fig.tight_layout()
+            fig.tight_layout()
             # print(fig)
             try:
                 plt.savefig(fp + ".png", dpi=fig.dpi)
@@ -6117,7 +6137,7 @@ def plot_g2_general(
         else:
             fps = []
             for fn, f in enumerate(fig):
-                f.set_tight_layout(True)
+                f.tight_layout()
                 fp = path + filename + "_q_%s_%s" % (fn * 16, (fn + 1) * 16)
                 if append_name != "":
                     fp = fp + append_name
@@ -6173,7 +6193,7 @@ def get_q_rate_fit_general(qval_dict, rate, geometry="saxs", weights=None, *argv
     mod = Model(power_func)
     # mod.set_param_hint( 'power',   min=0.5, max= 10 )
     # mod.set_param_hint( 'D0',   min=0 )
-    pars = mod.make_params(power=2, D0=1 * 10 ^ (-5))
+    pars = mod.make_params(power=2, D0=1e-5)
     if power_variable:
         pars["power"].vary = True
     else:

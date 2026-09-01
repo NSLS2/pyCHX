@@ -445,7 +445,7 @@ def _init_state_one_time(num_levels, num_bufs, labels, cal_error=False):
 
 def fill_pixel(p, v, pixelist):
     fra_pix = np.zeros_like(pixelist)
-    fra_pix[np.in1d(pixelist, p)] = v[np.in1d(p, pixelist)]
+    fra_pix[np.isin(pixelist, p)] = v[np.isin(p, pixelist)]
     return fra_pix
 
 
@@ -1297,11 +1297,12 @@ def one_time_from_two_time(two_time_corr):
         shape (number of labels(ROI's), number of frames)
     """
 
-    one_time_corr = np.zeros((two_time_corr.shape[0], two_time_corr.shape[2]))
-    for g in two_time_corr:
-        for j in range(two_time_corr.shape[2]):
-            one_time_corr[:, j] = np.trace(g, offset=j) / two_time_corr.shape[2]
-    return one_time_corr
+    return np.asarray(
+        [
+            [np.mean(np.diag(correlation, k=lag)) for lag in range(correlation.shape[0])]
+            for correlation in two_time_corr
+        ]
+    )
 
 
 def cal_c12c(FD, ring_mask, bad_frame_list=None, good_start=0, num_buf=8, num_lev=None, imgsum=None, norm=None):
@@ -1319,7 +1320,7 @@ def cal_c12c(FD, ring_mask, bad_frame_list=None, good_start=0, num_buf=8, num_le
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
             print("Bad frame involved and will be precessed!")
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            noframes -= len(np.where(np.isin(bad_frame_list, range(good_start, FD.end)))[0])
     print("%s frames will be processed..." % (noframes))
 
     c12, lag_steps, state = multi_tau_two_time_auto_corr(
@@ -1332,7 +1333,7 @@ def cal_c12c(FD, ring_mask, bad_frame_list=None, good_start=0, num_buf=8, num_le
     c12_ = np.zeros([n, n, m])
     for i in range(m):
         c12_[:, :, i] = c12[i]
-    return c12_, lag_steps
+    return c12_, lag_steps[lag_steps < noframes]
 
 
 def cal_g2c(
@@ -1360,7 +1361,7 @@ def cal_g2c(
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
             print("Bad frame involved and will be precessed!")
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            noframes -= len(np.where(np.isin(bad_frame_list, range(good_start, FD.end)))[0])
 
     print("%s frames will be processed..." % (noframes))
     if cal_error:
@@ -1371,12 +1372,12 @@ def cal_g2c(
         g2 = np.zeros_like(s.G)
         g2_err = np.zeros_like(g2)
         qind, pixelist = extract_label_indices(ring_mask)
-        noqs = len(np.unique(qind))
-        nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+        roi_labels = np.unique(qind)
+        nopr = np.array([np.count_nonzero(qind == label) for label in roi_labels])
         Ntau, Nq = s.G.shape
         g_max = 1e30
-        for qi in range(1, 1 + Nq):
-            pixelist_qi = np.where(qind == qi)[0]
+        for column, label in enumerate(roi_labels):
+            pixelist_qi = np.where(qind == label)[0]
             s_Gall_qi = s.G_all[:, pixelist_qi]
             s_Pall_qi = s.past_intensity_all[:, pixelist_qi]
             s_Fall_qi = s.future_intensity_all[:, pixelist_qi]
@@ -1399,8 +1400,8 @@ def cal_g2c(
             # print(g_max)
             # g2_ = (s.G[:g_max] / (s.past_intensity[:g_max] *
             #                             s.future_intensity[:g_max]))
-            g2[:g_max, qi - 1] = avgGi[:g_max] / (avgPi[:g_max] * avgFi[:g_max])
-            g2_err[:g_max, qi - 1] = np.sqrt(
+            g2[:g_max, column] = avgGi[:g_max] / (avgPi[:g_max] * avgFi[:g_max])
+            g2_err[:g_max, column] = np.sqrt(
                 (1 / (avgFi[:g_max] * avgPi[:g_max])) ** 2 * devGi[:g_max] ** 2
                 + (avgGi[:g_max] / (avgFi[:g_max] ** 2 * avgPi[:g_max])) ** 2 * devFi[:g_max] ** 2
                 + (avgGi[:g_max] / (avgFi[:g_max] * avgPi[:g_max] ** 2)) ** 2 * devPi[:g_max] ** 2
@@ -1653,6 +1654,23 @@ class Get_Pixel_Arrayc(object):
         return data_array
 
 
+def _select_two_time_rois(rois, index):
+    """Return flattened ROI labels, selected labels, and their pixel counts."""
+    qind, _ = roi.extract_label_indices(rois)
+    roi_labels = np.unique(qind)
+    if index is None:
+        selected_labels = roi_labels
+    else:
+        selected_labels = np.atleast_1d(index)
+        missing_labels = np.setdiff1d(selected_labels, roi_labels)
+        if missing_labels.size:
+            raise ValueError(f"ROI labels not present in rois: {missing_labels.tolist()}")
+    if selected_labels.size == 0:
+        raise ValueError("rois contains no positive ROI labels")
+    pixel_counts = np.array([np.count_nonzero(qind == label) for label in selected_labels])
+    return qind, selected_labels, pixel_counts
+
+
 def auto_two_Arrayc(data_pixel, rois, index=None):
     """
     Dec 16, 2015, Y.G.@CHX
@@ -1675,21 +1693,8 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
         g12 = auto_two_Array( imgsr, ring_mask, data_pixel = data_pixel )
     """
 
-    qind, pixelist = roi.extract_label_indices(rois)
-    noqs = len(np.unique(qind))
-    nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+    qind, qlist, nopr = _select_two_time_rois(rois, index)
     noframes = data_pixel.shape[0]
-
-    if index is None:
-        index = np.arange(1, noqs + 1)
-    else:
-        try:
-            len(index)
-            index = np.array(index)
-        except TypeError:
-            index = np.array([index])
-        # print( index )
-    qlist = np.arange(1, noqs + 1)[index - 1]
     # print( qlist )
     try:
         g12b = np.zeros([noframes, noframes, len(qlist)])
@@ -1702,8 +1707,7 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
         DO = False
 
     if DO:
-        i = 0
-        for qi in tqdm(qlist):
+        for i, qi in enumerate(tqdm(qlist)):
             # print (qi-1)
             pixelist_qi = np.where(qind == qi)[0]
             # print (pixelist_qi.shape,  data_pixel[qi].shape)
@@ -1712,8 +1716,7 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
             sum2 = sum1.T
             # print( qi, qlist, )
             # print( g12b[:,:,qi -1 ] )
-            g12b[:, :, i] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[qi - 1]
-            i += 1
+            g12b[:, :, i] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[i]
         return g12b
 
 
@@ -1742,21 +1745,8 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
         g12 = auto_two_Array( imgsr, ring_mask, data_pixel = data_pixel )
     """
 
-    qind, pixelist = roi.extract_label_indices(rois)
-    noqs = len(np.unique(qind))
-    nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+    qind, qlist, nopr = _select_two_time_rois(rois, index)
     noframes = data_pixel.shape[0]
-
-    if index is None:
-        index = np.arange(1, noqs + 1)
-    else:
-        try:
-            len(index)
-            index = np.array(index)
-        except TypeError:
-            index = np.array([index])
-        # print( index )
-    qlist = np.arange(1, noqs + 1)[index - 1]
     # print( qlist )
     try:
         g12b = np.zeros([noframes, noframes, len(qlist)])
@@ -1768,8 +1758,7 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
         """TO be done here  """
         DO = False
     if DO:
-        i = 0
-        for qi in tqdm(qlist):
+        for i, qi in enumerate(tqdm(qlist)):
             pixelist_qi = np.where(qind == qi)[0]
             data_pixel_qi = data_pixel[:, pixelist_qi]
             if norm is not None:
@@ -1779,8 +1768,7 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
             else:
                 sum1 = 1
                 sum2 = 1
-            g12b[:, :, i] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[qi - 1]
-            i += 1
+            g12b[:, :, i] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[i]
         return g12b
 
 
@@ -1807,21 +1795,8 @@ def two_time_norm(data_pixel, rois, index=None):
         g12 = auto_two_Array( imgsr, ring_mask, data_pixel = data_pixel )
     """
 
-    qind, pixelist = roi.extract_label_indices(rois)
-    noqs = len(np.unique(qind))
-    _ = np.bincount(qind, minlength=(noqs + 1))[1:]
+    qind, qlist, _ = _select_two_time_rois(rois, index)
     noframes = data_pixel.shape[0]
-
-    if index is None:
-        index = np.arange(1, noqs + 1)
-    else:
-        try:
-            len(index)
-            index = np.array(index)
-        except TypeError:
-            index = np.array([index])
-        # print( index )
-    qlist = np.arange(1, noqs + 1)[index - 1]
     # print( qlist )
     try:
         norm = np.zeros(len(qlist))
@@ -1834,8 +1809,7 @@ def two_time_norm(data_pixel, rois, index=None):
         DO = False
 
     if DO:
-        i = 0
-        for qi in tqdm(qlist):
+        for i, qi in enumerate(tqdm(qlist)):
             # print (qi-1)
             pixelist_qi = np.where(qind == qi)[0]
             # print (pixelist_qi.shape,  data_pixel[qi].shape)
@@ -1846,7 +1820,6 @@ def two_time_norm(data_pixel, rois, index=None):
             # print( qi, qlist, )
             # print( g12b[:,:,qi -1 ] )
             # g12b[:,:, i  ] = np.dot(   data_pixel_qi, data_pixel_qi.T)  /sum1  / sum2  / nopr[qi -1]
-            i += 1
         return norm
 
 

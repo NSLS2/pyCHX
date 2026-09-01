@@ -10,7 +10,6 @@ from __future__ import absolute_import, division, print_function
 import logging
 import os
 from datetime import datetime
-from multiprocessing import Pool
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,7 +20,7 @@ from skbeam.core import roi
 from skbeam.core.utils import bin_edges_to_centers, geometric_series
 from tqdm import tqdm
 
-from pyCHX.chx_compress import apply_async, pass_FD
+from pyCHX.chx_compress import _collect_pool_results, _make_pool, apply_async, pass_FD
 from pyCHX.chx_generic_functions import trans_data_to_pd
 
 logger = logging.getLogger(__name__)
@@ -142,17 +141,19 @@ def xsvsp_single(
     number_of_img = noframes
     for i in range(FD.beg, FD.end):
         pass_FD(FD, i)
-    label_arrays = [np.array(label_array == i, dtype=np.int64) for i in np.unique(label_array)[1:]]
+    roi_labels = np.unique(label_array)
+    roi_labels = roi_labels[roi_labels > 0]
+    label_arrays = [np.array(label_array == label, dtype=np.int64) for label in roi_labels]
     qind, pixelist = roi.extract_label_indices(label_array)
     if norm is not None:
         norms = [
-            norm[np.in1d(pixelist, roi.extract_label_indices(np.array(label_array == i, dtype=np.int64))[1])]
-            for i in np.unique(label_array)[1:]
+            norm[np.isin(pixelist, roi.extract_label_indices(np.array(label_array == i, dtype=np.int64))[1])]
+            for i in roi_labels
         ]
 
     inputs = range(len(label_arrays))
 
-    pool = Pool(processes=len(inputs))
+    pool = _make_pool(len(inputs))
     print("Starting assign the tasks...")
     results = {}
     progress_bar = False
@@ -196,10 +197,8 @@ def xsvsp_single(
                     progress_bar,
                 ),
             )
-    pool.close()
-
     print("Starting running the tasks...")
-    res = [results[k].get() for k in tqdm(list(sorted(results.keys())))]
+    res = _collect_pool_results(pool, results, show_progress=True)
 
     u_labels = list(np.unique(qind))
     num_roi = len(u_labels)
@@ -1096,8 +1095,8 @@ def plot_xsvs_fit(
     KL_val,
     K_mean,
     spec_std=None,
-    xlim=[0, 15],
-    vlim=[0.9, 1],
+    xlim=(0, 15),
+    vlim=(0.9, 1),
     q_ring_center=None,
     max_bins=None,
     uid="uid",
@@ -1108,7 +1107,7 @@ def plot_xsvs_fit(
     logy=True,
     spec_bins=None,
     lag_steps=None,
-    figsize=[10, 10],
+    figsize=(10, 10),
 ):
     """
     Plot visibility with fit
@@ -1359,11 +1358,11 @@ def plot_g2_contrast(
     taus,
     q_ring_center=None,
     uid=None,
-    vlim=[0.8, 1.2],
+    vlim=(0.8, 1.2),
     qth=None,
     path=None,
     legend_size=16,
-    figsize=[10, 10],
+    figsize=(10, 10),
 ):
     nq, nt = contrast_factorL.shape
 
@@ -1669,7 +1668,7 @@ def diff_mot_con_factor(times, relaxation_rate, contrast_factor, cf_baseline=0):
     return contrast_factor * co_eff + cf_baseline
 
 
-def plot_sxvs(Knorm_bin_edges, spe_cts_all, uid=None, q_ring_center=None, xlim=[0, 3.5], time_steps=None):
+def plot_sxvs(Knorm_bin_edges, spe_cts_all, uid=None, q_ring_center=None, xlim=(0, 3.5), time_steps=None):
     """a convinent function to plot sxvs results"""
     num_rings = spe_cts_all.shape[1]
     num_times = Knorm_bin_edges.shape[0]
@@ -1709,7 +1708,7 @@ def fit_xsvs1(
     threshold=1e-7,
     uid=None,
     q_ring_center=None,
-    xlim=[0, 3.5],
+    xlim=(0, 3.5),
     ylim=None,
     time_steps=None,
 ):

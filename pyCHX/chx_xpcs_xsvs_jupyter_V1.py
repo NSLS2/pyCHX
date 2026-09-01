@@ -10,7 +10,7 @@ import pandas as pds
 import skbeam.core.roi as roi
 from skbeam.core.utils import multi_tau_lags
 
-from pyCHX.chx_compress import Multifile, compress_eigerdata, get_avg_imgc
+from pyCHX.chx_compress import Multifile, compress_eigerdata
 from pyCHX.chx_compress_analysis import (
     cal_each_ring_mean_intensityc,
     cal_waterfallc,
@@ -35,7 +35,6 @@ from pyCHX.chx_generic_functions import (
     get_sid_filenames,
     load_data,
     load_mask,
-    mask_exclude_badpixel,
     plot1D,
     plot_g2_general,
     plot_q_rate_fit_general,
@@ -64,6 +63,7 @@ from pyCHX.chx_specklecp import (
     save_KM,
     xsvsp,
 )
+from pyCHX.config import get_analysis_root, get_compressed_data_dir
 from pyCHX.Create_Report import export_xpcs_results_to_h5, extract_xpcs_results_from_h5, make_pdf_report
 from pyCHX.SAXS import fit_form_factor, show_saxs_qmap
 from pyCHX.Two_Time_Correlation_Function import get_four_time_from_two_time, get_one_time_from_two_time, show_C12
@@ -115,7 +115,7 @@ def get_t_iqc_uids(uid_list, setup_pargs, slice_num=10, slice_width=1):
         luid = md["uid"]
         timeperframe = md["cam_acquire_period"]
         N = md["cam_num_images"]
-        filename = "/XF11ID/analysis/Compressed_Data" + "/uid_%s.cmp" % luid
+        filename = os.path.join(get_compressed_data_dir(), "uid_%s.cmp" % luid)
         good_start = 5
         FD = Multifile(filename, good_start, N)
         Nimg = FD.end - FD.beg
@@ -227,6 +227,17 @@ def plot_entries_from_csvlist(
         d = pds.read_csv(inDiru + fp)
         # print(d)
 
+        if isinstance(yshift, (list, tuple, np.ndarray)):
+            yshift_ = yshift[i]
+            ii = i + 1
+        else:
+            yshift_ = yshift
+            ii = i
+        if isinstance(ymulti, (list, tuple, np.ndarray)):
+            ymulti_ = ymulti[i]
+        else:
+            ymulti_ = ymulti
+
         if key == "g2":
             taus = d["tau"][1:]
             col = d.columns[qth + 1]
@@ -236,12 +247,6 @@ def plot_entries_from_csvlist(
                 leg = u
             else:
                 leg = "uid=%s-->" % u + legend[i]
-            if isinstance(yshift, list):
-                yshift_ = yshift[i]
-                ii = i + 1
-            else:
-                yshift_ = yshift
-                ii = i
             plot1D(
                 x=taus,
                 y=y + yshift_ * ii,
@@ -257,9 +262,9 @@ def plot_entries_from_csvlist(
             title = "Q = %s" % (col)
             ax.set_title(title)
         elif key == "imgsum":
-            y = total_res[key]
+            y = d[key]
             plot1D(
-                y=d + yshift_ * ii,
+                y=y + yshift_ * ii,
                 c=colors[i],
                 m=markers[i],
                 ax=ax,
@@ -270,11 +275,11 @@ def plot_entries_from_csvlist(
             )
 
         elif key == "iq":
-            x = total_res["q_saxs"]
-            y = total_res["iq_saxs"]
+            x = d["q_saxs"]
+            y = d["iq_saxs"]
             plot1D(
                 x=x,
-                y=y * ymulti[i] + yshift_ * ii,
+                y=y * ymulti_ + yshift_ * ii,
                 c=colors[i],
                 m=markers[i],
                 ax=ax,
@@ -286,10 +291,10 @@ def plot_entries_from_csvlist(
             )
 
         else:
-            d = total_res[key][:, qth]
+            values = d[key] if key in d else d.iloc[:, qth + 1]
             plot1D(
-                x=np.arange(len(d)),
-                y=d + yshift_ * ii,
+                x=np.arange(len(values)),
+                y=values + yshift_ * ii,
                 c=colors[i],
                 m=markers[i],
                 ax=ax,
@@ -494,7 +499,7 @@ def get_iq_from_uids(uids, mask, setup_pargs):
             md.update(imgs.md)
             Nimg = len(imgs)
             if Nimg != 1:
-                filename = "/XF11ID/analysis/Compressed_Data" + "/uid_%s.cmp" % sud[1]
+                filename = os.path.join(get_compressed_data_dir(), "uid_%s.cmp" % sud[1])
                 mask0, avg_img, imgsum, bad_frame_list = compress_eigerdata(
                     imgs,
                     mask,
@@ -779,16 +784,12 @@ def compress_multi_uids(
                 mask = mask_dict[md["detector"]]
                 print("The detecotr is: %s" % md["detector"])
             md.update(imgs.md)
-            if not use_local_disk:
-                cmp_path = "/nsls2/xf11id1/analysis/Compressed_Data"
-            else:
-                cmp_path = "/tmp_data/compressed"
-            cmp_path = "/nsls2/xf11id1/analysis/Compressed_Data"
+            cmp_path = get_compressed_data_dir(local=use_local_disk)
             if bin_frame_number == 1:
-                cmp_file = "/uid_%s.cmp" % md["uid"]
+                cmp_file = "uid_%s.cmp" % md["uid"]
             else:
-                cmp_file = "/uid_%s_bined--%s.cmp" % (md["uid"], bin_frame_number)
-            filename = cmp_path + cmp_file
+                cmp_file = "uid_%s_bined--%s.cmp" % (md["uid"], bin_frame_number)
+            filename = os.path.join(cmp_path, cmp_file)
             mask, avg_img, imgsum, bad_frame_list = compress_eigerdata(
                 imgs,
                 mask,
@@ -857,11 +858,11 @@ def get_two_time_mulit_uids(
         N = len(imgs)
         # print( N )
         if compress_path is None:
-            compress_path = "/XF11ID/analysis/Compressed_Data/"
+            compress_path = get_compressed_data_dir()
         if bin_frame_number == 1:
-            filename = "%s" % compress_path + "uid_%s.cmp" % md["uid"]
+            filename = os.path.join(compress_path, "uid_%s.cmp" % md["uid"])
         else:
-            filename = "%s" % compress_path + "uid_%s_bined--%s.cmp" % (md["uid"], bin_frame_number)
+            filename = os.path.join(compress_path, "uid_%s_bined--%s.cmp" % (md["uid"], bin_frame_number))
 
         FD = Multifile(filename, 0, N // bin_frame_number)
         # print( FD.beg, FD.end)
@@ -1073,7 +1074,7 @@ def plot_dose_g2(
     g2_uids,
     qval_dict,
     qth_interest=None,
-    ylim=[0.95, 1.05],
+    ylim=(0.95, 1.05),
     vshift=0.1,
     fit_res=None,
     geometry="saxs",
@@ -1315,7 +1316,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
     except Exception:
         username = getpass.getuser()
 
-    data_dir0 = os.path.join("/XF11ID/analysis/", CYCLE, username, "Results/")
+    data_dir0 = os.path.join(get_analysis_root(), CYCLE, username, "Results/")
     os.makedirs(data_dir0, exist_ok=True)
     print("Results from this analysis will be stashed in the directory %s" % data_dir0)
     # uid = (sys.argv)[1]
@@ -1344,10 +1345,12 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
     # print(  inc_x0, inc_y0 )
 
     if md["detector"] == "eiger1m_single_image":
-        Chip_Mask = np.load("/XF11ID/analysis/2017_1/masks/Eiger1M_Chip_Mask.npy")
+        Chip_Mask = np.load(os.path.join(get_analysis_root(), "2017_1/masks/Eiger1M_Chip_Mask.npy"))
     elif md["detector"] == "eiger4m_single_image" or md["detector"] == "image":
-        Chip_Mask = np.array(np.load("/XF11ID/analysis/2017_1/masks/Eiger4M_chip_mask.npy"), dtype=bool)
-        BadPix = np.load("/XF11ID/analysis/2018_1/BadPix_4M.npy")
+        Chip_Mask = np.array(
+            np.load(os.path.join(get_analysis_root(), "2017_1/masks/Eiger4M_chip_mask.npy")), dtype=bool
+        )
+        BadPix = np.load(os.path.join(get_analysis_root(), "2018_1/BadPix_4M.npy"))
         Chip_Mask.ravel()[BadPix] = 0
     elif md["detector"] == "eiger500K_single_image":
         Chip_Mask = 1  # to be defined the chip mask
@@ -1381,7 +1384,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
         )
     # Overwrite Some Metadata if Wrong Input
     dpix, lambda_, Ldet, exposuretime, timeperframe, center = check_lost_metadata(
-        md, Nimg, inc_x0=inc_x0, inc_y0=inc_y0, pixelsize=7.5 * 10 * (-5)
+        md, Nimg, inc_x0=inc_x0, inc_y0=inc_y0, pixelsize=7.5e-5
     )
 
     print("The beam center is: %s" % center)
@@ -1446,7 +1449,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
         print("Will " + "Always " + ["NOT", "DO"][compress] + " apply compress process.")
         # good_start = 5  #make the good_start at least 0
         t0 = time.time()
-        filename = "/XF11ID/analysis/Compressed_Data" + "/uid_%s.cmp" % md["uid"]
+        filename = os.path.join(get_compressed_data_dir(), "uid_%s.cmp" % md["uid"])
         mask, avg_img, imgsum, bad_frame_list = compress_eigerdata(
             imgs,
             mask,
@@ -1491,11 +1494,6 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             path=data_dir,
         )
         print("The bad frame list length is: %s" % len(bad_frame_list))
-
-        # Creat new mask by masking the bad pixels and get new avg_img
-        if False:
-            mask = mask_exclude_badpixel(bp, mask, md["uid"])
-            avg_img = get_avg_imgc(FD, sampling=1, bad_frame_list=bad_frame_list)
 
         show_img(
             avg_img,
@@ -1563,7 +1561,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                     iq_saxs,
                     guess_values={"radius": 2500, "sigma": 0.05, "delta_rho": 1e-10},
                     fit_range=[0.0001, 0.015],
-                    fit_variables={"radius": T, "sigma": T, "delta_rho": T},
+                    fit_variables={"radius": True, "sigma": True, "delta_rho": True},
                     res_pargs=setup_pargs,
                     xlim=[0.0001, 0.015],
                 )
@@ -1736,7 +1734,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                     g2,
                     taus,
                     function=fit_g2_func,
-                    vlim=[0.95, 1.05],
+                    vlim=(0.95, 1.05),
                     fit_range=None,
                     fit_variables=g2_fit_variables,
                     guess_values=g2_guess_values,
@@ -2136,12 +2134,12 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
 
             run_xsvs_all_lags = False
             if run_xsvs_all_lags:
-                times_xsvs = exposuretime + lag_steps * acquisition_period
+                times_xsvs = exposuretime + lag_steps * timeperframe
                 if data_pixel is None:
                     data_pixel = Get_Pixel_Arrayc(FD, pixelist, norm=norm).get_data()
                 t0 = time.time()
                 spec_bins, spec_his, spec_std, spec_kmean = get_binned_his_std(
-                    data_pixel, np.int_(ro_mask), lag_steps
+                    data_pixel, np.int_(roi_mask), lag_steps
                 )
                 run_time(t0)
             spec_pds = save_bin_his_std(
@@ -2250,7 +2248,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             md["beam_refl_center_x"] = refl_x0
             md["beam_refl_center_y"] = refl_y0
 
-        elif scat_geometry == "saxs" or "gi_waxs":
+        elif scat_geometry in {"saxs", "gi_waxs"}:
             md["qr"] = qr
             # md['qr_edge'] = qr_edge
             md["qval_dict"] = qval_dict
@@ -2389,7 +2387,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
         # extract_dict = extract_xpcs_results_from_h5( filename = 'uid=%s_Res.h5'%md['uid'], import_dir = data_dir
         # )
         # Creat PDF Report
-        pdf_out_dir = os.path.join("/XF11ID/analysis/", CYCLE, username, "Results/")
+        pdf_out_dir = os.path.join(get_analysis_root(), CYCLE, username, "Results/")
         pdf_filename = "XPCS_Analysis_Report_for_uid=%s%s.pdf" % (uid, pdf_version)
         if run_xsvs:
             pdf_filename = "XPCS_XSVS_Analysis_Report_for_uid=%s%s.pdf" % (uid, pdf_version)
@@ -2413,12 +2411,15 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
         )
         # Attach the PDF report to Olog
         if att_pdf_report:
-            os.environ["HTTPS_PROXY"] = "https://proxy:8888"
-            os.environ["no_proxy"] = "cs.nsls2.local,localhost,127.0.0.1"
             pname = pdf_out_dir + pdf_filename
-            atch = [Attachment(open(pname, "rb"))]
             try:
-                update_olog_uid(uid=md["uid"], text="Add XPCS Analysis PDF Report", attachments=atch)
+                with open(pname, "rb") as stream:
+                    attachments = [Attachment(stream)]
+                    update_olog_uid(
+                        uid=md["uid"],
+                        text="Add XPCS Analysis PDF Report",
+                        attachments=attachments,
+                    )
             except Exception:
                 print(
                     "I can't attach this PDF: %s due to a duplicated filename. Please give a different PDF file."

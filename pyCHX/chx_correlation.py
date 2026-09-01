@@ -860,11 +860,12 @@ def one_time_from_two_time(two_time_corr):
         shape (number of labels(ROI's), number of frames)
     """
 
-    one_time_corr = np.zeros((two_time_corr.shape[0], two_time_corr.shape[2]))
-    for g in two_time_corr:
-        for j in range(two_time_corr.shape[2]):
-            one_time_corr[:, j] = np.trace(g, offset=j) / two_time_corr.shape[2]
-    return one_time_corr
+    return np.asarray(
+        [
+            [np.mean(np.diag(correlation, k=lag)) for lag in range(correlation.shape[0])]
+            for correlation in two_time_corr
+        ]
+    )
 
 
 class CrossCorrelator:

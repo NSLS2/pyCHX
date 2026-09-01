@@ -9,5 +9,6 @@ Coherent Hard X-ray Scattering beamline.
 
    installation
    usage
+   testing
    release-history
    min_versions

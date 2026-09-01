@@ -90,6 +90,10 @@ docs/_build/
 *.tiff
 *.tif
 
+# Reproducible pyCHX test artifacts (larger than GitHub's per-file limit)
+pyCHX/tests/data/*/results/*.cmp
+pyCHX/tests/data/*/md.json
+
 #generated documntation files
 doc/resource/api/generated/
 

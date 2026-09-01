@@ -41,9 +41,8 @@ def delays(num_lev=3, num_buf=4, time=1):
         ptr = (i - 1) * int(num_buf / 2) + np.arange(imin, num_buf + 1)
         dly[ptr] = np.arange(imin, num_buf + 1) * 2 ** (i - 1)
         dict_dly[i] = dly[ptr - 1]
-        dly *= time
         # print (i, ptr, imin)
-    return dly, dict_dly
+    return dly[:-1] * time, {level: values * time for level, values in dict_dly.items()}
 
 
 class Get_Pixel_Array(object):
@@ -128,10 +127,9 @@ def get_mean_intensity(data_pixel, qind):
         mean_inten = get_mean_intensity( data_pixel, qind)
     """
 
-    noqs = len(np.unique(qind))
     mean_inten = {}
 
-    for qi in range(1, noqs + 1):
+    for qi in np.unique(qind):
         pixelist_qi = np.where(qind == qi)[0]
         # print (pixelist_qi.shape,  data_pixel[qi].shape)
         data_pixel_qi = data_pixel[:, pixelist_qi]
@@ -173,15 +171,9 @@ def get_each_frame_ROI_intensity(data_pixel, bad_pixel_threshold=1e10, plot_=Fal
     """
 
     # print ( argv, kwargs )
-    imgsum = np.array(
-        [
-            np.sum(img)
-            for img in tqdm(
-                data_series[::sampling],  # noqa: F821 - supplied by the legacy notebook workflow
-                leave=True,
-            )
-        ]
-    )
+    sampling = kwargs.get("sampling", 1)
+    sample_indices = np.arange(0, len(data_pixel), sampling)
+    imgsum = np.array([np.sum(data_pixel[index]) for index in tqdm(sample_indices, leave=True)])
     if plot_:
         uid = "uid"
         if "uid" in kwargs.keys():
@@ -189,18 +181,18 @@ def get_each_frame_ROI_intensity(data_pixel, bad_pixel_threshold=1e10, plot_=Fal
         fig, ax = plt.subplots()
         ax.plot(imgsum, "bo")
         ax.set_title("uid= %s--imgsum" % uid)
-        ax.set_xlabel("Frame_bin_%s" % sampling)  # noqa: F821 - legacy notebook setting
+        ax.set_xlabel("Frame_bin_%s" % sampling)
         ax.set_ylabel("Total_Intensity")
 
-        if save:  # noqa: F821 - legacy notebook setting
+        if kwargs.get("save", False):
             # dt =datetime.now()
             # CurTime = '%s%02d%02d-%02d%02d-' % (dt.year, dt.month, dt.day,dt.hour,dt.minute)
-            path = kwargs["path"]
+            path = kwargs.get("path", "")
             # fp = path + "uid= %s--Waterfall-"%uid + CurTime + '.png'
             fp = path + "uid=%s--imgsum-" % uid + ".png"
             fig.savefig(fp, dpi=fig.dpi)
         # plt.show()
-    bad_frame_list = np.where(np.array(imgsum) > bad_pixel_threshold)[0]
+    bad_frame_list = sample_indices[imgsum > bad_pixel_threshold]
     if len(bad_frame_list):
         print("Bad frame list are: %s" % bad_frame_list)
     else:
@@ -234,19 +226,17 @@ def auto_two_Array(data, rois, data_pixel=None):
     start_time = time.time()
 
     qind, pixelist = roi.extract_label_indices(rois)
-    noqs = len(np.unique(qind))
-    nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+    roi_labels = np.unique(qind)
+    nopr = np.array([np.count_nonzero(qind == label) for label in roi_labels])
 
     if data_pixel is None:
         data_pixel = Get_Pixel_Array(data, pixelist).get_data()
         # print (data_pixel.shape)
 
     noframes = data_pixel.shape[0]
-    g12b = np.zeros([noframes, noframes, noqs])
-    _ = noqs / 10
-    _ = 0
+    g12b = np.zeros([noframes, noframes, len(roi_labels)])
 
-    for qi in tqdm(range(1, noqs + 1)):
+    for column, qi in enumerate(tqdm(roi_labels)):
         pixelist_qi = np.where(qind == qi)[0]
         # print (pixelist_qi.shape,  data_pixel[qi].shape)
         data_pixel_qi = data_pixel[:, pixelist_qi]
@@ -254,7 +244,7 @@ def auto_two_Array(data, rois, data_pixel=None):
         sum1 = (np.average(data_pixel_qi, axis=1)).reshape(1, noframes)
         sum2 = sum1.T
 
-        g12b[:, :, qi - 1] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[qi - 1]
+        g12b[:, :, column] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[column]
         # print ( proi, int( qi //( Unitq) ) )
     #        if  int( qi //( Unitq) ) == proi:
     #            sys.stdout.write("#")
@@ -293,7 +283,7 @@ def get_qedge2(qstart, qend, qwidth, noqs, return_int=False):
     if not return_int:
         return qedge, qcenter
     else:
-        return int(qedge), int(qcenter)
+        return qedge.astype(int), qcenter.astype(int)
 
 
 def get_qedge(qstart, qend, qwidth, noqs, return_int=False):
@@ -312,7 +302,7 @@ def get_qedge(qstart, qend, qwidth, noqs, return_int=False):
     if not return_int:
         return qedge, qcenter
     else:
-        return int(qedge), int(qcenter)
+        return qedge.astype(int), qcenter.astype(int)
 
 
 def get_time_edge(tstart, tend, twidth, nots, return_int=False):
@@ -332,7 +322,7 @@ def get_time_edge(tstart, tend, twidth, nots, return_int=False):
     if not return_int:
         return tedge, tcenter
     else:
-        return int(tedge), int(tcenter)
+        return tedge.astype(int), tcenter.astype(int)
 
 
 def rotate_g12q_to_rectangle(g12q):

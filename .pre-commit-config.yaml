@@ -25,3 +25,4 @@ repos:
     rev: 0.7.1
     hooks:
       - id: nbstripout
+        exclude: ^pyCHX/tests/data/

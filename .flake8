@@ -15,11 +15,6 @@ per-file-ignores =
     pyCHX/chx_packages.py:F401,F811
     pyCHX/chx_libs.py:F401
 
-    # Some old notebook-driven entry points still consume caller-defined
-    # globals. Their imports are explicit; retain that interactive behavior.
-    pyCHX/SAXS.py:F821
-    pyCHX/XPCS_GiSAXS.py:F821
-    pyCHX/XPCS_SAXS.py:F821
+    # This old notebook-driven entry point still consumes caller-defined
+    # globals. Its imports are explicit; retain that interactive behavior.
     pyCHX/XPCS_XSVS_SAXS_Multi_2017_V4.py:F821
-    pyCHX/chx_generic_functions.py:F821
-    pyCHX/chx_xpcs_xsvs_jupyter_V1.py:F821
