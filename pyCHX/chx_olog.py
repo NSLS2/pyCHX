@@ -1,4 +1,4 @@
-from pyOlog import Attachment, LogEntry, OlogClient, SimpleOlogClient
+from pyOlog import Attachment, LogEntry, SimpleOlogClient
 from pyOlog.OlogDataTypes import Logbook
 
 olog_client = SimpleOlogClient(url="https://epics-services-chx.nsls2.bnl.local:38981/Olog")

@@ -9,21 +9,17 @@ The chx_correlationp2 is for dedug g2
 from __future__ import absolute_import, division, print_function
 
 import logging
-import sys
-from collections import namedtuple
 from multiprocessing import Pool
 
-import dill
 import numpy as np
 import skbeam.core.roi as roi
 from skbeam.core.roi import extract_label_indices
-from skbeam.core.utils import multi_tau_lags
 
-from pyCHX.chx_compress import apply_async, go_through_FD, map_async, pass_FD, run_dill_encoded
+from pyCHX.chx_compress import apply_async, pass_FD
 from pyCHX.chx_correlationc import _one_time_process as _one_time_processp
 from pyCHX.chx_correlationc import _one_time_process_error as _one_time_process_errorp
 from pyCHX.chx_correlationc import _two_time_process as _two_time_processp
-from pyCHX.chx_correlationc import _validate_and_transform_inputs, get_pixelist_interp_iq
+from pyCHX.chx_correlationc import _validate_and_transform_inputs
 from pyCHX.chx_libs import tqdm
 
 logger = logging.getLogger(__name__)
@@ -169,7 +165,7 @@ def lazy_two_timep(
         if i in bad_frame_list:
             fra_pix[:] = np.nan
         else:
-            (p, v) = FD.rdrawframe(i)
+            p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             if imgsum is None:
@@ -439,7 +435,7 @@ def lazy_one_timep(
         if i in bad_frame_list:
             fra_pix[:] = np.nan
         else:
-            (p, v) = FD.rdrawframe(i)
+            p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             if imgsum is None:
@@ -654,9 +650,9 @@ def cal_g2p(
     res = [results[k].get() for k in tqdm(list(sorted(results.keys())))]
     len_lag = 10**10
     for i in inputs:  # to get the smallest length of lag_step,
-        ##*****************************
-        ##Here could result in problem for significantly cut useful data if some Q have very short tau list
-        ##****************************
+        # *****************************
+        # Here could result in problem for significantly cut useful data if some Q have very short tau list
+        # ****************************
         if len_lag > len(res[i][1]):
             lag_steps = res[i][1]
             len_lag = len(lag_steps)

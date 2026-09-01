@@ -90,11 +90,11 @@ bad_pixel_4M = {
             4155535,
         ]
     ),  # 57 points, coralpor
-    "6cc34a": np.array([1058942, 2105743, 2105744, 2107813, 2107815, 2109883, 4155535]),  #  coralpor
+    "6cc34a": np.array([1058942, 2105743, 2105744, 2107813, 2107815, 2109883, 4155535]),  # coralpor
 }
 
 
-## Create during 2018 Cycle 1
+# Create during 2018 Cycle 1
 BadPix_4M = np.array(
     [
         828861,

@@ -7,21 +7,17 @@ This module is for parallel computation of time correlation
 from __future__ import absolute_import, division, print_function
 
 import logging
-import sys
-from collections import namedtuple
 from multiprocessing import Pool
 
-import dill
 import numpy as np
 import skbeam.core.roi as roi
 from skbeam.core.roi import extract_label_indices
-from skbeam.core.utils import multi_tau_lags
 
-from pyCHX.chx_compress import apply_async, go_through_FD, map_async, pass_FD, run_dill_encoded
+from pyCHX.chx_compress import apply_async, pass_FD
 from pyCHX.chx_correlationc import _one_time_process as _one_time_processp
 from pyCHX.chx_correlationc import _one_time_process_error as _one_time_process_errorp
 from pyCHX.chx_correlationc import _two_time_process as _two_time_processp
-from pyCHX.chx_correlationc import _validate_and_transform_inputs, get_pixelist_interp_iq
+from pyCHX.chx_correlationc import _validate_and_transform_inputs
 from pyCHX.chx_libs import tqdm
 
 logger = logging.getLogger(__name__)
@@ -167,7 +163,7 @@ def lazy_two_timep(
         if i in bad_frame_list:
             fra_pix[:] = np.nan
         else:
-            (p, v) = FD.rdrawframe(i)
+            p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             if imgsum is None:
@@ -449,7 +445,7 @@ def lazy_one_timep(
         if i in bad_frame_list:
             fra_pix[:] = np.nan
         else:
-            (p, v) = FD.rdrawframe(i)
+            p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             if imgsum is None:
@@ -677,9 +673,9 @@ def cal_g2p(
     res = [results[k].get() for k in tqdm(list(sorted(results.keys())))]
     len_lag = 10**10
     for i in inputs:  # to get the smallest length of lag_step,
-        ##*****************************
-        ##Here could result in problem for significantly cut useful data if some Q have very short tau list
-        ##****************************
+        # *****************************
+        # Here could result in problem for significantly cut useful data if some Q have very short tau list
+        # ****************************
         if len_lag > len(res[i][1]):
             lag_steps = res[i][1]
             len_lag = len(lag_steps)
@@ -775,7 +771,7 @@ def cal_GPF(
     ring_masks = [np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[qstart:]]
     qind, pixelist = roi.extract_label_indices(ring_mask)
     noqs = len(np.unique(qind))
-    nopr = np.bincount(qind, minlength=(noqs + 1))[qstart:]
+    _ = np.bincount(qind, minlength=(noqs + 1))[qstart:]
     if norm is not None:
         norms = [
             norm[np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
@@ -810,8 +806,8 @@ def cal_GPF(
     g2_G = np.zeros((int((num_lev + 1) * num_buf / 2), len(pixelist)))
     g2_P = np.zeros_like(g2_G)
     g2_F = np.zeros_like(g2_G)
-    Gmax = 0
-    lag_steps_err = res[0][1]
+    _ = 0
+    _ = res[0][1]
     # print('Here')
     for i in inputs:
         g2_G[:, qind == 1 + i] = res[i][2]  # [:len_lag]
@@ -840,12 +836,12 @@ def get_g2_from_ROI_GPF(G, P, F, roi_mask):
     g2 = np.zeros([G.shape[0], noqs])
     g2_err = np.zeros([G.shape[0], noqs])
     for i in range(1, 1 + noqs):
-        ## G[0].shape is the same as roi_mask shape
+        # G[0].shape is the same as roi_mask shape
         if len(G.shape) > 2:
             s_Gall_qi = G[:, roi_mask == i]
             s_Pall_qi = P[:, roi_mask == i]
             s_Fall_qi = F[:, roi_mask == i]
-        ## G[0].shape is the same length as pixelist
+        # G[0].shape is the same length as pixelist
         else:
             s_Gall_qi = G[:, qind == i]
             s_Pall_qi = P[:, qind == i]

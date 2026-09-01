@@ -10,52 +10,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pds
 from numpy import (
-    apply_over_axes,
     arange,
-    arctan,
-    around,
-    array,
     digitize,
     dot,
-    exp,
     histogram,
-    histogramdd,
     hstack,
     hypot,
     indices,
     int_,
     intersect1d,
     linspace,
-    load,
-    log,
-    log10,
-    ma,
-    mean,
-    mgrid,
-    ones,
-    pi,
-    poly1d,
-    polyfit,
-    power,
-    ravel,
-    reshape,
     round,
     save,
-    shape,
-    sin,
-    sqrt,
-    std,
-    sum,
-    unique,
-    vstack,
     where,
     zeros,
     zeros_like,
 )
-from numpy.linalg import lstsq
 from tqdm import tqdm
 
-from pyCHX.chx_compress import Multifile, go_through_FD, pass_FD
 from pyCHX.chx_libs import multi_tau_lags
 
 
@@ -69,17 +41,17 @@ def get_timepixel_data(data_dir, filename, time_unit=1):
 
     """
     data = pds.read_csv(data_dir + filename)
-    #'#Col', ' #Row', ' #ToA',
+    # '#Col', ' #Row', ' #ToA',
     # return np.array( data['Col'] ), np.array(data['Row']), np.array(data['GlobalTimeFine']) #*6.1  #in ps
     if time_unit != 1:
         try:
             x, y, t = np.array(data["#Col"]), np.array(data["#Row"]), np.array(data["#ToA"]) * time_unit
-        except:
+        except Exception:
             x, y, t = np.array(data["#Col"]), np.array(data[" #Row"]), np.array(data[" #ToA"]) * time_unit
     else:
         try:
             x, y, t = np.array(data["#Col"]), np.array(data["#Row"]), np.array(data["#ToA"])
-        except:
+        except Exception:
             x, y, t = np.array(data["#Col"]), np.array(data[" #Row"]), np.array(data[" #ToA"])
     return x, y, t - t.min()  # * 25/4096.  #in ns
 
@@ -159,7 +131,7 @@ def get_FD_end_num(FD, maxend=1e10):
     for i in range(0, int(maxend)):
         try:
             FD.seekimg(i)
-        except:
+        except Exception:
             N = i
             break
     FD.seekimg(0)
@@ -278,8 +250,8 @@ def init_compress_timepix_data(pos, t, binstep, filename, mask=None, md=None, no
     # TODList: for different detector using different md structure, March 2, 2017,
 
     # 8d include,
-    #'bytes', 'nrows', 'ncols', (detsize)
-    #'rows_begin', 'rows_end', 'cols_begin', 'cols_end'  (roi)
+    # 'bytes', 'nrows', 'ncols', (detsize)
+    # 'rows_begin', 'rows_end', 'cols_begin', 'cols_end'  (roi)
     Header = struct.pack(
         "@16s8d7I916x",
         b"Version-COMPtpx1",
@@ -375,8 +347,8 @@ def init_compress_timepix_data_light_duty(
     # TODList: for different detector using different md structure, March 2, 2017,
 
     # 8d include,
-    #'bytes', 'nrows', 'ncols', (detsize)
-    #'rows_begin', 'rows_end', 'cols_begin', 'cols_end'  (roi)
+    # 'bytes', 'nrows', 'ncols', (detsize)
+    # 'rows_begin', 'rows_end', 'cols_begin', 'cols_end'  (roi)
     Header = struct.pack(
         "@16s8d7I916x",
         b"Version-COMPtpx1",
@@ -465,8 +437,8 @@ def compress_timepix_data_old(data_pixel, filename, rois=None, md=None, nobytes=
     # TODList: for different detector using different md structure, March 2, 2017,
 
     # 8d include,
-    #'bytes', 'nrows', 'ncols', (detsize)
-    #'rows_begin', 'rows_end', 'cols_begin', 'cols_end'  (roi)
+    # 'bytes', 'nrows', 'ncols', (detsize)
+    # 'rows_begin', 'rows_end', 'cols_begin', 'cols_end'  (roi)
     Header = struct.pack(
         "@16s8d7I916x",
         b"Version-COMPtpx1",
@@ -584,7 +556,7 @@ def get_timepixel_data_from_series(data_dir, filename_prefix, total_filenum=72, 
         filename = filename_prefix + "_%s.csv" % n
         data = get_timepixel_data(data_dir, filename)
         if n != total_filenum - 1:
-            (x[n * colms : (n + 1) * colms], y[n * colms : (n + 1) * colms], t[n * colms : (n + 1) * colms]) = (
+            x[n * colms : (n + 1) * colms], y[n * colms : (n + 1) * colms], t[n * colms : (n + 1) * colms] = (
                 data[0],
                 data[1],
                 data[2],
@@ -593,7 +565,7 @@ def get_timepixel_data_from_series(data_dir, filename_prefix, total_filenum=72, 
             # print(  filename_prefix + '_%s.csv'%n )
             ln = len(data[0])
             # print( ln )
-            (x[n * colms : n * colms + ln], y[n * colms : n * colms + ln], t[n * colms : n * colms + ln]) = (
+            x[n * colms : n * colms + ln], y[n * colms : n * colms + ln], t[n * colms : n * colms + ln] = (
                 data[0],
                 data[1],
                 data[2],
@@ -611,7 +583,7 @@ def get_timepixel_avg_image(x, y, t, det_shape=[256, 256], delta_time=None):
 
 
     """
-    t0 = t.min()
+    _ = t.min()
     tm = t.max()
 
     if delta_time is not None:
@@ -705,7 +677,7 @@ def read_xyt_frame(n=1):
     import numpy as np
 
     ni = "%04d" % n
-    fp = DATA_DIR + DataPref + "%s.txt" % ni
+    fp = DATA_DIR + DataPref + "%s.txt" % ni  # noqa: F821 - values come from the legacy setup file
     data = np.genfromtxt(fp, skiprows=0)[:, 2]  # take the time encoder
     td = np.histogram(data, bins=np.arange(11810))[0]  # do histogram
     return td
@@ -737,11 +709,11 @@ class xpcs(object):
         """
 
         if nolevs is None:
-            nolevs = nolev  # defined by the set-up file
+            nolevs = nolev  # noqa: F821 - defined by the legacy setup file
         if nobufs is None:
-            nobufs = nobuf  # defined by the set-up file
+            nobufs = nobuf  # noqa: F821 - defined by the legacy setup file
         if tmaxs is None:
-            tmaxs = tmax  # defined by the set-up file
+            tmaxs = tmax  # noqa: F821 - defined by the legacy setup file
         if nobufs % 2 != 0:
             print("nobuf must be even!!!")
         dly = zeros((nolevs + 1) * nobufs / 2 + 1)
@@ -769,14 +741,14 @@ class xpcs(object):
                qlist: a list of q centered at qradi with qwidth.
         KEYWORD:  noqs, qstart,qend,qwidth::defined by the set-up file
         """
-        qradi = linspace(qstart, qend, noqs)
-        qlist = zeros(2 * noqs)
-        qlist[::2] = round(qradi - qwidth / 2)  # render  even value
-        qlist[1::2] = round(qradi + (1 + qwidth) / 2)  # render odd value
-        qlist[::2] = int_(qradi - qwidth / 2)  # render  even value
-        qlist[1::2] = int_(qradi + (1 + qwidth) / 2)  # render odd value
-        if qlist_ != None:
-            qlist = qlist_
+        qradi = linspace(qstart, qend, noqs)  # noqa: F821 - legacy setup-file geometry
+        qlist = zeros(2 * noqs)  # noqa: F821 - legacy setup-file geometry
+        qlist[::2] = round(qradi - qwidth / 2)  # noqa: F821 - legacy setup-file geometry
+        qlist[1::2] = round(qradi + (1 + qwidth) / 2)  # noqa: F821 - legacy setup-file geometry
+        qlist[::2] = int_(qradi - qwidth / 2)  # noqa: F821 - legacy setup-file geometry
+        qlist[1::2] = int_(qradi + (1 + qwidth) / 2)  # noqa: F821 - legacy setup-file geometry
+        if qlist_ is not None:  # noqa: F821 - optional legacy setup-file override
+            qlist = qlist_  # noqa: F821 - optional legacy setup-file override
         return qlist, qradi
 
     def calqlist(self, qmask=None, shape="circle"):
@@ -796,10 +768,10 @@ class xpcs(object):
         """
 
         qlist, qradi = self.make_qlist()
-        y, x = indices([dimy, dimx])
+        y, x = indices([dimy, dimx])  # noqa: F821 - dimensions come from the legacy setup file
         if shape == "circle":
-            y_ = y - ceny + 1
-            x_ = x - cenx + 1
+            y_ = y - ceny + 1  # noqa: F821 - center comes from the legacy setup file
+            x_ = x - cenx + 1  # noqa: F821 - center comes from the legacy setup file
             r = int_(hypot(x_, y_) + 0.5)
         elif shape == "column":
             r = x
@@ -808,23 +780,23 @@ class xpcs(object):
         else:
             pass
         r = r.flatten()
-        noqrs = len(qlist)
+        _ = len(qlist)
         qind = digitize(r, qlist)
         if qmask is None:
             w_ = where((qind) % 2)  # qind should be odd;print 'Yes'
             w = w_[0]
         else:
             a = where((qind) % 2)[0]
-            b = where(mask.flatten() == False)[0]
+            b = where(qmask.flatten() == False)[0]  # noqa: E712 - elementwise comparison
             w = intersect1d(a, b)
         nopixels = len(w)
         qind = qind[w] / 2
-        pixellist = (y * dimx + x).flatten()[w]
+        pixellist = (y * dimx + x).flatten()[w]  # noqa: F821 - dimensions come from legacy setup
         nopr, bins = histogram(qind, bins=range(len(qradi) + 1))
         return qind, pixellist, nopr, nopixels
 
     ###########################################################################
-    ########for one_time correlation function for xyt frames
+    # for one_time correlation function for xyt frames
     ##################################################################
 
     def autocor_xytframe(self, n):
@@ -872,12 +844,12 @@ class xpcs(object):
         if len(g2.shape) == 1:
             g2 = g2.reshape([len(g2), 1])
         tn, qn = g2.shape
-        tindex = xrange(tn)
+        tindex = range(tn)
         qcolumns = ["t"] + ["g2"]
         if tscale is None:
             tscale = 1.0
         g2t = hstack([dly[:tn].reshape(tn, 1) * tscale, g2])
-        g2p = pd.DataFrame(data=g2t, index=tindex, columns=qcolumns)
+        g2p = pds.DataFrame(data=g2t, index=tindex, columns=qcolumns)
         return g2p
 
     def show(self, g2p, title):
@@ -887,7 +859,7 @@ class xpcs(object):
         g2p.plot(x=t, y="g2", marker="o", ls="--", logx=T, ylim=ylim)
         plt.xlabel("time delay, ns", fontsize=12)
         plt.title(title)
-        plt.savefig(RES_DIR + title + ".png")
+        plt.savefig(RES_DIR + title + ".png")  # noqa: F821 - configured by the legacy setup file
         plt.show()
 
 
@@ -901,7 +873,7 @@ if False:
         fnum = 100
         g2 = xp.autocor(fnum)
         filename = "g2_-%s-" % (fnum)
-        save(RES_DIR + FOUT + filename, g2)
-        ##g2= load(RES_DIR + FOUT + filename +'.npy')
+        save(RES_DIR + FOUT + filename, g2)  # noqa: F821 - configured by the legacy setup file
+        # g2= load(RES_DIR + FOUT + filename +'.npy')
         g2p = xp.g2_to_pds(dly, g2, tscale=20)
         xp.show(g2p, "g2_run_%s" % fnum)

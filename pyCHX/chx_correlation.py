@@ -39,6 +39,7 @@
 """
 This module is for functions specific to time correlation
 """
+
 from __future__ import absolute_import, division, print_function
 
 from collections import namedtuple
@@ -429,12 +430,12 @@ def auto_corr_scat_factor(lags, beta, relaxation_rate, baseline=1):
     The intensity-intensity autocorrelation g2 is connected to the intermediate
     scattering factor(ISF) g1
     .. math::
-        g_2(q, \\tau) = \\beta_1[g_1(q, \\tau)]^{2} + g_\infty
+        g_2(q, \\tau) = \\beta_1[g_1(q, \\tau)]^{2} + g_\\infty
     For a system undergoing  diffusive dynamics,
     .. math::
-        g_1(q, \\tau) = e^{-\gamma(q) \\tau}
+        g_1(q, \\tau) = e^{-\\gamma(q) \\tau}
     .. math::
-       g_2(q, \\tau) = \\beta_1 e^{-2\gamma(q) \\tau} + g_\infty
+       g_2(q, \\tau) = \\beta_1 e^{-2\\gamma(q) \\tau} + g_\\infty
     These implementation are based on published work. [1]_
     References
     ----------

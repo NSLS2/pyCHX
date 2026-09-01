@@ -34,7 +34,7 @@ def get_t_iqc_uids(uid_list, setup_pargs, slice_num=10, slice_width=1):
     iqsts = {}
     tstamp = {}
     qs = {}
-    label = []
+    _ = []
     for uid in uid_list:
         md = get_meta_data(uid)
         luid = md["uid"]
@@ -384,7 +384,7 @@ def plot_entries_from_uids(
 
 
 ####################################################################################################
-##For real time analysis##
+# For real time analysis##
 #################################################################################################
 
 
@@ -502,7 +502,7 @@ def wait_data_acquistion_finish(uid, wait_time=2, max_try_num=3):
             FINISH = True
             print("The data acquistion finished.")
             print("Starting to do something here...")
-        except:
+        except Exception:
             wait_func(wait_time=wait_time)
             w += 1
             print("Try number: %s" % w)
@@ -594,7 +594,7 @@ def do_compress_on_line(start_time, stop_time, mask_dict=None, mask=None, wait_t
                         )
 
                         update_olog_uid(uid=md["uid"], text="Data are on-line sparsified!", attachments=None)
-                    except:
+                    except Exception:
                         print("There are something wrong with this data: %s..." % uid)
             print("*" * 50)
     return time.time() - t0
@@ -633,7 +633,7 @@ def realtime_xpcs_analysis(
                 if finish:
                     try:
                         md = get_meta_data(uid)
-                        ##corect some metadata
+                        # corect some metadata
                         if md_update is not None:
                             md.update(md_update)
                             # if 'username' in list(md.keys()):
@@ -649,7 +649,7 @@ def realtime_xpcs_analysis(
                                 uid, run_pargs=run_pargs, md_cor=None, return_res=False, clear_plot=clear_plot
                             )
                         # update_olog_uid( uid= md['uid'], text='Data are on-line sparsified!',attachments=None)
-                    except:
+                    except Exception:
                         print("There are something wrong with this data: %s..." % uid)
             else:
                 print("\nThis is not a XPCS series. We will simiply ignore it.")
@@ -662,7 +662,7 @@ def realtime_xpcs_analysis(
 
 
 ####################################################################################################
-##compress multi uids, sequential compress for uids, but for each uid, can apply parallel compress##
+# compress multi uids, sequential compress for uids, but for each uid, can apply parallel compress##
 #################################################################################################
 def compress_multi_uids(
     uids,
@@ -736,7 +736,7 @@ def compress_multi_uids(
 
 
 ####################################################################################################
-##get_two_time_mulit_uids, sequential cal for uids, but apply parallel for each uid ##
+# get_two_time_mulit_uids, sequential cal for uids, but apply parallel for each uid ##
 #################################################################################################
 
 
@@ -841,7 +841,8 @@ def get_series_g2_from_g12(
         # print( good_end )
         if good_end > L:
             warnings.warn(
-                "Warning: the dose value is too large, and please check the maxium dose in this data set and give a smaller dose value. We will use the maxium dose of the data."
+                "Warning: the dose value is too large, and please check the maxium dose in this data "
+                "set and give a smaller dose value. We will use the maxium dose of the data."
             )
             good_end = L
         if not log_taus:
@@ -947,17 +948,17 @@ def get_series_one_time_mulit_uids(
             try:
                 g2_path = path + uid + "/"
                 g12b = np.load(g2_path + "uid=%s_g12b.npy" % uid)
-            except:
+            except Exception:
                 g2_path = path + md["uid"] + "/"
                 g12b = np.load(g2_path + "uid=%s_g12b.npy" % uid)
             try:
                 exp_time = float(md["cam_acquire_time"])  # *1000 #from second to ms
-            except:
+            except Exception:
                 exp_time = float(md["exposure time"])  # * 1000  #from second to ms
             if trans is None:
                 try:
                     transi = md["transmission"]
-                except:
+                except Exception:
                     transi = [1]
             else:
                 transi = trans[i]
@@ -1106,7 +1107,8 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
        An example for the run_pargs:
 
     run_pargs=  dict(
-                    scat_geometry = 'gi_saxs'  #suport 'saxs', 'gi_saxs', 'ang_saxs' (for anisotropics saxs or flow-xpcs)
+                    scat_geometry = 'gi_saxs'  #suport 'saxs', 'gi_saxs', 'ang_saxs' (for anisotropics saxs or
+                    flow-xpcs)
                     force_compress =  True,#False,
                     para_compress = True,
                     run_fit_form = False,
@@ -1160,7 +1162,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
     run_xsvs = run_pargs["run_xsvs"]
     try:
         run_dose = run_pargs["run_dose"]
-    except:
+    except Exception:
         run_dose = False
     ###############################################################
     if scat_geometry == "gi_saxs":  # to be done for other types
@@ -1192,12 +1194,12 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
     use_imgsum_norm = run_pargs["use_imgsum_norm"]
     try:
         use_sqnorm = run_pargs["use_sqnorm"]
-    except:
+    except Exception:
         use_sqnorm = False
     try:
         inc_x0 = run_pargs["inc_x0"]
         inc_y0 = run_pargs["inc_y0"]
-    except:
+    except Exception:
         inc_x0 = None
         inc_y0 = None
 
@@ -1208,7 +1210,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
         roi_mask = run_pargs["roi_mask"]
         qind, pixelist = roi.extract_label_indices(roi_mask)
         noqs = len(np.unique(qind))
-        nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+        _ = np.bincount(qind, minlength=(noqs + 1))[1:]
 
     else:
         roi_mask_p = run_pargs["roi_mask_p"]
@@ -1228,14 +1230,14 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
     g12b = None
     taus4 = None
     g4 = None
-    times_xsv = None
+    _ = None
     contrast_factorL = None
     qth_interest = run_pargs["qth_interest"]
     pdf_version = run_pargs["pdf_version"]
 
     try:
         username = run_pargs["username"]
-    except:
+    except Exception:
         username = getpass.getuser()
 
     data_dir0 = os.path.join("/XF11ID/analysis/", CYCLE, username, "Results/")
@@ -1302,7 +1304,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                 "beam_center_y",
             ],
         )
-    ## Overwrite Some Metadata if Wrong Input
+    # Overwrite Some Metadata if Wrong Input
     dpix, lambda_, Ldet, exposuretime, timeperframe, center = check_lost_metadata(
         md, Nimg, inc_x0=inc_x0, inc_y0=inc_y0, pixelsize=7.5 * 10 * (-5)
     )
@@ -1328,7 +1330,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
     if md["detector"] == "eiger4m_single_image":
         mask[:, 2069] = 0  # False  #Concluded from the previous results
     show_img(mask, image_name=uidstr + "_mask", save=True, path=data_dir)
-    mask_load = mask.copy()
+    _ = mask.copy()
     imgsa = apply_mask(imgs, mask)
 
     img_choice_N = 2
@@ -1402,7 +1404,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
         mask = mask * Chip_Mask
 
         # %system   free && sync && echo 3 > /proc/sys/vm/drop_caches && free
-        ## Get bad frame list by a polynominal fit
+        # Get bad frame list by a polynominal fit
         bad_frame_list = get_bad_frame_list(
             imgsum,
             fit=True,
@@ -1415,7 +1417,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
         )
         print("The bad frame list length is: %s" % len(bad_frame_list))
 
-        ### Creat new mask by masking the bad pixels and get new avg_img
+        # Creat new mask by masking the bad pixels and get new avg_img
         if False:
             mask = mask_exclude_badpixel(bp, mask, md["uid"])
             avg_img = get_avg_imgc(FD, sampling=1, bad_frame_list=bad_frame_list)
@@ -1447,7 +1449,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             path=data_dir,
         )
 
-        ############for SAXS and ANG_SAXS (Flow_SAXS)
+        # for SAXS and ANG_SAXS (Flow_SAXS)
         if scat_geometry == "saxs" or scat_geometry == "ang_saxs":
 
             # show_saxs_qmap( avg_img, setup_pargs, width=600, vmin=.1, vmax=np.max(avg_img*.1), logs=True,
@@ -1481,7 +1483,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             # show_img( mask )
 
             if run_fit_form:
-                form_res = fit_form_factor(
+                _ = fit_form_factor(
                     q_saxs,
                     iq_saxs,
                     guess_values={"radius": 2500, "sigma": 0.05, "delta_rho": 1e-10},
@@ -1572,10 +1574,10 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             plot_qrt_pds(qrt_pds, time_edge, qz_index=0, uid=uidstr, path=data_dir)
 
         ##############################
-        ##the below works for all the geometries
+        # the below works for all the geometries
         ########################################
         if scat_geometry != "ang_saxs":
-            roi_inten = check_ROI_intensity(
+            _ = check_ROI_intensity(
                 avg_img, roi_mask, ring_number=qth_interest, uid=uidstr, save=True, path=data_dir
             )
         if scat_geometry == "saxs" or scat_geometry == "gi_saxs" or scat_geometry == "gi_waxs":
@@ -1592,7 +1594,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                     path=data_dir,
                     beg=FD.beg,
                 )
-        ring_avg = None
+        _ = None
 
         if run_t_ROI_Inten:
             times_roi, mean_int_sets = cal_each_ring_mean_intensityc(
@@ -1647,7 +1649,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                 )
                 run_time(t0)
                 taus = lag_steps * timeperframe
-                g2_pds = save_g2_general(
+                _ = save_g2_general(
                     g2,
                     taus=taus,
                     qr=np.array(list(qval_dict.values()))[:, 0],
@@ -1671,7 +1673,8 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                 )
 
                 # if run_one_time:
-                # plot_g2_general( g2_dict={1:g2}, taus_dict={1:taus},vlim=[0.95, 1.05], qval_dict = qval_dict, fit_res= None,
+                # plot_g2_general( g2_dict={1:g2}, taus_dict={1:taus},vlim=[0.95, 1.05], qval_dict = qval_dict,
+                # fit_res= None,
                 #                geometry='saxs',filename=uid_+'--g2',path= data_dir,   ylabel='g2')
 
                 plot_g2_general(
@@ -1711,7 +1714,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                 run_time(t0)
 
                 taus_v = lag_steps_v * timeperframe
-                g2_pds_v = save_g2_general(
+                _ = save_g2_general(
                     g2_v,
                     taus=taus_v,
                     qr=np.array(list(qval_dict_v.values()))[:, 0],
@@ -1721,7 +1724,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                 )
 
                 taus_p = lag_steps_p * timeperframe
-                g2_pds_p = save_g2_general(
+                _ = save_g2_general(
                     g2_p,
                     taus=taus_p,
                     qr=np.array(list(qval_dict_p.values()))[:, 0],
@@ -1885,7 +1888,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             run_time(t0)
 
             # tausb = np.arange( g2b.shape[0])[:max_taus] *timeperframe
-            g2b_pds = save_g2_general(
+            _ = save_g2_general(
                 g2b,
                 taus=tausb,
                 qr=np.array(list(qval_dict.values()))[:, 0],
@@ -1959,7 +1962,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             run_time(t0)
 
             taus4 = np.arange(g4.shape[0]) * timeperframe
-            g4_pds = save_g2_general(
+            _ = save_g2_general(
                 g4,
                 taus=taus4,
                 qr=np.array(list(qval_dict.values()))[:, 0],
@@ -1987,7 +1990,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             N = len(imgs)
             try:
                 tr = md["transmission"]
-            except:
+            except Exception:
                 tr = 1
             if "dose_frame" in list(run_pargs.keys()):
                 dose_frame = run_pargs["dose_frame"]
@@ -2028,14 +2031,14 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             max_cts = get_max_countc(FD, roi_mask)
             qind, pixelist = roi.extract_label_indices(roi_mask)
             noqs = len(np.unique(qind))
-            nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+            _ = np.bincount(qind, minlength=(noqs + 1))[1:]
             # time_steps = np.array( utils.geometric_series(2,   len(imgs)   ) )
             time_steps = [0, 1]  # only run the first two levels
-            num_times = len(time_steps)
+            _ = len(time_steps)
             times_xsvs = exposuretime + (2 ** (np.arange(len(time_steps))) - 1) * timeperframe
             print("The max counts are: %s" % max_cts)
 
-            ### Do historam
+            # Do historam
             if roi_avg is None:
                 times_roi, mean_int_sets = cal_each_ring_mean_intensityc(
                     FD,
@@ -2122,7 +2125,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                 path=data_dir,
             )
 
-            ### Get contrast
+            # Get contrast
             contrast_factorL = get_contrast(ML_val)
             spec_km_pds = save_KM(
                 spec_kmean, KL_val, ML_val, qs=qr, level_time=times_xsvs, uid=uid_, path=data_dir
@@ -2308,7 +2311,8 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
                 Exdt[k] = v
 
         export_xpcs_results_to_h5("uid=%s_Res.h5" % md["uid"], data_dir, export_dict=Exdt)
-        # extract_dict = extract_xpcs_results_from_h5( filename = 'uid=%s_Res.h5'%md['uid'], import_dir = data_dir )
+        # extract_dict = extract_xpcs_results_from_h5( filename = 'uid=%s_Res.h5'%md['uid'], import_dir = data_dir
+        # )
         # Creat PDF Report
         pdf_out_dir = os.path.join("/XF11ID/analysis/", CYCLE, username, "Results/")
         pdf_filename = "XPCS_Analysis_Report_for_uid=%s%s.pdf" % (uid, pdf_version)
@@ -2332,7 +2336,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             run_dose=run_dose,
             report_type=scat_geometry,
         )
-        ## Attach the PDF report to Olog
+        # Attach the PDF report to Olog
         if att_pdf_report:
             os.environ["HTTPS_PROXY"] = "https://proxy:8888"
             os.environ["no_proxy"] = "cs.nsls2.local,localhost,127.0.0.1"
@@ -2340,7 +2344,7 @@ def run_xpcs_xsvs_single(uid, run_pargs, md_cor=None, return_res=False, reverse=
             atch = [Attachment(open(pname, "rb"))]
             try:
                 update_olog_uid(uid=md["uid"], text="Add XPCS Analysis PDF Report", attachments=atch)
-            except:
+            except Exception:
                 print(
                     "I can't attach this PDF: %s due to a duplicated filename. Please give a different PDF file."
                     % pname

@@ -1,11 +1,8 @@
-import gc
 import os
 import pickle as pkl
 import shutil
 import struct
 import sys
-from contextlib import closing
-from glob import iglob
 from multiprocessing import Pool, cpu_count
 
 import dill
@@ -14,7 +11,7 @@ import matplotlib.pyplot as plt
 # imports handler from CHX
 # this is where the decision is made whether or not to use dask
 # from chxtools.handlers import EigerImages, EigerHandler
-from eiger_io.fs_handler import EigerHandler, EigerImages
+from eiger_io.fs_handler import EigerImages
 from tqdm import tqdm
 
 from pyCHX.chx_generic_functions import (
@@ -28,7 +25,7 @@ from pyCHX.chx_generic_functions import (
     reverse_updown,
     rot90_clockwise,
 )
-from pyCHX.chx_libs import RUN_GUI, LogNorm, datetime, db, getpass, np, os, roi, time
+from pyCHX.chx_libs import RUN_GUI, Figure, LogNorm, db, np, roi, time
 
 
 def run_dill_encoded(what):
@@ -48,7 +45,7 @@ def pass_FD(FD, n):
     # FD.rdframe(n)
     try:
         FD.seekimg(n)
-    except:
+    except Exception:
         pass
         return False
 
@@ -107,16 +104,19 @@ def compress_eigerdata(
     if direct_load_data:
         images_per_file = func_images_per_file(data_path)
         if data_path is None:
-            sud = get_sid_filenames(db[uid])
+            sud = get_sid_filenames(db[md["uid"]])
             data_path = sud[2][0]
     if force_compress:
         print("Create a new compress file with filename as :%s." % filename)
         if para_compress:
-            # stop connection to be before forking... (let it reset again); 11/09/2024 this seems to fail with 'registry doesn't have attribute disconnect... -> try making this optional; this might have been a leftover: if compression happens "natuarally" (not as force_compress=True) this disconnect/reconnect is already missing...we definitely had this error before...
+            # stop connection to be before forking... (let it reset again); 11/09/2024 this seems to fail with
+            # 'registry doesn't have attribute disconnect... -> try making this optional; this might have been a
+            # leftover: if compression happens "natuarally" (not as force_compress=True) this disconnect/reconnect
+            # is already missing...we definitely had this error before...
             try:
                 db.reg.disconnect()
                 db.mds.reset_connection()
-            except:
+            except Exception:
                 pass
             print("Using a multiprocess to compress the data.")
             return para_compress_eigerdata(
@@ -249,7 +249,7 @@ def read_compressed_eigerdata(
     else:
         try:
             mask, avg_img, imgsum, bad_frame_list_ = pkl.load(open(filename + ".pkl", "rb"))
-        except:
+        except Exception:
             CAL = True
     if CAL:
         FD = Multifile(filename, beg, end)
@@ -472,7 +472,7 @@ def para_segment_compress_eigerdata(
             inputs = range(num_max_para_process * nr, Nf)
         else:
             inputs = range(num_max_para_process * nr, num_max_para_process * (nr + 1))
-        fns = [filename + "_temp-%i.tmp" % i for i in inputs]
+        _ = [filename + "_temp-%i.tmp" % i for i in inputs]
         # print( nr, inputs, )
         pool = Pool(processes=len(inputs))  # , maxtasksperchild=1000 )
         print("Pool processes: %s" % len(inputs))
@@ -545,7 +545,7 @@ def segment_compress_eigerdata(
     Nimg_ = len(images)
     M, N = images[0].shape
     avg_img = np.zeros([M, N], dtype=np.float64)
-    Nopix = float(avg_img.size)
+    _ = float(avg_img.size)
     n = 0
     good_count = 0
     # frac = 0.0
@@ -671,7 +671,8 @@ def create_compress_header(md, filename, nobytes=4, bins=1, rot90=False):
                 vs[5],
                 vs[6],
                 vs[7],
-                # md['beam_center_x'],md['beam_center_y'], md['count_time'], md['detector_distance'], #md['frame_time'],md['incident_wavelength'], md['x_pixel_size'],md['y_pixel_size'],
+                # md['beam_center_x'],md['beam_center_y'], md['count_time'], md['detector_distance'],
+                # #md['frame_time'],md['incident_wavelength'], md['x_pixel_size'],md['y_pixel_size'],
                 nobytes,
                 sy,
                 sx,
@@ -938,7 +939,7 @@ class Multifile:
             "cols_end",
         ]
 
-        magic = struct.unpack("@16s", br[:16])
+        _ = struct.unpack("@16s", br[:16])
         md_temp = struct.unpack("@8d7I916x", br[16:])
         self.md = dict(zip(ms_keys, md_temp))
 
@@ -984,7 +985,7 @@ class Multifile:
         return (p, v)
 
     def _readImage(self):
-        (p, v) = self._readImageRaw()
+        p, v = self._readImageRaw()
         img = np.zeros((self.md["ncols"], self.md["nrows"]))
         np.put(np.ravel(img), p, v)
         return img
@@ -1173,7 +1174,7 @@ class MultifileBNL:
             "cols_begin",
             "cols_end",
         ]
-        magic = struct.unpack("@16s", header_raw[:16])
+        _ = struct.unpack("@16s", header_raw[:16])
         md_temp = struct.unpack("@8d7I916x", header_raw[16:])
         self.md = dict(zip(ms_keys, md_temp))
         return self.md
@@ -1256,7 +1257,7 @@ def get_avg_imgc(
                     flag = True
             # print(i, flag)
             if flag:
-                (p, v) = FD.rdrawframe(i)
+                p, v = FD.rdrawframe(i)
                 if len(p) > 0:
                     np.ravel(avg_img)[p] += v
                     n += 1
@@ -1268,7 +1269,7 @@ def get_avg_imgc(
                 else:
                     flag = True
             if flag:
-                (p, v) = FD.rdrawframe(i)
+                p, v = FD.rdrawframe(i)
                 if len(p) > 0:
                     np.ravel(avg_img)[p] += v
                     n += 1
@@ -1287,7 +1288,7 @@ def get_avg_imgc(
         # ax.set_title("Masked Averaged Image")
         ax.set_title("uid= %s--Masked-Averaged-Image-" % uid)
         fig.colorbar(im)
-        if save:
+        if kwargs.get("save", False):
             # dt =datetime.now()
             # CurTime = '%s%02d%02d-%02d%02d-' % (dt.year, dt.month, dt.day,dt.hour,dt.minute)
             path = kwargs["path"]
@@ -1366,7 +1367,7 @@ def mean_intensityc(FD, labeled_array, sampling=1, index=None, multi_cor=False):
     # for  i in tqdm(range( FD.beg , FD.end )):
     if not multi_cor:
         for i in tqdm(range(FD.beg, FD.end, sampling), desc="Get ROI intensity of each frame"):
-            (p, v) = FD.rdrawframe(i)
+            p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             mean_intensity[n] = np.bincount(qind[pxlist], weights=v[w], minlength=len(index) + 1)[1:]
@@ -1399,11 +1400,11 @@ def _get_mean_intensity_one_q(FD, sampling, labels):
     n = 0
     qind, pixelist = roi.extract_label_indices(labels)
     # iterate over the images to compute multi-tau correlation
-    fra_pix = np.zeros_like(pixelist, dtype=np.float64)
+    _ = np.zeros_like(pixelist, dtype=np.float64)
     timg = np.zeros(FD.md["ncols"] * FD.md["nrows"], dtype=np.int32)
     timg[pixelist] = np.arange(1, len(pixelist) + 1)
     for i in range(FD.beg, FD.end, sampling):
-        (p, v) = FD.rdrawframe(i)
+        p, v = FD.rdrawframe(i)
         w = np.where(timg[p])[0]
         pxlist = timg[p[w]] - 1
         mi[n] = np.bincount(qind[pxlist], weights=v[w], minlength=2)[1:]
@@ -1436,7 +1437,7 @@ def get_each_frame_intensityc(
     imgsum = np.zeros(int((FD.end - FD.beg) / sampling))
     n = 0
     for i in tqdm(range(FD.beg, FD.end, sampling), desc="Get each frame intensity"):
-        (p, v) = FD.rdrawframe(i)
+        p, v = FD.rdrawframe(i)
         if len(p) > 0:
             imgsum[n] = np.sum(v)
         n += 1
