@@ -653,7 +653,7 @@ def plot_form_factor_with_fit(q, iq, q_, result, fit_power=0, res_pargs=None, re
         ax.set_ylim(kwargs["ylim"])
     elif "vlim" in kwargs:
         vmin, vmax = kwargs["vlim"]
-        ax.set_ylim([min(y) * vmin, max(y[1:]) * vmax])
+        ax.set_ylim([min(iq) * vmin, max(iq[1:]) * vmax])
     else:
         pass
     if "xlim" in kwargs:
@@ -854,7 +854,7 @@ def fit_form_factor2(
         ax.set_ylim(kwargs["ylim"])
     elif "vlim" in kwargs:
         vmin, vmax = kwargs["vlim"]
-        ax.set_ylim([min(y) * vmin, max(y[1:]) * vmax])
+        ax.set_ylim([min(iq) * vmin, max(iq[1:]) * vmax])
     else:
         pass
     if "xlim" in kwargs:
@@ -1085,7 +1085,8 @@ def plot_fit_sphere_form_factor(q, pq, res, p0=None, xlim=None, ylim=None):
     ax.text(x=0.02, y=0.15, s=txts, fontsize=14, transform=ax.transAxes)
 
 
-def exm_plot():
+def exm_plot(q, iq, ff):
+    """Plot example form-factor data and its fitted curve."""
     fig, ax = plt.subplots()
 
     ax.semilogy(q, iq, "ro", label="data")

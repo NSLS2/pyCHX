@@ -5,7 +5,9 @@ from __future__ import annotations
 from functools import lru_cache
 from shutil import copyfile
 
-OLOG_URL = "https://epics-services-chx.nsls2.bnl.local:38981/Olog"
+from pyCHX.config import DEFAULT_OLOG_URL, get_olog_url
+
+OLOG_URL = DEFAULT_OLOG_URL
 
 
 def _missing_dependency_stub(symbol: str):
@@ -32,8 +34,10 @@ except ImportError:
 
 
 @lru_cache(maxsize=1)
-def get_olog_client(url: str = OLOG_URL):
+def get_olog_client(url: str | None = None):
     """Construct and cache the Olog client on first use."""
+    if url is None:
+        url = get_olog_url()
     return SimpleOlogClient(url=url)
 
 
@@ -58,28 +62,39 @@ def create_olog_entry(text, logbooks="Data Acquisition"):
 def update_olog_uid_with_file(uid, text, filename, append_name=""):
     """Attach text and a file to the CHX Olog entry containing *uid*."""
     client = get_olog_client()
-    atch = [Attachment(open(filename, "rb"))]
     try:
-        update_olog_uid(client, uid=uid, text=text, attachments=atch)
+        with open(filename, "rb") as stream:
+            attachments = [Attachment(stream)]
+            update_olog_uid(client, uid=uid, text=text, attachments=attachments)
     except Exception:
         new_name = f"{filename[:-4]}_{append_name}.pdf"
         copyfile(filename, new_name)
-        atch = [Attachment(open(new_name, "rb"))]
         print(f"Append {append_name} to the filename.")
-        update_olog_uid(client, uid=uid, text=text, attachments=atch)
+        with open(new_name, "rb") as stream:
+            attachments = [Attachment(stream)]
+            update_olog_uid(client, uid=uid, text=text, attachments=attachments)
 
 
 def update_olog_logid_with_file(logid, text, filename=None, verbose=False):
     """Attach text and optionally a file to an Olog entry."""
-    attachments = [Attachment(open(filename, "rb"))] if filename is not None else None
     try:
-        update_olog_id(
-            get_olog_client(),
-            logid=logid,
-            text=text,
-            attachments=attachments,
-            verbose=verbose,
-        )
+        if filename is None:
+            update_olog_id(
+                get_olog_client(),
+                logid=logid,
+                text=text,
+                attachments=None,
+                verbose=verbose,
+            )
+        else:
+            with open(filename, "rb") as stream:
+                update_olog_id(
+                    get_olog_client(),
+                    logid=logid,
+                    text=text,
+                    attachments=[Attachment(stream)],
+                    verbose=verbose,
+                )
     except Exception:
         pass
 

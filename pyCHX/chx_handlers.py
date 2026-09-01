@@ -152,6 +152,12 @@ class LazyCatalog:
     def __iter__(self):
         return iter(self._resolve())
 
+    def __contains__(self, key):
+        return key in self._resolve()
+
+    def __len__(self):
+        return len(self._resolve())
+
     def __repr__(self):
         catalog = object.__getattribute__(self, "_catalog")
         if catalog is None:

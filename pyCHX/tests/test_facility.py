@@ -17,6 +17,12 @@ class FakeCatalog:
     def __getitem__(self, key):
         return self.items[key]
 
+    def __iter__(self):
+        return iter(self.items)
+
+    def __len__(self):
+        return len(self.items)
+
 
 @pytest.mark.mocked_facility
 def test_register_eiger_handlers(monkeypatch):
@@ -55,6 +61,9 @@ def test_lazy_catalog_initializes_once_on_first_real_use(monkeypatch):
     assert calls == []
     assert proxy["uid"] == "run"
     assert proxy.reg is catalog.reg
+    assert "uid" in proxy
+    assert len(proxy) == 1
+    assert list(proxy) == ["uid"]
     assert calls == [("chx", "pims")]
 
 
@@ -94,3 +103,55 @@ def test_olog_client_is_constructed_only_on_use(monkeypatch):
     assert calls == []
     assert chx_olog.create_olog_entry("ready") == ("ready", "Data Acquisition")
     assert calls == [chx_olog.OLOG_URL]
+
+
+@pytest.mark.mocked_facility
+def test_olog_client_uses_configured_url(monkeypatch):
+    from pyCHX import chx_olog
+
+    calls = []
+
+    class FakeClient:
+        def __init__(self, url):
+            calls.append(url)
+
+    chx_olog.get_olog_client.cache_clear()
+    monkeypatch.setattr(chx_olog, "SimpleOlogClient", FakeClient)
+    monkeypatch.setenv("PYCHX_OLOG_URL", "https://olog.example.invalid/Olog")
+
+    chx_olog.get_olog_client()
+
+    assert calls == ["https://olog.example.invalid/Olog"]
+    chx_olog.get_olog_client.cache_clear()
+
+
+@pytest.mark.mocked_facility
+@pytest.mark.parametrize(
+    ("helper_name", "update_name"),
+    [
+        ("update_olog_uid_with_file", "update_olog_uid"),
+        ("update_olog_logid_with_file", "update_olog_id"),
+    ],
+)
+def test_olog_attachment_files_are_closed_after_update(monkeypatch, tmp_path, helper_name, update_name):
+    from pyCHX import chx_olog
+
+    attachment_path = tmp_path / "report.pdf"
+    attachment_path.write_bytes(b"report")
+    observed = []
+
+    def record_update(*args, attachments, **kwargs):
+        observed.append((attachments[0].closed, attachments[0]))
+
+    monkeypatch.setattr(chx_olog, "Attachment", lambda stream: stream)
+    monkeypatch.setattr(chx_olog, "get_olog_client", lambda: object())
+    monkeypatch.setattr(chx_olog, update_name, record_update)
+
+    helper = getattr(chx_olog, helper_name)
+    if helper_name == "update_olog_uid_with_file":
+        helper("uid", "text", str(attachment_path))
+    else:
+        helper(1, "text", str(attachment_path))
+
+    assert observed[0][0] is False
+    assert observed[0][1].closed

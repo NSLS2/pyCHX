@@ -26,3 +26,11 @@ def test_obsolete_packaging_files_are_removed():
     root = Path(__file__).parents[2]
     for filename in ("setup.py", "setup.cfg", "requirements.txt", "requirements-dev.txt", "versioneer.py"):
         assert not (root / filename).exists()
+
+
+@pytest.mark.portable
+def test_large_regression_fixtures_are_excluded_from_distributions():
+    root = Path(__file__).parents[2]
+    manifest = (root / "MANIFEST.in").read_text().splitlines()
+
+    assert "prune pyCHX/tests/data" in manifest

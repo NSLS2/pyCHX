@@ -575,7 +575,7 @@ def get_roi(data, threshold=1e-3):
     return roi[0]
 
 
-def plot_sxvs(Knorm_bin_edges, spe_cts_all, uid=None, q_ring_center=None, xlim=[0, 3.5], time_steps=None):
+def plot_sxvs(Knorm_bin_edges, spe_cts_all, uid=None, q_ring_center=None, xlim=(0, 3.5), time_steps=None):
     """a convinent function to plot sxvs results"""
     num_rings = spe_cts_all.shape[1]
     num_times = Knorm_bin_edges.shape[0]
@@ -615,7 +615,7 @@ def fit_xsvs1(
     threshold=1e-7,
     uid=None,
     q_ring_center=None,
-    xlim=[0, 3.5],
+    xlim=(0, 3.5),
     ylim=None,
     time_steps=None,
 ):
@@ -969,8 +969,8 @@ def plot_xsvs_fit(
     ML_val,
     KL_val,
     K_mean,
-    xlim=[0, 15],
-    ylim=[1e-8, 1],
+    xlim=(0, 15),
+    ylim=(1e-8, 1),
     q_ring_center=None,
     uid="uid",
     qth=None,
@@ -1101,7 +1101,7 @@ def get_contrast(ML_val):
     return contrast_factorL
 
 
-def plot_g2_contrast(contrast_factorL, g2, times, taus, q_ring_center=None, uid=None, vlim=[0.8, 1.2], qth=None):
+def plot_g2_contrast(contrast_factorL, g2, times, taus, q_ring_center=None, uid=None, vlim=(0.8, 1.2), qth=None):
     nq, nt = contrast_factorL.shape
 
     if qth is not None:

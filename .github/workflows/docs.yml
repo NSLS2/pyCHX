@@ -4,6 +4,16 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+env:
+  PYTHONNOUSERSITE: "1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build_docs:
     runs-on: ubuntu-latest
@@ -23,12 +33,12 @@ jobs:
           echo "REPOSITORY_NAME=${REPOSITORY_NAME}" >> $GITHUB_ENV
 
       - name: Checkout the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1000  # should be enough to reach the most recent tag
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -42,11 +52,11 @@ jobs:
           # installation problems if out of date.
           python -m pip install --upgrade pip setuptools numpy
 
-          pip install ".[docs]"
-          pip list
+          python -m pip install ".[docs]"
+          python -m pip list
 
       - name: Build Docs
-        run: make -C docs/ html
+        run: PYCHX_DOCS_OFFLINE=1 make -C docs/ SPHINXOPTS="-W --keep-going" html
 
       - uses: actions/upload-artifact@v4
         with:

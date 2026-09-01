@@ -46,7 +46,7 @@ def fit_one_peak_curve(x, y, fit_range):
     return cen, cen_std, wid, wid_std, xf, out
 
 
-def plot_xy_with_fit(x, y, xf, out, xlim=[1e-3, 0.01], xlabel="q (" r"$\AA^{-1}$)", ylabel="I(q)", filename=None):
+def plot_xy_with_fit(x, y, xf, out, xlim=(1e-3, 0.01), xlabel="q (" r"$\AA^{-1}$)", ylabel="I(q)", filename=None):
     """YG Dev@Aug 10, 2019 to plot x,y with fit,
     currently this code is dedicated to plot q-Iq with fit and show the fittign parameter, peak pos, peak wid"""
 

@@ -27,12 +27,17 @@ from pyCHX.chx_generic_functions import (
     get_avg_img,
     get_detector,
     get_each_frame_intensity,
+    get_g2_fit_general,
+    get_q_rate_fit_general,
     get_qval_dict,
     load_data,
     plot1D,
+    plot_g2_general,
+    plot_q_rate_fit_general,
     psave_obj,
     save_arrays,
     save_g2_fit_para_tocsv,
+    save_g2_general,
     save_lists,
     show_img,
     show_label_array_on_image,
@@ -41,6 +46,7 @@ from pyCHX.chx_generic_functions import (
 )
 from pyCHX.chx_handlers import db
 from pyCHX.chx_libs import RUN_GUI, cmap_albula, colors, markers
+from pyCHX.config import get_compressed_data_dir
 
 
 def get_iq_invariant(qt, iqst):
@@ -89,8 +95,8 @@ def plot_q2_iq(
     iqst,
     time_stamp,
     pargs,
-    ylim=[-0.001, 0.01],
-    xlim=[0.007, 0.2],
+    ylim=(-0.001, 0.01),
+    xlim=(0.007, 0.2),
     legend_size=4,
     save=True,
 ):
@@ -1242,7 +1248,7 @@ def get_angular_mask(
     edges=None,
     num_angles=12,
     center=None,
-    dpix=[1, 1],
+    dpix=(1, 1),
     flow_geometry=False,
     flow_angle=None,
     fix_180_angle=False,
@@ -1328,7 +1334,7 @@ def get_angular_mask_old(
     edges=None,
     num_angles=12,
     center=None,
-    dpix=[1, 1],
+    dpix=(1, 1),
     flow_geometry=False,
     flow_angle=90,
 ):
@@ -1821,7 +1827,7 @@ def plot_saxs_rad_ang_g2(g2, taus, res_pargs=None, master_angle_plot=False, retu
         # fp = path + 'g2--uid=%s-qr=%s'%(uid,q_ring_center[qr_ind]) + CurTime + '.png'
         fp = path + "uid=%s--g2-qr=%s" % (uid, q_ring_center[qr_ind]) + "-.png"
         plt.savefig(fp, dpi=fig.dpi)
-        fig.set_tight_layout(True)
+        fig.tight_layout()
     if return_fig:
         return fig
 
@@ -1933,9 +1939,10 @@ def fit_saxs_rad_ang_g2(
         mod = Model(flow_para_function)  # ,  independent_vars=  _vars)
 
     else:
-        print(
-            "The %s is not supported.The supported functions include simple_exponential and stretched_exponential"
-            % function
+        raise ValueError(
+            f"Unsupported correlation function {function!r}. "
+            "Choose simple_exponential, stretched_exponential, "
+            "stretched_vibration, or flow_para_function."
         )
 
     mod.set_param_hint("baseline", min=0.5, max=1.5)
@@ -2132,18 +2139,14 @@ def linear_fit(x, y):
     return D0, gmfit
 
 
-def plot_gamma():
-    """not work"""
+def plot_gamma(uid, q_ring_center, result):
+    """Plot inverse relaxation rate as a function of radial momentum transfer."""
     fig, ax = plt.subplots()
-    ax.set_title("Uid= %s--Beta" % uid)
     ax.set_title("Uid= %s--Gamma" % uid)
-    # ax.plot(  q_ring_center**2 , 1/rate, 'ro', ls='--')
-
     ax.loglog(q_ring_center, 1 / result["rate"], "ro", ls="--")
-    # ax.set_ylabel('Log( Beta0 'r'$\beta$'"($s^{-1}$)")
     ax.set_ylabel("Log( Gamma )")
     ax.set_xlabel("$Log(q)$" r"($\AA^{-1}$)")
-    # plt.show()
+    return fig, ax
 
 
 def multi_uids_saxs_flow_xpcs_analysis(
@@ -2227,7 +2230,7 @@ def multi_uids_saxs_flow_xpcs_analysis(
                 useful_uids[run_seq + 1][i] = uid
                 g2s[run_seq + 1][i] = {}
                 # if compress:
-                filename = "/XF11ID/analysis/Compressed_Data" + "/uid_%s.cmp" % uid
+                filename = os.path.join(get_compressed_data_dir(), "uid_%s.cmp" % uid)
                 # update code here to use new pass uid to compress, 2016, Dec 3
                 if False:
                     mask, avg_img, imgsum, bad_frame_list = compress_eigerdata(
@@ -2340,7 +2343,19 @@ def multi_uids_saxs_flow_xpcs_analysis(
                         path=data_dir_,
                         uid=uid + "_1a_mq%s" % conf,
                     )
-                    save_g2(g2, taus=taus, qr=rcen, qz=acen, uid=uid + "_1a_mq%s" % conf, path=data_dir_)
+                    qval_dict = get_qval_dict(
+                        rcen,
+                        acen,
+                        multi_qr_for_one_qz=False,
+                    )
+                    save_g2_general(
+                        g2,
+                        taus=taus,
+                        qr=rcen,
+                        qz=acen,
+                        uid=uid + "_1a_mq%s_g2.csv" % conf,
+                        path=data_dir_,
+                    )
 
                     if nconf == 0:
                         g2s[run_seq + 1][i]["v"] = g2  # perpendular
@@ -2348,36 +2363,11 @@ def multi_uids_saxs_flow_xpcs_analysis(
                         g2s[run_seq + 1][i]["p"] = g2  # parallel
 
                     if fit:
-                        if False:
-                            g2_fit_result, taus_fit, g2_fit = get_g2_fit(
-                                g2,
-                                res_pargs=res_pargs,
-                                function="stretched_vibration",
-                                vlim=[0.95, 1.05],
-                                fit_variables={
-                                    "baseline": True,
-                                    "beta": True,
-                                    "alpha": False,
-                                    "relaxation_rate": True,
-                                    "freq": fit_vibration,
-                                    "amp": True,
-                                },
-                                fit_range=None,
-                                guess_values={
-                                    "baseline": 1.0,
-                                    "beta": 0.05,
-                                    "alpha": 1.0,
-                                    "relaxation_rate": 0.01,
-                                    "freq": 60,
-                                    "amp": 0.1,
-                                },
-                            )
-
                         if nconf == 0:  # for vertical
                             function = "stretched"
-                            g2_fit_result, taus_fit, g2_fit = get_g2_fit(
+                            g2_fit_result, taus_fit, g2_fit = get_g2_fit_general(
                                 g2,
-                                res_pargs=res_pargs,
+                                taus,
                                 function=function,
                                 vlim=[0.95, 1.05],
                                 fit_variables={
@@ -2396,9 +2386,9 @@ def multi_uids_saxs_flow_xpcs_analysis(
                             )
                         else:
                             function = "flow_para"
-                            g2_fit_result, taus_fit, g2_fit = get_g2_fit(
+                            g2_fit_result, taus_fit, g2_fit = get_g2_fit_general(
                                 g2,
-                                res_pargs=res_pargs,
+                                taus,
                                 function=function,
                                 vlim=[0.99, 1.05],
                                 fit_range=None,
@@ -2418,44 +2408,43 @@ def multi_uids_saxs_flow_xpcs_analysis(
                                 },
                             )
 
-                        save_g2(
+                        save_g2_general(
                             g2_fit,
                             taus=taus_fit,
                             qr=rcen,
                             qz=acen,
-                            uid=uid + "_1a_mq%s" % conf + "_fit",
+                            uid=uid + "_1a_mq%s_fit_g2.csv" % conf,
                             path=data_dir_,
                         )
-
-                        _ = dict(
-                            taus=taus,
-                            q_ring_center=np.unique(rcen),
-                            ang_center=[acen[0]],
-                            path=data_dir_,
-                            uid=uid + "_1a_mq%s" % conf + "_fit",
-                        )
-
-                        plot_g2(
-                            g2,
-                            res_pargs=res_pargs,
-                            tau_2=taus_fit,
-                            g2_2=g2_fit,
+                        plot_g2_general(
+                            g2_dict={1: g2, 2: g2_fit},
+                            taus_dict={1: taus, 2: taus_fit},
+                            qval_dict=qval_dict,
                             fit_res=g2_fit_result,
                             function=function,
-                            master_plot="qz",
                             vlim=[0.95, 1.05],
                             geometry="ang_saxs",
+                            filename=res_pargs["uid"] + "_g2",
+                            path=data_dir_,
                             append_name=conf + "_fit",
                         )
 
                         dfv = save_g2_fit_para_tocsv(
-                            g2_fit_result, filename=uid + "_1a_mq" + conf + "_fit_para", path=data_dir_
+                            g2_fit_result,
+                            filename=uid + "_1a_mq" + conf + "_fit_para.csv",
+                            path=data_dir_,
                         )
 
-                        fit_q_rate(
-                            np.unique(rcen)[:],
+                        _, qrate_fit_result = get_q_rate_fit_general(
+                            qval_dict,
                             dfv["relaxation_rate"],
-                            power_variable=False,
+                            geometry="ang_saxs",
+                        )
+                        plot_q_rate_fit_general(
+                            qval_dict,
+                            dfv["relaxation_rate"],
+                            qrate_fit_result,
+                            geometry="ang_saxs",
                             uid=uid + "_" + conf + "_fit_rate",
                             path=data_dir_,
                         )
@@ -2546,7 +2535,7 @@ def multi_uids_saxs_xpcs_analysis(
                 md_ = imgs.md
                 useful_uids[run_seq + 1][i] = uid
                 if compress:
-                    filename = "/XF11ID/analysis/Compressed_Data" + "/uid_%s.cmp" % uid
+                    filename = os.path.join(get_compressed_data_dir(), "uid_%s.cmp" % uid)
                     # update code here to use new pass uid to compress, 2016, Dec 3
                     if False:
                         mask, avg_img, imgsum, bad_frame_list = compress_eigerdata(
@@ -2675,27 +2664,67 @@ def multi_uids_saxs_xpcs_analysis(
                         good_series, ring_mask, bad_image_process, bad_frame_list, good_start, num_buf=8
                     )
                     if len(lag_steps) < len(lag_steps_):
-                        lag_steps = lag_step_
+                        lag_steps = lag_steps_
 
                 taus_ = lag_steps_ * timeperframe
                 taus = lag_steps * timeperframe
 
-                res_pargs = dict(taus=taus_, q_ring_center=q_ring_center, path=data_dir_, uid=uid)
-                save_saxs_g2(g2, res_pargs)
+                qval_dict = get_qval_dict(q_ring_center)
+                save_g2_general(
+                    g2,
+                    taus=taus_,
+                    qr=q_ring_center,
+                    uid=uid + "_g2.csv",
+                    path=data_dir_,
+                )
                 # plot_saxs_g2( g2, taus,  vlim=[0.95, 1.05], res_pargs=res_pargs)
                 if fit:
-                    fit_result = fit_saxs_g2(
+                    g2_fit_result, taus_fit, g2_fit = get_g2_fit_general(
                         g2,
-                        res_pargs,
+                        taus_,
                         function="stretched",
                         vlim=[0.95, 1.05],
                         fit_variables={"baseline": True, "beta": True, "alpha": False, "relaxation_rate": True},
                         guess_values={"baseline": 1.0, "beta": 0.05, "alpha": 1.0, "relaxation_rate": 0.01},
                     )
-                    fit_q_rate(
-                        q_ring_center[:], fit_result["rate"][:], power_variable=False, uid=uid, path=data_dir_
+                    g2_fit_paras = save_g2_fit_para_tocsv(
+                        g2_fit_result,
+                        filename=uid + "_g2_fit_paras.csv",
+                        path=data_dir_,
+                    )
+                    plot_g2_general(
+                        g2_dict={1: g2, 2: g2_fit},
+                        taus_dict={1: taus_, 2: taus_fit},
+                        qval_dict=qval_dict,
+                        fit_res=g2_fit_result,
+                        geometry="saxs",
+                        filename=uid + "_g2",
+                        path=data_dir_,
+                        function="stretched",
+                        ylabel="g2",
+                        append_name="_fit",
+                        vlim=[0.95, 1.05],
+                    )
+                    _, qrate_fit_result = get_q_rate_fit_general(
+                        qval_dict,
+                        g2_fit_paras["relaxation_rate"],
+                        geometry="saxs",
+                    )
+                    plot_q_rate_fit_general(
+                        qval_dict,
+                        g2_fit_paras["relaxation_rate"],
+                        qrate_fit_result,
+                        geometry="saxs",
+                        uid=uid,
+                        path=data_dir_,
                     )
 
+                    fit_result = {
+                        "beta": g2_fit_paras["beta"].to_numpy(),
+                        "rate": g2_fit_paras["relaxation_rate"].to_numpy(),
+                        "alpha": g2_fit_paras["alpha"].to_numpy(),
+                        "baseline": g2_fit_paras["baseline"].to_numpy(),
+                    }
                     psave_obj(fit_result, data_dir_ + "uid=%s-g2-fit-para" % uid)
                 psave_obj(md, data_dir_ + "uid=%s-md" % uid)  # save the setup parameters
 
@@ -2765,7 +2794,7 @@ def plot_mul_g2(g2s, md):
                     ax.legend(loc="best", fontsize=6)
 
                 i = i + 1
-    fig.set_tight_layout(True)
+    fig.tight_layout()
 
 
 def get_QrQw_From_RoiMask(roi_mask, setup_pargs):

@@ -35,6 +35,7 @@ from pyCHX.chx_specklecp import (
     plot_xsvs_fit,
     save_KM,
 )
+from pyCHX.config import get_analysis_root
 from pyCHX.Create_Report import export_xpcs_results_to_h5, extract_xpcs_results_from_h5, make_pdf_report
 from pyCHX.SAXS import show_saxs_qmap
 from pyCHX.Two_Time_Correlation_Function import show_C12
@@ -81,7 +82,7 @@ def XPCS_XSVS_SAXS_Multi(
     _ = mask.copy()
 
     username = getpass.getuser()
-    data_dir0 = os.path.join("/XF11ID/analysis/", run_pargs["CYCLE"], username, "Results/")
+    data_dir0 = os.path.join(get_analysis_root(), run_pargs["CYCLE"], username, "Results/")
     os.makedirs(data_dir0, exist_ok=True)
     print("Results from this analysis will be stashed in the directory %s" % data_dir0)
     data_dir = os.path.join(data_dir0, uid_average + "/")
@@ -544,12 +545,15 @@ def XPCS_XSVS_SAXS_Multi(
     )
     # Attach each g2 result to the corresponding olog entry
     if att_pdf_report:
-        os.environ["HTTPS_PROXY"] = "https://proxy:8888"
-        os.environ["no_proxy"] = "cs.nsls2.local,localhost,127.0.0.1"
         pname = pdf_out_dir + pdf_filename
-        atch = [Attachment(open(pname, "rb"))]
         try:
-            update_olog_uid(uid=fuids[-1], text="Add XPCS Averaged Analysis PDF Report", attachments=atch)
+            with open(pname, "rb") as stream:
+                attachments = [Attachment(stream)]
+                update_olog_uid(
+                    uid=fuids[-1],
+                    text="Add XPCS Averaged Analysis PDF Report",
+                    attachments=attachments,
+                )
         except Exception:
             print(
                 "I can't attach this PDF: %s due to a duplicated filename. Please give a different PDF file."

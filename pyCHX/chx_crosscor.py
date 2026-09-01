@@ -11,7 +11,6 @@ This module is for functions specific to spatial correlation in order to tackle 
 from __future__ import absolute_import, division, print_function
 
 import threading
-from multiprocessing import Pool
 
 import numpy as np
 from numpy import array, asarray
@@ -20,7 +19,7 @@ from numpy.lib import NumpyVersion
 from scipy.fftpack import fftn, ifftn, next_fast_len
 from scipy.signal import fftconvolve
 
-from pyCHX.chx_compress import apply_async
+from pyCHX.chx_compress import _collect_pool_results, _make_pool, apply_async
 
 # from __future__ import absolute_import, division, print_function
 
@@ -236,13 +235,14 @@ class CrossCorrelator2:
             # set up size for fft with padding
             shape = 2 * self.sizes[reg, :] - 1
             fshape = [next_fast_len(int(d)) for d in shape]
+            axes = tuple(range(len(shape)))
             # fslice = tuple([slice(0, int(sz)) for sz in shape])
 
             submask = np.zeros(self.sizes[reg, :])
             submask[i, j] = 1
-            mma1 = np.fft.rfftn(submask, fshape)  # for mask
+            mma1 = np.fft.rfftn(submask, s=fshape, axes=axes)  # for mask
             # do correlation by ffts
-            maskcor = np.fft.irfftn(mma1 * mma1.conj(), fshape)  # [fslice])
+            maskcor = np.fft.irfftn(mma1 * mma1.conj(), s=fshape, axes=axes)  # [fslice])
             # print(reg, maskcor)
             # maskcor = _centered(np.fft.fftshift(maskcor), self.sizes[reg,:]) #make smaller??
             maskcor = _centered(maskcor, self.sizes[reg, :])  # make smaller??
@@ -250,18 +250,18 @@ class CrossCorrelator2:
             maskcor *= maskcor > 0.5
             tmpimg = np.zeros(self.sizes[reg, :])
             tmpimg[i, j] = img1[ii, jj]
-            im1 = np.fft.rfftn(tmpimg, fshape)  # image 1
+            im1 = np.fft.rfftn(tmpimg, s=fshape, axes=axes)  # image 1
             if self_correlation:
                 # ccorr = np.real(np.fft.ifftn(im1 * im1.conj(), fshape)[fslice])
-                ccorr = np.fft.irfftn(im1 * im1.conj(), fshape)  # [fslice])
+                ccorr = np.fft.irfftn(im1 * im1.conj(), s=fshape, axes=axes)  # [fslice])
                 # ccorr = np.fft.fftshift(ccorr)
                 ccorr = _centered(ccorr, self.sizes[reg, :])
             else:
                 _ = img1.ndim
                 tmpimg2 = np.zeros_like(tmpimg)
                 tmpimg2[i, j] = img2[ii, jj]
-                im2 = np.fft.rfftn(tmpimg2, fshape)  # image 2
-                ccorr = np.fft.irfftn(im1 * im2.conj(), fshape)  # [fslice])
+                im2 = np.fft.rfftn(tmpimg2, s=fshape, axes=axes)  # image 2
+                ccorr = np.fft.irfftn(im1 * im2.conj(), s=fshape, axes=axes)  # [fslice])
                 # ccorr = _centered(np.fft.fftshift(ccorr), self.sizes[reg,:])
                 ccorr = _centered(ccorr, self.sizes[reg, :])
                 # print('here')
@@ -278,18 +278,18 @@ class CrossCorrelator2:
 
             # now handle the normalizations
             if "symavg" in normalization:
-                mim1 = np.fft.rfftn(tmpimg * submask, fshape)
-                Icorr = np.fft.irfftn(mim1 * mma1.conj(), fshape)  # [fslice])
+                mim1 = np.fft.rfftn(tmpimg * submask, s=fshape, axes=axes)
+                Icorr = np.fft.irfftn(mim1 * mma1.conj(), s=fshape, axes=axes)  # [fslice])
                 # Icorr = _centered(np.fft.fftshift(Icorr), self.sizes[reg,:])
                 Icorr = _centered(Icorr, self.sizes[reg, :])
                 # do symmetric averaging
                 if self_correlation:
-                    Icorr2 = np.fft.irfftn(mma1 * mim1.conj(), fshape)  # [fslice])
+                    Icorr2 = np.fft.irfftn(mma1 * mim1.conj(), s=fshape, axes=axes)  # [fslice])
                     # Icorr2 = _centered(np.fft.fftshift(Icorr2), self.sizes[reg,:])
                     Icorr2 = _centered(Icorr2, self.sizes[reg, :])
                 else:
-                    mim2 = np.fft.rfftn(tmpimg2 * submask, fshape)
-                    Icorr2 = np.fft.irfftn(mma1 * mim2.conj(), fshape)
+                    mim2 = np.fft.rfftn(tmpimg2 * submask, s=fshape, axes=axes)
+                    Icorr2 = np.fft.irfftn(mma1 * mim2.conj(), s=fshape, axes=axes)
                     # Icorr2 = _centered(np.fft.fftshift(Icorr2), self.sizes[reg,:])
                     Icorr2 = _centered(Icorr2, self.sizes[reg, :])
                 # there is an extra condition that Icorr*Icorr2 != 0
@@ -739,25 +739,28 @@ def run_para_ccorr_sym(ccorr_sym, FD, nstart=0, nend=None, imgsum=None, img_norm
     if nend > FD.end - 1:
         nend = FD.end - 1
     N = nend - nstart
-    if imgsum is None:
-        imgsum = np.ones(N)
+    if N <= 0:
+        raise ValueError("nend must be greater than nstart and include at least one frame pair")
+    if imgsum is not None and len(imgsum) <= nend:
+        raise ValueError("imgsum must contain an entry for every requested frame")
     if img_norm is None:
         img_norm = 1.0
     inputs = range(N)
-    pool = Pool(processes=len(inputs))
+    pool = _make_pool(len(inputs))
     print("Starting assign the tasks...")
     results = {}
     for i in tqdm(range(nstart, nend)):
         # img1 = FD.rdframe(i)
         # img2 = FD.rdframe(i+1)
+        first_sum = 1.0 if imgsum is None else imgsum[i]
+        second_sum = 1.0 if imgsum is None else imgsum[i + 1]
         results[i] = apply_async(
             pool,
             ccorr_sym,
-            (FD.rdframe(i) / (imgsum[i] * img_norm), FD.rdframe(1 + i) / (imgsum[i + 1] * img_norm)),
+            (FD.rdframe(i) / (first_sum * img_norm), FD.rdframe(1 + i) / (second_sum * img_norm)),
         )
-    pool.close()
     print("Starting running the tasks...")
-    res = [results[k].get() for k in tqdm(list(sorted(results.keys())))]
+    res = _collect_pool_results(pool, results, show_progress=True)
 
     for i in inputs:
         if i == 0:

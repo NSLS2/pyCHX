@@ -1,3 +1,4 @@
+import operator
 import os
 import pickle as pkl
 import shutil
@@ -27,6 +28,7 @@ from pyCHX.chx_generic_functions import (
 )
 from pyCHX.chx_handlers import EigerImages, db
 from pyCHX.chx_libs import RUN_GUI
+from pyCHX.config import get_compressed_data_dir
 
 
 def run_dill_encoded(what):
@@ -36,6 +38,42 @@ def run_dill_encoded(what):
 
 def apply_async(pool, fun, args, callback=None):
     return pool.apply_async(run_dill_encoded, (dill.dumps((fun, args)),), callback=callback)
+
+
+def _make_pool(task_count):
+    """Create no more worker processes than either tasks or available CPUs."""
+    if task_count < 1:
+        raise ValueError("at least one multiprocessing task is required")
+    return Pool(processes=min(task_count, cpu_count()))
+
+
+def _collect_pool_results(pool, results, show_progress=False):
+    """Collect keyed async results and always reap the worker processes."""
+    try:
+        pool.close()
+        keys = list(sorted(results))
+        if show_progress:
+            keys = tqdm(keys)
+        return [results[key].get() for key in keys]
+    except BaseException:
+        pool.terminate()
+        raise
+    finally:
+        pool.join()
+
+
+def _frame_bin_edges(frame_count, bins):
+    """Return consecutive, non-overlapping frame ranges for compression."""
+    try:
+        bins = operator.index(bins)
+    except TypeError as error:
+        raise TypeError("bins must be an integer") from error
+    if bins < 1:
+        raise ValueError("bins must be at least one")
+
+    starts = np.arange(0, frame_count, bins, dtype=np.int64)
+    stops = np.minimum(starts + bins, frame_count)
+    return np.column_stack((starts, stops))
 
 
 def map_async(pool, fun, args):
@@ -92,9 +130,9 @@ def compress_eigerdata(
 
     """
 
-    end = len(images) // bins
+    end = len(_frame_bin_edges(len(images), bins))
     if filename is None:
-        filename = "/XF11ID/analysis/Compressed_Data" + "/uid_%s.cmp" % md["uid"]
+        filename = os.path.join(get_compressed_data_dir(), "uid_%s.cmp" % md["uid"])
     if dtypes != "uid":
         para_compress = False
     else:
@@ -249,24 +287,24 @@ def read_compressed_eigerdata(
         CAL = True
     else:
         try:
-            mask, avg_img, imgsum, bad_frame_list_ = pkl.load(open(filename + ".pkl", "rb"))
+            with open(filename + ".pkl", "rb") as stream:
+                mask, avg_img, imgsum, bad_frame_list_ = pkl.load(stream)
         except Exception:
             CAL = True
     if CAL:
-        FD = Multifile(filename, beg, end)
-        imgsum = np.zeros(FD.end - FD.beg, dtype=np.float64)
-        avg_img = np.zeros([FD.md["ncols"], FD.md["nrows"]], dtype=np.float64)
-        imgsum, bad_frame_list_ = get_each_frame_intensityc(
-            FD,
-            sampling=1,
-            bad_pixel_threshold=bad_pixel_threshold,
-            bad_pixel_low_threshold=bad_pixel_low_threshold,
-            hot_pixel_threshold=hot_pixel_threshold,
-            plot_=False,
-            bad_frame_list=bad_frame_list,
-        )
-        avg_img = get_avg_imgc(FD, beg=None, end=None, sampling=1, plot_=False, bad_frame_list=bad_frame_list_)
-        FD.FID.close()
+        with Multifile(filename, beg, end) as FD:
+            imgsum = np.zeros(FD.end - FD.beg, dtype=np.float64)
+            avg_img = np.zeros([FD.md["ncols"], FD.md["nrows"]], dtype=np.float64)
+            imgsum, bad_frame_list_ = get_each_frame_intensityc(
+                FD,
+                sampling=1,
+                bad_pixel_threshold=bad_pixel_threshold,
+                bad_pixel_low_threshold=bad_pixel_low_threshold,
+                hot_pixel_threshold=hot_pixel_threshold,
+                plot_=False,
+                bad_frame_list=bad_frame_list,
+            )
+            avg_img = get_avg_imgc(FD, beg=None, end=None, sampling=1, plot_=False, bad_frame_list=bad_frame_list_)
 
     return mask, avg_img, imgsum, bad_frame_list_
 
@@ -329,7 +367,7 @@ def para_compress_eigerdata(
     if cpu_core_number == 0:
         cpu_core_number = cpu_count()
 
-    N = int(np.ceil(N / bins))
+    N = len(_frame_bin_edges(N, bins))
     Nf = int(np.ceil(N / num_sub))
     if Nf > cpu_core_number:
         print("The process number is larger than %s (current server's core threads)" % cpu_core_number)
@@ -393,7 +431,8 @@ def para_compress_eigerdata(
     del results
     del res_
     if with_pickle:
-        pkl.dump([mask, avg_img, imgsum, bad_frame_list], open(filename + ".pkl", "wb"))
+        with open(filename + ".pkl", "wb") as stream:
+            pkl.dump([mask, avg_img, imgsum, bad_frame_list], stream)
     if copy_rawdata:
         delete_data(data_path, new_path)
     return mask, avg_img, imgsum, bad_frame_list
@@ -408,12 +447,12 @@ def combine_compressed(filename, Nf, del_old=True):
 
 def combine_binary_files(filename, old_files, del_old=False):
     """Combine binary files together"""
-    fn_ = open(filename, "wb")
-    for ftemp in old_files:
-        shutil.copyfileobj(open(ftemp, "rb"), fn_)
-        if del_old:
-            os.remove(ftemp)
-    fn_.close()
+    with open(filename, "wb") as destination:
+        for source_name in old_files:
+            with open(source_name, "rb") as source:
+                shutil.copyfileobj(source, destination)
+            if del_old:
+                os.remove(source_name)
 
 
 def para_segment_compress_eigerdata(
@@ -457,12 +496,7 @@ def para_segment_compress_eigerdata(
 
     # N = int( np.ceil( N/ bins  ) )
     num_sub *= bins
-    if N % num_sub:
-        Nf = N // num_sub + 1
-        print("The average image intensity would be slightly not correct, about 1% error.")
-        print("Please give a num_sub to make reminder of Num_images/num_sub =0 to get a correct avg_image")
-    else:
-        Nf = N // num_sub
+    Nf = int(np.ceil(N / num_sub))
     print("It will create %i temporary files for parallel compression." % Nf)
 
     if Nf > num_max_para_process:
@@ -479,7 +513,7 @@ def para_segment_compress_eigerdata(
             inputs = range(num_max_para_process * nr, num_max_para_process * (nr + 1))
         _ = [filename + "_temp-%i.tmp" % i for i in inputs]
         # print( nr, inputs, )
-        pool = Pool(processes=len(inputs))  # , maxtasksperchild=1000 )
+        pool = _make_pool(len(inputs))  # , maxtasksperchild=1000 )
         print("Pool processes: %s" % len(inputs))
         for i in inputs:
             if i * num_sub <= N:
@@ -546,6 +580,8 @@ def segment_compress_eigerdata(
                 images = reverse_updown(EigerImages(data_path, images_per_file, md))[N1:N2]
             if rot90:
                 images = rot90_clockwise(images)
+    else:
+        images = images[N1:N2]
 
     Nimg_ = len(images)
     M, N = images[0].shape
@@ -564,9 +600,8 @@ def segment_compress_eigerdata(
         print("Wrong type of nobytes, only support 2 [np.int16] or 4 [np.int32]")
         dtype = np.int32
 
-    # Nimg =   Nimg_//bins
-    Nimg = int(np.ceil(Nimg_ / bins))
-    time_edge = np.array(create_time_slice(N=Nimg_, slice_num=Nimg, slice_width=bins))
+    time_edge = _frame_bin_edges(Nimg_, bins)
+    Nimg = len(time_edge)
     # print( time_edge, Nimg_, Nimg, bins, N1, N2 )
     imgsum = np.zeros(Nimg)
     if bins != 1:
@@ -600,7 +635,10 @@ def segment_compress_eigerdata(
         del p, v, img
         fp.flush()
     fp.close()
-    avg_img /= good_count
+    if good_count:
+        avg_img /= good_count
+    else:
+        avg_img.fill(np.nan)
     bad_frame_list = (np.array(imgsum) > bad_pixel_threshold) | (np.array(imgsum) <= bad_pixel_low_threshold)
     sys.stdout.write("#")
     sys.stdout.flush()
@@ -812,8 +850,8 @@ def init_compress_eigerdata(
         print("Wrong type of nobytes, only support 2 [np.int16] or 4 [np.int32]")
         dtype = np.int32
 
-    Nimg = Nimg_ // bins
-    time_edge = np.array(create_time_slice(N=Nimg_, slice_num=Nimg, slice_width=bins))
+    time_edge = _frame_bin_edges(Nimg_, bins)
+    Nimg = len(time_edge)
 
     imgsum = np.zeros(Nimg)
     if bins != 1:
@@ -848,9 +886,15 @@ def init_compress_eigerdata(
         # n +=1
 
     fp.close()
-    frac /= good_count
+    if good_count:
+        frac /= good_count
+    else:
+        frac = 0.0
     print("The fraction of pixel occupied by photon is %6.3f%% " % (100 * frac))
-    avg_img /= good_count
+    if good_count:
+        avg_img /= good_count
+    else:
+        avg_img.fill(np.nan)
 
     bad_frame_list = np.where(
         (np.array(imgsum) > bad_pixel_threshold) | (np.array(imgsum) <= bad_pixel_low_threshold)
@@ -864,7 +908,8 @@ def init_compress_eigerdata(
     else:
         print("No bad frames are involved.")
     if with_pickle:
-        pkl.dump([mask, avg_img, imgsum, bad_frame_list], open(filename + ".pkl", "wb"))
+        with open(filename + ".pkl", "wb") as stream:
+            pkl.dump([mask, avg_img, imgsum, bad_frame_list], stream)
     return mask, avg_img, imgsum, bad_frame_list
 
 
@@ -1002,7 +1047,7 @@ class Multifile:
         # the logic involving finding the cursor position
         if n is None:
             n = self.recno
-        if n < self.beg or n > self.end:
+        if n < self.beg or n >= self.end:
             raise IndexError("Error, record out of range")
         # print (n, self.recno, self.FID.tell() )
         if (n == self.recno) and (self.imgread == 0):
@@ -1250,47 +1295,27 @@ def get_avg_imgc(
     FD, beg=None, end=None, sampling=100, plot_=False, bad_frame_list=None, show_progress=True, *argv, **kwargs
 ):
     """Get average imagef from a data_series by every sampling number to save time"""
-    # avg_img = np.average(data_series[:: sampling], axis=0)
-
     if beg is None:
         beg = FD.beg
     if end is None:
         end = FD.end
+    if sampling < 1:
+        raise ValueError("sampling must be at least one")
 
-    avg_img = FD.rdframe(beg)
-    n = 1
-    flag = True
-    if show_progress:
-        # print(  sampling-1 + beg , end, sampling )
-        if bad_frame_list is None:
-            bad_frame_list = []
-        fra_num = int((end - beg) / sampling) - len(bad_frame_list)
-        for i in tqdm(range(sampling - 1 + beg, end, sampling), desc="Averaging %s images" % fra_num):
-            if bad_frame_list is not None:
-                if i in bad_frame_list:
-                    flag = False
-                else:
-                    flag = True
-            # print(i, flag)
-            if flag:
-                p, v = FD.rdrawframe(i)
-                if len(p) > 0:
-                    np.ravel(avg_img)[p] += v
-                    n += 1
+    bad_frames = set() if bad_frame_list is None else set(np.atleast_1d(bad_frame_list).tolist())
+    sample_indices = [index for index in range(beg, end, sampling) if index not in bad_frames]
+    avg_img = np.zeros((FD.md["ncols"], FD.md["nrows"]), dtype=np.float64)
+    indices = (
+        tqdm(sample_indices, desc="Averaging %s images" % len(sample_indices)) if show_progress else sample_indices
+    )
+    for index in indices:
+        p, v = FD.rdrawframe(index)
+        np.ravel(avg_img)[p] += v
+
+    if sample_indices:
+        avg_img /= len(sample_indices)
     else:
-        for i in range(sampling - 1 + beg, end, sampling):
-            if bad_frame_list is not None:
-                if i in bad_frame_list:
-                    flag = False
-                else:
-                    flag = True
-            if flag:
-                p, v = FD.rdrawframe(i)
-                if len(p) > 0:
-                    np.ravel(avg_img)[p] += v
-                    n += 1
-
-    avg_img /= n
+        avg_img.fill(np.nan)
     if plot_:
         if RUN_GUI:
             fig = Figure()
@@ -1338,9 +1363,7 @@ def mean_intensityc(FD, labeled_array, sampling=1, index=None, multi_cor=False):
     -------
     mean_intensity : array
         The mean intensity of each ROI for all `images`
-        Dimensions:
-            len(mean_intensity) == len(index)
-            len(mean_intensity[0]) == len(images)
+        Shape is ``(number_of_sampled_frames, len(index))``.
     index : list
         The labels for each element of the `mean_intensity` list
     """
@@ -1352,54 +1375,57 @@ def mean_intensityc(FD, labeled_array, sampling=1, index=None, multi_cor=False):
             " `image` shape (%d, %d) in FD is not equal to the labeled_array shape (%d, %d)"
             % (sx, sy, labeled_array.shape[0], labeled_array.shape[1])
         )
-    # handle various input for `index`
+    # Remap the selected labels to a dense, one-based range for
+    # ``np.bincount``. ROI labels need not be contiguous in the input mask.
+    available_labels = np.unique(qind)
     if index is None:
-        index = list(np.unique(labeled_array))
-        index.remove(0)
+        index = list(available_labels)
     else:
-        try:
-            len(index)
-        except TypeError:
-            index = [index]
+        index = np.atleast_1d(index)
+        missing_labels = np.setdiff1d(index, available_labels)
+        if missing_labels.size:
+            raise ValueError(f"ROI labels not present in labeled_array: {missing_labels.tolist()}")
 
-        index = np.array(index)
-        # print ('here')
-        good_ind = np.zeros(max(qind), dtype=np.int32)
-        good_ind[index - 1] = np.arange(len(index)) + 1
-        w = np.where(good_ind[qind - 1])[0]
-        qind = good_ind[qind[w] - 1]
-        pixelist = pixelist[w]
+    if len(index) == 0:
+        raise ValueError("labeled_array contains no positive ROI labels")
+
+    remapped_qind = np.zeros_like(qind, dtype=np.int64)
+    for output_label, input_label in enumerate(index, start=1):
+        remapped_qind[qind == input_label] = output_label
+    selected = remapped_qind > 0
+    qind = remapped_qind[selected]
+    pixelist = pixelist[selected]
 
     # pre-allocate an array for performance
     # might be able to use list comprehension to make this faster
 
-    mean_intensity = np.zeros([int((FD.end - FD.beg) / sampling), len(index)])
+    sample_indices = range(FD.beg, FD.end, sampling)
+    mean_intensity = np.zeros([len(sample_indices), len(index)])
     # fra_pix = np.zeros_like( pixelist, dtype=np.float64)
     timg = np.zeros(FD.md["ncols"] * FD.md["nrows"], dtype=np.int32)
     timg[pixelist] = np.arange(1, len(pixelist) + 1)
     # maxqind = max(qind)
-    norm = np.bincount(qind)[1:]
+    norm = np.bincount(qind, minlength=len(index) + 1)[1:]
     n = 0
     # for  i in tqdm(range( FD.beg , FD.end )):
     if not multi_cor:
-        for i in tqdm(range(FD.beg, FD.end, sampling), desc="Get ROI intensity of each frame"):
+        for i in tqdm(sample_indices, desc="Get ROI intensity of each frame"):
             p, v = FD.rdrawframe(i)
             w = np.where(timg[p])[0]
             pxlist = timg[p[w]] - 1
             mean_intensity[n] = np.bincount(qind[pxlist], weights=v[w], minlength=len(index) + 1)[1:]
             n += 1
     else:
-        ring_masks = [np.array(labeled_array == i, dtype=np.int64) for i in np.unique(labeled_array)[1:]]
+        ring_masks = [np.array(labeled_array == label, dtype=np.int64) for label in index]
         inputs = range(len(ring_masks))
         go_through_FD(FD)
-        pool = Pool(processes=len(inputs))
+        pool = _make_pool(len(inputs))
         print("Starting assign the tasks...")
         results = {}
         for i in tqdm(inputs):
             results[i] = apply_async(pool, _get_mean_intensity_one_q, (FD, sampling, ring_masks[i]))
-        pool.close()
         print("Starting running the tasks...")
-        res = [results[k].get() for k in tqdm(list(sorted(results.keys())))]
+        res = _collect_pool_results(pool, results, show_progress=True)
         # return res
         for i in inputs:
             mean_intensity[:, i] = res[i]
@@ -1412,7 +1438,7 @@ def mean_intensityc(FD, labeled_array, sampling=1, index=None, multi_cor=False):
 
 
 def _get_mean_intensity_one_q(FD, sampling, labels):
-    mi = np.zeros(int((FD.end - FD.beg) / sampling))
+    mi = np.zeros(len(range(FD.beg, FD.end, sampling)))
     n = 0
     qind, pixelist = roi.extract_label_indices(labels)
     # iterate over the images to compute multi-tau correlation
@@ -1423,7 +1449,7 @@ def _get_mean_intensity_one_q(FD, sampling, labels):
         p, v = FD.rdrawframe(i)
         w = np.where(timg[p])[0]
         pxlist = timg[p[w]] - 1
-        mi[n] = np.bincount(qind[pxlist], weights=v[w], minlength=2)[1:]
+        mi[n] = np.bincount(qind[pxlist], weights=v[w], minlength=2)[1]
         n += 1
     return mi
 
@@ -1450,9 +1476,10 @@ def get_each_frame_intensityc(
 
     # print ( argv, kwargs )
     # mask &= img < hot_pixel_threshold
-    imgsum = np.zeros(int((FD.end - FD.beg) / sampling))
+    sample_indices = np.arange(FD.beg, FD.end, sampling)
+    imgsum = np.zeros(len(sample_indices))
     n = 0
-    for i in tqdm(range(FD.beg, FD.end, sampling), desc="Get each frame intensity"):
+    for i in tqdm(sample_indices, desc="Get each frame intensity"):
         p, v = FD.rdrawframe(i)
         if len(p) > 0:
             imgsum[n] = np.sum(v)
@@ -1482,10 +1509,7 @@ def get_each_frame_intensityc(
 
         plt.show()
 
-    bad_frame_list_ = (
-        np.where((np.array(imgsum) > bad_pixel_threshold) | (np.array(imgsum) <= bad_pixel_low_threshold))[0]
-        + FD.beg
-    )
+    bad_frame_list_ = sample_indices[(imgsum > bad_pixel_threshold) | (imgsum <= bad_pixel_low_threshold)]
 
     if bad_frame_list is not None:
         bad_frame_list = np.unique(np.concatenate([bad_frame_list, bad_frame_list_]))

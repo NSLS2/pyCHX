@@ -1,5 +1,7 @@
 # import sys
 
+import os
+
 import h5py
 import numpy as np
 
@@ -168,7 +170,7 @@ def convert_Qmap_old(img, qx_map, qy_map=None, bins=None, rangeq=None):
             bins = qx_map.shape
 
         remesh_data, xbins, ybins = np.histogram2d(
-            qx_map.ravel(), qy_map.ravel(), bins=bins, range=rangeq, normed=False, weights=img.ravel()
+            qx_map.ravel(), qy_map.ravel(), bins=bins, range=rangeq, density=False, weights=img.ravel()
         )
 
     else:
@@ -182,7 +184,7 @@ def convert_Qmap_old(img, qx_map, qy_map=None, bins=None, rangeq=None):
                 bins = bins[0]
         print(rangeq, bins)
         remesh_data, xbins = np.histogram(
-            qx_map.ravel(), bins=bins, range=rangeq, normed=False, weights=img.ravel()
+            qx_map.ravel(), bins=bins, range=rangeq, density=False, weights=img.ravel()
         )
         ybins = None
     return remesh_data, xbins, ybins
@@ -206,11 +208,12 @@ class Mask(object):
         """Loads a mask from a a file. If this object already has some masking
         defined, then the new mask is 'added' to it. Thus, one can load multiple
         masks to exlude various pixels."""
+        infile = os.fspath(infile)
 
-        if format == "png" or infile[-4:] == ".png":
+        if format == "png" or infile.lower().endswith(".png"):
             self.load_png(infile, invert=invert)
 
-        elif format == "hdf5" or infile[-3:] == ".h5" or infile[-4:] == ".hd5":
+        elif format == "hdf5" or infile.lower().endswith((".h5", ".hd5", ".hdf5")):
             self.load_hdf5(infile, invert=invert)
 
         else:
@@ -227,9 +230,10 @@ class Mask(object):
         low values (black) are exluded."""
 
         # Image should be black (0) for excluded pixels, white (255) for included pixels
-        img = PIL.Image.open(infile).convert("L")  # black-and-white
-        img2 = img.point(lambda p: p > threshold and 255)
-        data = np.asarray(img2) / 255
+        with PIL.Image.open(infile) as source:
+            with source.convert("L") as image:  # black-and-white
+                with image.point(lambda p: p > threshold and 255) as thresholded:
+                    data = np.asarray(thresholded) / 255
         data = data.astype(int)
 
         if invert:

@@ -29,6 +29,8 @@ from numpy import (
 from skbeam.core.utils import multi_tau_lags
 from tqdm import tqdm
 
+from pyCHX.config import get_compressed_data_dir
+
 
 def get_timepixel_data(data_dir, filename, time_unit=1):
     """give a csv file of a timepixel data, return x,y,t
@@ -95,10 +97,7 @@ def histogram_pt(p, t, binstep=100, detx=256, dety=256):
     L = np.max((t - t[0]) // binstep) + 1
     # print(L,x,y, (t-t[0])//binstep)
     arr = np.ravel_multi_index([p, (t - t[0]) // binstep], [detx * dety, L])
-    M, N = arr.max(), arr.min()
-    da = np.zeros([detx * dety, L])
-    da.flat[np.arange(N, M)] = np.bincount(arr - N)
-    return da
+    return np.bincount(arr, minlength=detx * dety * L).reshape(detx * dety, L)
 
 
 def histogram_xyt(x, y, t, binstep=100, detx=256, dety=256):
@@ -119,10 +118,7 @@ def histogram_xyt(x, y, t, binstep=100, detx=256, dety=256):
     L = np.max((t - t[0]) // binstep) + 1
     # print(L,x,y, (t-t[0])//binstep)
     arr = np.ravel_multi_index([x, y, (t - t[0]) // binstep], [detx, dety, L])
-    M, N = arr.max(), arr.min()
-    da = np.zeros([detx, dety, L])
-    da.flat[np.arange(N, M)] = np.bincount(arr - N)
-    return da
+    return np.bincount(arr, minlength=detx * dety * L).reshape(detx, dety, L)
 
 
 def get_FD_end_num(FD, maxend=1e10):
@@ -160,7 +156,7 @@ def compress_timepix_data(
 
     """
     if filename is None:
-        filename = "/XF11ID/analysis/Compressed_Data" + "/timpix_uid_%s.cmp" % md["uid"]
+        filename = os.path.join(get_compressed_data_dir(), "timpix_uid_%s.cmp" % md["uid"])
 
     if force_compress:
         print("Create a new compress file with filename as :%s." % filename)
@@ -175,7 +171,8 @@ def compress_timepix_data(
             )
         else:
             print("Using already created compressed file with filename as :%s." % filename)
-            return pkl.load(open(filename + ".pkl", "rb"))
+            with open(filename + ".pkl", "rb") as stream:
+                return pkl.load(stream)
 
             # FD = Multifile(filename, 0, int(1e25)  )
             # return    get_FD_end_num(FD)
@@ -306,7 +303,8 @@ def init_compress_timepix_data(pos, t, binstep, filename, mask=None, md=None, no
     avg_img /= good_count
     # return N -1
     if with_pickle:
-        pkl.dump([avg_img, imgsum, N], open(filename + ".pkl", "wb"))
+        with open(filename + ".pkl", "wb") as stream:
+            pkl.dump([avg_img, imgsum, N], stream)
     return avg_img, imgsum, N
 
 
@@ -395,7 +393,8 @@ def init_compress_timepix_data_light_duty(
     avg_img /= good_count
     # return N -1
     if with_pickle:
-        pkl.dump([avg_img, imgsum, N - 1], open(filename + ".pkl", "wb"))
+        with open(filename + ".pkl", "wb") as stream:
+            pkl.dump([avg_img, imgsum, N - 1], stream)
     return avg_img, imgsum, N - 1
 
 
@@ -484,11 +483,11 @@ class Get_TimePixel_Arrayc(object):
         self.hitime = hitime
         self.tbins = tbins
         self.tx = np.arange(self.hitime.min(), self.hitime.max(), self.tbins)
-        N = len(self.tx)
+        number_of_edges = len(self.tx)
         if beg is None:
             beg = 0
         if end is None:
-            end = N
+            end = number_of_edges
 
         self.beg = beg
         self.end = end
@@ -514,11 +513,10 @@ class Get_TimePixel_Arrayc(object):
         timg[self.pixelist] = np.arange(1, len(self.pixelist) + 1)
         n = 0
         tx = self.tx
-        N = len(self.tx)
-        print("The Produced Array Length is  %d." % (N - 1))
+        print("The Produced Array Length is  %d." % (self.length - 1))
         flat_correction = self.flat_correction
         # imgsum  =  np.zeros(    N   )
-        for i in tqdm(range(N - 1)):
+        for i in tqdm(range(self.beg, self.end - 1)):
             ind1 = np.argmin(np.abs(tx[i] - self.hitime))
             ind2 = np.argmin(np.abs(tx[i + 1] - self.hitime))
             # print( 'N=%d:'%i, ind1, ind2 )
@@ -529,10 +527,10 @@ class Get_TimePixel_Arrayc(object):
             pxlist = timg[pos[w]] - 1
             # print( val[w].sum() )
             # fra_pix[ pxlist] = v[w]
-            if flat_correction is not None:
-                # normalized by flatfield
+            if flat_correction is None:
                 data_array[n][pxlist] = val[w]
             else:
+                # normalized by flatfield
                 data_array[n][pxlist] = val[w] / flat_correction[pxlist]  # -1.0
             if norm is not None:
                 # normalized by total intensity, like a incident beam intensity
@@ -573,7 +571,7 @@ def get_timepixel_data_from_series(data_dir, filename_prefix, total_filenum=72, 
     return x[: n * colms + ln], y[: n * colms + ln], t[: n * colms + ln]
 
 
-def get_timepixel_avg_image(x, y, t, det_shape=[256, 256], delta_time=None):
+def get_timepixel_avg_image(x, y, t, det_shape=(256, 256), delta_time=None):
     """YG.Dev@CHX, 2016
     give x,y, t data to get image in a period of delta_time (in second)
     x, pos_x in pixel
@@ -582,22 +580,15 @@ def get_timepixel_avg_image(x, y, t, det_shape=[256, 256], delta_time=None):
 
 
     """
-    _ = t.min()
-    tm = t.max()
-
-    if delta_time is not None:
-        delta_time *= 1e12
-        if delta_time > tm:
-            delta_time = tm
+    if delta_time is None:
+        selected = np.ones(len(t), dtype=bool)
     else:
-        delta_time = t.max()
-    # print( delta_time)
-    t_ = t[t < delta_time]
-    x_ = x[: len(t_)]
-    y_ = y[: len(t_)]
+        selected = (t - t.min()) < delta_time * 1e12
+    x_ = x[selected]
+    y_ = y[selected]
 
     img = np.zeros(det_shape, dtype=np.int32)
-    pixlist = x_ * det_shape[0] + y_
+    pixlist = np.ravel_multi_index((x_, y_), det_shape)
     his = np.histogram(pixlist, bins=np.arange(det_shape[0] * det_shape[1] + 1))[0]
     np.ravel(img)[:] = his
     print("The max photon count is %d." % img.max())
@@ -715,17 +706,19 @@ class xpcs(object):
             tmaxs = tmax  # noqa: F821 - defined by the legacy setup file
         if nobufs % 2 != 0:
             print("nobuf must be even!!!")
-        dly = zeros((nolevs + 1) * nobufs / 2 + 1)
+        half_bufs = nobufs // 2
+        dly = zeros((nolevs + 1) * half_bufs + 1)
         dict_dly = {}
         for i in range(1, nolevs + 1):
             if i == 1:
                 imin = 1
             else:
-                imin = nobufs / 2 + 1
-            ptr = (i - 1) * nobufs / 2 + arange(imin, nobufs + 1)
+                imin = half_bufs + 1
+            ptr = (i - 1) * half_bufs + arange(imin, nobufs + 1)
             dly[ptr] = arange(imin, nobufs + 1) * 2 ** (i - 1)
             dict_dly[i] = dly[ptr - 1]
         dly *= time
+        dict_dly = {level: values * time for level, values in dict_dly.items()}
         dly = dly[:-1]
         dly_ = dly[: where(dly < tmaxs)[0][-1] + 1]
         self.dly = dly

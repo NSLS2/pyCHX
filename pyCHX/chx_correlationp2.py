@@ -9,16 +9,16 @@ The chx_correlationp2 is for dedug g2
 from __future__ import absolute_import, division, print_function
 
 import logging
-from multiprocessing import Pool
 
 import numpy as np
 import skbeam.core.roi as roi
 from skbeam.core.roi import extract_label_indices
 from tqdm import tqdm
 
-from pyCHX.chx_compress import apply_async, pass_FD
+from pyCHX.chx_compress import _collect_pool_results, _make_pool, apply_async, pass_FD
 from pyCHX.chx_correlationc import _one_time_process as _one_time_processp
 from pyCHX.chx_correlationc import _one_time_process_error as _one_time_process_errorp
+from pyCHX.chx_correlationc import _select_two_time_rois
 from pyCHX.chx_correlationc import _two_time_process as _two_time_processp
 from pyCHX.chx_correlationc import _validate_and_transform_inputs
 
@@ -269,17 +269,19 @@ def cal_c12p(FD, ring_mask, bad_frame_list=None, good_start=0, num_buf=8, num_le
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
             print("Bad frame involved and will be precessed!")
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            noframes -= len(np.where(np.isin(bad_frame_list, range(good_start, FD.end)))[0])
     print("%s frames will be processed..." % (noframes))
-    ring_masks = [np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[1:]]
+    roi_labels = np.unique(ring_mask)
+    roi_labels = roi_labels[roi_labels > 0]
+    ring_masks = [np.array(ring_mask == label, dtype=np.int64) for label in roi_labels]
     qind, pixelist = roi.extract_label_indices(ring_mask)
     if norm is not None:
         norms = [
-            norm[np.in1d(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
-            for i in np.unique(ring_mask)[1:]
+            norm[np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
+            for i in roi_labels
         ]
     inputs = range(len(ring_masks))
-    pool = Pool(processes=len(inputs))
+    pool = _make_pool(len(inputs))
     internal_state = None
     print("Starting assign the tasks...")
     results = {}
@@ -318,9 +320,8 @@ def cal_c12p(FD, ring_mask, bad_frame_list=None, good_start=0, num_buf=8, num_le
                     None,
                 ),
             )
-    pool.close()
     print("Starting running the tasks...")
-    res = [results[k].get() for k in tqdm(list(sorted(results.keys())))]
+    res = _collect_pool_results(pool, results, show_progress=True)
 
     c12 = np.zeros([noframes, noframes, len(ring_masks)])
     for i in inputs:
@@ -612,21 +613,22 @@ def cal_g2p(
     if bad_frame_list is not None:
         if len(bad_frame_list) != 0:
             print("%s Bad frames involved and will be discarded!" % len(bad_frame_list))
-            noframes -= len(np.where(np.in1d(bad_frame_list, range(good_start, FD.end)))[0])
+            noframes -= len(np.where(np.isin(bad_frame_list, range(good_start, FD.end)))[0])
     print("%s frames will be processed..." % (noframes - 1))
-    ring_masks = [np.array(ring_mask == i, dtype=np.int64) for i in np.unique(ring_mask)[1:]]
+    roi_labels = np.unique(ring_mask)
+    roi_labels = roi_labels[roi_labels > 0]
+    ring_masks = [np.array(ring_mask == label, dtype=np.int64) for label in roi_labels]
     qind, pixelist = roi.extract_label_indices(ring_mask)
-    noqs = len(np.unique(qind))
-    nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+    nopr = np.array([np.count_nonzero(qind == label) for label in roi_labels])
     if norm is not None:
         norms = [
-            norm[np.in1d(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
-            for i in np.unique(ring_mask)[1:]
+            norm[np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
+            for i in roi_labels
         ]
 
     inputs = range(len(ring_masks))
 
-    pool = Pool(processes=len(inputs))
+    pool = _make_pool(len(inputs))
     internal_state = None
     print("Starting assign the tasks...")
     results = {}
@@ -645,9 +647,8 @@ def cal_g2p(
                 lazy_one_timep,
                 (FD, num_lev, num_buf, ring_masks[i], internal_state, bad_frame_list, imgsum, None, cal_error),
             )
-    pool.close()
     print("Starting running the tasks...")
-    res = [results[k].get() for k in tqdm(list(sorted(results.keys())))]
+    res = _collect_pool_results(pool, results, show_progress=True)
     len_lag = 10**10
     for i in inputs:  # to get the smallest length of lag_step,
         # *****************************
@@ -670,7 +671,7 @@ def cal_g2p(
 
     Gmax = 0
     lag_steps_err = res[0][1]
-    nopr_ = np.lib.pad(np.cumsum(nopr), [1], mode="constant", constant_values=(0))[:-1]
+    nopr_ = np.pad(np.cumsum(nopr), [1], mode="constant", constant_values=(0))[:-1]
     for i in inputs:
         # print( res[i][0][:,0].shape, g2.shape )
         if not cal_error:
@@ -746,21 +747,9 @@ def auto_two_Arrayp(data_pixel, rois, index=None):
     One example:
         g12 = auto_two_Array( imgsr, ring_mask, data_pixel = data_pixel )
     """
-    qind, pixelist = roi.extract_label_indices(rois)
-    noqs = len(np.unique(qind))
-    nopr = np.bincount(qind, minlength=(noqs + 1))[1:]
+    qind, qlist, nopr = _select_two_time_rois(rois, index)
     noframes = data_pixel.shape[0]
-    g12b = np.zeros([noframes, noframes, noqs])
-
-    if index is None:
-        index = np.arange(1, noqs + 1)
-    else:
-        try:
-            len(index)
-            index = np.array(index)
-        except TypeError:
-            index = np.array([index])
-    qlist = np.arange(1, noqs + 1)[index - 1]
+    g12b = np.zeros([noframes, noframes, len(qlist)])
 
     inputs = range(len(qlist))
 
@@ -774,27 +763,24 @@ def auto_two_Arrayp(data_pixel, rois, index=None):
     #                                    data_pixel_qis[i], nopr, noframes ) ) for i in tqdm( inputs )  ]
     # res = [r.get() for r in results]
 
-    pool = Pool(processes=len(inputs))
+    pool = _make_pool(len(inputs))
     results = {}
     for i in inputs:
-        results[i] = pool.apply_async(_get_two_time_for_one_q, [qlist[i], data_pixel_qis[i], nopr, noframes])
-    pool.close()
-    pool.join()
-    res = np.array([results[k].get() for k in list(sorted(results.keys()))])
+        results[i] = pool.apply_async(_get_two_time_for_one_q, [data_pixel_qis[i], nopr[i], noframes])
+    res = np.array(_collect_pool_results(pool, results))
 
     # print('here')
 
     for i in inputs:
-        qi = qlist[i]
-        g12b[:, :, qi - 1] = res[i]
+        g12b[:, :, i] = res[i]
     print("G12 calculation DONE!")
     return g12b  # g12b
 
 
-def _get_two_time_for_one_q(qi, data_pixel_qi, nopr, noframes):
+def _get_two_time_for_one_q(data_pixel_qi, pixel_count, noframes):
     # print( data_pixel_qi.shape)
 
     sum1 = (np.average(data_pixel_qi, axis=1)).reshape(1, noframes)
     sum2 = sum1.T
-    two_time_qi = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[qi - 1]
+    two_time_qi = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / pixel_count
     return two_time_qi
