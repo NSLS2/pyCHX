@@ -538,6 +538,7 @@ def test_parallel_two_time_matrix_finishing_matches_serial_kernels():
         mirror_and_normalize_two_time_parallel,
         mirror_two_time,
         mirror_two_time_parallel,
+        store_symmetric_two_time_batch,
     )
 
     generator = np.random.default_rng(11)
@@ -555,6 +556,37 @@ def test_parallel_two_time_matrix_finishing_matches_serial_kernels():
     mirror_and_normalize_two_time_parallel(actual_normalized, norms, 17)
     np.testing.assert_array_equal(actual_normalized, expected_normalized)
 
+    upper_batch = np.empty((128, 128, 2), dtype=np.float64, order="F")
+    upper_batch[:, :, 0] = upper_triangle
+    upper_batch[:, :, 1] = upper_triangle
+    row_norms = np.column_stack((np.ones(128), norms))
+    output = np.empty((128, 128, 2), dtype=np.float64)
+    store_symmetric_two_time_batch(
+        upper_batch,
+        row_norms,
+        np.array([1, 17]),
+        np.array([True, False]),
+        output,
+        0,
+        2,
+    )
+    np.testing.assert_array_equal(output[:, :, 0], expected_mirror)
+    np.testing.assert_array_equal(output[:, :, 1], expected_normalized)
+
+
+@pytest.mark.portable
+def test_two_time_batch_size_is_cache_and_memory_bounded(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    frame_count = 1_000
+    matrix_bytes = frame_count * frame_count * np.dtype(np.float64).itemsize
+    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: matrix_bytes * 40)
+    assert chx_correlationc._two_time_batch_size(frame_count, 100) == 2
+
+    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: matrix_bytes * 1_000)
+    assert chx_correlationc._two_time_batch_size(frame_count, 100) == 16
+    assert chx_correlationc._two_time_batch_size(frame_count, 7) == 7
+
 
 @pytest.mark.portable
 def test_two_time_supports_hundreds_of_rois_and_returns_c_contiguous_output(monkeypatch):
@@ -568,6 +600,51 @@ def test_two_time_supports_hundreds_of_rois_and_returns_c_contiguous_output(monk
     assert actual.shape == (8, 8, 200)
     assert actual.flags.c_contiguous
     np.testing.assert_allclose(actual, 1.0)
+
+
+@pytest.mark.portable
+def test_two_time_multiple_output_batches_match_original_operations(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    generator = np.random.default_rng(81)
+    roi_count = 20
+    pixels_per_roi = 3
+    frame_count = 12
+    roi_mask = np.repeat(np.arange(1, roi_count + 1), pixels_per_roi).reshape(6, 10)
+    data = 0.5 + generator.random((frame_count, roi_count * pixels_per_roi))
+    explicit_norm = 0.5 + generator.random(data.shape)
+    monkeypatch.setattr(chx_correlationc, "_two_time_batch_size", lambda *_: 7)
+
+    expected = []
+    expected_explicit = []
+    expected_without_norm = []
+    for roi_index in range(roi_count):
+        start = roi_index * pixels_per_roi
+        selected = data[:, start : start + pixels_per_roi]
+        means = selected.mean(axis=1)
+        expected.append(np.dot(selected, selected.T) / np.outer(means, means) / pixels_per_roi)
+        explicit_means = explicit_norm[:, start : start + pixels_per_roi].mean(axis=1)
+        expected_explicit.append(
+            np.dot(selected, selected.T) / np.outer(explicit_means, explicit_means) / pixels_per_roi
+        )
+        expected_without_norm.append(np.dot(selected, selected.T) / pixels_per_roi)
+
+    actual = chx_correlationc.auto_two_Arrayc(data, roi_mask)
+    actual_explicit = chx_correlationc.auto_two_Arrayc_ExplicitNorm(data, roi_mask, norm=explicit_norm)
+    actual_without_norm = chx_correlationc.auto_two_Arrayc_ExplicitNorm(data, roi_mask)
+    np.testing.assert_allclose(actual, np.stack(expected, axis=2), rtol=1e-15, atol=1e-15)
+    np.testing.assert_allclose(
+        actual_explicit,
+        np.stack(expected_explicit, axis=2),
+        rtol=1e-15,
+        atol=1e-15,
+    )
+    np.testing.assert_allclose(
+        actual_without_norm,
+        np.stack(expected_without_norm, axis=2),
+        rtol=1e-15,
+        atol=1e-15,
+    )
 
 
 @pytest.mark.portable

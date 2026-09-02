@@ -20,6 +20,7 @@ from threadpoolctl import threadpool_limits
 from tqdm import tqdm
 
 from pyCHX._performance import (
+    available_memory_bytes,
     mirror_and_normalize_two_time,
     mirror_and_normalize_two_time_parallel,
     mirror_two_time,
@@ -27,6 +28,7 @@ from pyCHX._performance import (
     numba_thread_limit,
     physical_core_count,
     sparse_scatter_normalized,
+    store_symmetric_two_time_batch,
 )
 from pyCHX.chx_generic_functions import plot1D
 from pyCHX.chx_libs import markers
@@ -1805,28 +1807,110 @@ def _select_two_time_rois(rois, index):
 
 def _symmetric_two_time_product(data, row_norm, pixel_count):
     """Compute one ROI matrix, pre-normalizing production-sized float inputs."""
+    correlation, pre_normalized = _upper_two_time_product(data, row_norm, pixel_count)
     use_parallel_finish = data.shape[0] >= 1_024
-    if np.issubdtype(data.dtype, np.floating):
-        if data.size >= 262_144 and np.all(np.isfinite(row_norm)) and np.all(row_norm != 0):
-            normalized = np.asarray(data, dtype=np.float64, order="F") / row_norm[:, None]
-            correlation = dsyrk(1.0 / pixel_count, normalized, lower=0, trans=0)
-            if use_parallel_finish:
-                mirror_two_time_parallel(correlation)
-            else:
-                mirror_two_time(correlation)
+    if pre_normalized:
+        if use_parallel_finish:
+            mirror_two_time_parallel(correlation)
         else:
-            correlation = dsyrk(1.0, np.asarray(data, dtype=np.float64), lower=0, trans=0)
-            if use_parallel_finish:
-                mirror_and_normalize_two_time_parallel(correlation, row_norm, pixel_count)
-            else:
-                mirror_and_normalize_two_time(correlation, row_norm, pixel_count)
+            mirror_two_time(correlation)
     else:
-        correlation = np.dot(data, data.T).astype(np.float64)
         if use_parallel_finish:
             mirror_and_normalize_two_time_parallel(correlation, row_norm, pixel_count)
         else:
             mirror_and_normalize_two_time(correlation, row_norm, pixel_count)
     return correlation
+
+
+def _upper_two_time_product(data, row_norm, pixel_count, output=None):
+    """Compute one ROI's upper triangle, optionally into a reusable buffer."""
+    pre_normalized = False
+    if np.issubdtype(data.dtype, np.floating):
+        if data.size >= 262_144 and np.all(np.isfinite(row_norm)) and np.all(row_norm != 0):
+            fortran_data = np.asarray(data, dtype=np.float64, order="F")
+            if np.all(row_norm == 1):
+                normalized = fortran_data
+            else:
+                normalized = fortran_data / row_norm[:, None]
+            kwargs = {}
+            if output is not None:
+                kwargs = {"c": output, "overwrite_c": 1}
+            correlation = dsyrk(1.0 / pixel_count, normalized, lower=0, trans=0, **kwargs)
+            pre_normalized = True
+        else:
+            kwargs = {}
+            if output is not None:
+                kwargs = {"c": output, "overwrite_c": 1}
+            correlation = dsyrk(
+                1.0,
+                np.asarray(data, dtype=np.float64),
+                lower=0,
+                trans=0,
+                **kwargs,
+            )
+    else:
+        correlation = np.dot(data, data.T).astype(np.float64)
+
+    if output is not None and not np.shares_memory(correlation, output):
+        output[:, :] = correlation
+        correlation = output
+    return correlation, pre_normalized
+
+
+def _two_time_batch_size(frame_count, roi_count):
+    """Choose a cache-friendly batch while bounding its square work buffers."""
+    matrix_bytes = max(1, frame_count * frame_count * np.dtype(np.float64).itemsize)
+    memory_batch_count = max(1, int(available_memory_bytes() * 0.05) // matrix_bytes)
+    return min(roi_count, 16, memory_batch_count)
+
+
+def _fill_two_time_output(
+    data_pixel,
+    roi_pixel_indices,
+    pixel_counts,
+    output,
+    norm=None,
+    use_data_mean=True,
+):
+    """Calculate ROI matrices in bounded batches and write the public layout."""
+    frame_count = data_pixel.shape[0]
+    roi_count = len(roi_pixel_indices)
+    batch_size = _two_time_batch_size(frame_count, roi_count)
+    upper_triangles = np.empty((frame_count, frame_count, batch_size), dtype=np.float64, order="F")
+    row_norms = np.empty((frame_count, batch_size), dtype=np.float64)
+    batch_pixel_counts = np.empty(batch_size, dtype=np.int64)
+    pre_normalized = np.empty(batch_size, dtype=np.bool_)
+
+    for roi_index in tqdm(range(roi_count)):
+        batch_start = (roi_index // batch_size) * batch_size
+        batch_index = roi_index - batch_start
+        batch_count = min(batch_size, roi_count - batch_start)
+        pixel_indices = roi_pixel_indices[roi_index]
+        selected_data = data_pixel[:, pixel_indices]
+        if use_data_mean:
+            row_norm = np.average(selected_data, axis=1)
+        elif norm is None:
+            row_norm = np.ones(frame_count, dtype=np.float64)
+        else:
+            row_norm = np.average(norm[:, pixel_indices], axis=1)
+        row_norms[:, batch_index] = row_norm
+        batch_pixel_counts[batch_index] = pixel_counts[roi_index]
+        _, pre_normalized[batch_index] = _upper_two_time_product(
+            selected_data,
+            row_norm,
+            pixel_counts[roi_index],
+            output=upper_triangles[:, :, batch_index],
+        )
+        if batch_index + 1 == batch_count:
+            store_symmetric_two_time_batch(
+                upper_triangles,
+                row_norms,
+                batch_pixel_counts,
+                pre_normalized,
+                output,
+                batch_start,
+                batch_count,
+            )
 
 
 def auto_two_Arrayc(data_pixel, rois, index=None):
@@ -1866,20 +1950,12 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
         DO = False
 
     if DO:
-
-        def calculate_one(i):
-            data_pixel_qi = data_pixel[:, roi_pixel_indices[i]]
-            row_norm = np.average(data_pixel_qi, axis=1)
-            correlation = _symmetric_two_time_product(data_pixel_qi, row_norm, nopr[i])
-            g12b[:, :, i] = correlation
-
         core_count = physical_core_count()
         with (
             threadpool_limits(limits=core_count, user_api="blas"),
             numba_thread_limit(core_count),
         ):
-            for i in tqdm(range(len(qlist))):
-                calculate_one(i)
+            _fill_two_time_output(data_pixel, roi_pixel_indices, nopr, g12b)
         return np.ascontiguousarray(g12b)
 
 
@@ -1922,24 +1998,19 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
         DO = False
     if DO:
         roi_pixel_indices = [np.flatnonzero(qind == label) for label in qlist]
-
-        def calculate_one(i):
-            pixelist_qi = roi_pixel_indices[i]
-            data_pixel_qi = data_pixel[:, pixelist_qi]
-            if norm is not None:
-                row_norm = np.average(norm[:, pixelist_qi], axis=1)
-            else:
-                row_norm = np.ones(noframes, dtype=np.float64)
-            correlation = _symmetric_two_time_product(data_pixel_qi, row_norm, nopr[i])
-            g12b[:, :, i] = correlation
-
         core_count = physical_core_count()
         with (
             threadpool_limits(limits=core_count, user_api="blas"),
             numba_thread_limit(core_count),
         ):
-            for i in tqdm(range(len(qlist))):
-                calculate_one(i)
+            _fill_two_time_output(
+                data_pixel,
+                roi_pixel_indices,
+                nopr,
+                g12b,
+                norm=norm,
+                use_data_mean=False,
+            )
         return np.ascontiguousarray(g12b)
 
 

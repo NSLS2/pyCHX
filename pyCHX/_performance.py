@@ -289,6 +289,35 @@ def mirror_two_time_parallel(matrix):
             matrix[column, row] = matrix[row, column]
 
 
+@njit(cache=True, nogil=True, parallel=True, error_model="numpy")
+def store_symmetric_two_time_batch(
+    upper_triangles,
+    row_norms,
+    pixel_counts,
+    pre_normalized,
+    output,
+    output_start,
+    batch_count,
+):
+    """Write several upper-triangular ROI results into the public C-order output."""
+    frame_count = output.shape[0]
+    for task in prange(frame_count * frame_count):
+        row = task // frame_count
+        column = task - row * frame_count
+        source_row = row
+        source_column = column
+        if row > column:
+            source_row = column
+            source_column = row
+        for batch_index in range(batch_count):
+            value = upper_triangles[source_row, source_column, batch_index]
+            if not pre_normalized[batch_index]:
+                value /= row_norms[source_column, batch_index]
+                value /= row_norms[source_row, batch_index]
+                value /= pixel_counts[batch_index]
+            output[row, column, output_start + batch_index] = value
+
+
 @njit(cache=True, nogil=True, parallel=True)
 def diagonal_nanmean(g12):
     """Reduce upper diagonals of a C-order (time, time, ROI) array."""
