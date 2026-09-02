@@ -778,7 +778,7 @@ def test_pool_size_is_limited_by_available_cpus(monkeypatch):
 
     created_with = []
     sentinel = object()
-    monkeypatch.setattr(chx_compress, "cpu_count", lambda: 4)
+    monkeypatch.setattr(chx_compress, "_available_cpu_count", lambda: 4)
     monkeypatch.setattr(chx_compress, "Pool", lambda processes: created_with.append(processes) or sentinel)
 
     assert chx_compress._make_pool(10) is sentinel
@@ -795,6 +795,7 @@ def test_pool_size_respects_cpu_affinity(monkeypatch):
     sentinel = object()
     monkeypatch.setattr(chx_compress, "cpu_count", lambda: 32)
     monkeypatch.setattr(chx_compress.os, "sched_getaffinity", lambda _pid: set(range(3)))
+    monkeypatch.setattr(chx_compress, "physical_core_count", lambda cpu_ids: len(cpu_ids))
     monkeypatch.setattr(chx_compress, "Pool", lambda processes: created_with.append(processes) or sentinel)
 
     assert chx_compress._make_pool(10) is sentinel
