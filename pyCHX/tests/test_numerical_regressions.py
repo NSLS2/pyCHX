@@ -1,5 +1,6 @@
 import ast
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -149,6 +150,56 @@ def test_one_time_correlation_is_mean_of_two_time_diagonals():
     expected = np.array([[np.mean(np.diag(two_time[:, :, q], lag)) for q in range(2)] for lag in range(5)])
 
     np.testing.assert_allclose(get_one_time_from_two_time(two_time), expected)
+
+
+@pytest.mark.portable
+def test_one_time_from_two_time_preserves_nan_and_explicit_normalization_semantics():
+    from pyCHX.Two_Time_Correlation_Function import get_one_time_from_two_time
+
+    two_time = np.arange(72, dtype=float).reshape(6, 6, 2)
+    two_time[1, 3, 0] = np.nan
+    two_time[2, 2, 1] = np.nan
+    norms = np.linspace(1.0, 3.0, 12).reshape(6, 2)
+    pixel_counts = np.array([3, 7])
+    expected = np.empty((6, 2))
+    for delay in range(6):
+        for roi_index in range(2):
+            expected[delay, roi_index] = np.nanmean(np.diag(two_time[:, :, roi_index], delay)) / (
+                np.average(norms[delay:, roi_index])
+                * np.average(norms[: 6 - delay, roi_index])
+                * pixel_counts[roi_index]
+            )
+
+    np.testing.assert_allclose(
+        get_one_time_from_two_time(two_time, norms=norms, nopr=pixel_counts),
+        expected,
+        rtol=1e-14,
+        atol=0,
+    )
+
+
+@pytest.mark.portable
+def test_compiled_two_time_diagonal_reducer_matches_numpy():
+    from pyCHX.Two_Time_Correlation_Function import get_one_time_from_two_time
+
+    generator = np.random.default_rng(20260902)
+    two_time = generator.random((360, 360, 8))
+    two_time[10, 17, 3] = np.nan
+    norms = 1.0 + generator.random((360, 8))
+    pixel_counts = np.arange(2, 10)
+    expected = np.empty((360, 8))
+    for delay in range(360):
+        diagonal = np.nanmean(two_time.diagonal(delay), axis=1)
+        expected[delay] = diagonal / (
+            norms[delay:].mean(axis=0) * norms[: 360 - delay].mean(axis=0) * pixel_counts
+        )
+
+    np.testing.assert_allclose(
+        get_one_time_from_two_time(two_time, norms=norms, nopr=pixel_counts),
+        expected,
+        rtol=2e-13,
+        atol=0,
+    )
 
 
 @pytest.mark.portable
@@ -368,14 +419,27 @@ def test_array_two_time_helpers_support_sparse_roi_labels():
     )
 
     expected = []
+    expected_auto = []
     expected_norm = []
     for selected in (data[:, :2], data[:, 2:]):
         means = selected.mean(axis=1)
         expected.append(np.dot(selected, selected.T) / np.outer(means, means) / selected.shape[1])
+        expected_auto.append(
+            np.dot(selected, selected.T) / means.reshape(1, -1) / means.reshape(-1, 1) / selected.shape[1]
+        )
         expected_norm.append(means.mean())
     expected = np.stack(expected, axis=2)
+    expected_auto = np.stack(expected_auto, axis=2)
 
-    np.testing.assert_allclose(auto_two_Arrayc(data, roi_mask), expected)
+    np.testing.assert_array_equal(auto_two_Arrayc(data, roi_mask), expected_auto)
+    integer_data = data.astype(np.int64)
+    integer_expected = []
+    for selected in (integer_data[:, :2], integer_data[:, 2:]):
+        means = selected.mean(axis=1)
+        integer_expected.append(
+            np.dot(selected, selected.T) / means.reshape(1, -1) / means.reshape(-1, 1) / selected.shape[1]
+        )
+    np.testing.assert_array_equal(auto_two_Arrayc(integer_data, roi_mask), np.stack(integer_expected, axis=2))
     np.testing.assert_allclose(auto_two_Arrayc_ExplicitNorm(data, roi_mask, norm=data), expected)
     np.testing.assert_allclose(auto_two_Arrayp(data, roi_mask), expected)
     np.testing.assert_allclose(auto_two_Arrayp2(data, roi_mask), expected)
@@ -385,10 +449,534 @@ def test_array_two_time_helpers_support_sparse_roi_labels():
     assert set(mean_intensity) == {2, 5}
     np.testing.assert_allclose(mean_intensity[2], data[:, :2].mean(axis=1))
     np.testing.assert_allclose(mean_intensity[5], data[:, 2:].mean(axis=1))
-    np.testing.assert_allclose(auto_two_Arrayc(data, roi_mask, index=5), expected[:, :, 1:])
+    np.testing.assert_array_equal(auto_two_Arrayc(data, roi_mask, index=5), expected_auto[:, :, 1:])
 
     with pytest.raises(ValueError, match="ROI labels not present"):
         auto_two_Arrayc(data, roi_mask, index=3)
+
+
+@pytest.mark.portable
+def test_production_two_time_path_prenormalizes_before_symmetric_blas(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    generator = np.random.default_rng(9)
+    data = 1.0 + generator.random((512, 512))
+    means = data.mean(axis=1)
+    observed = {}
+    original_dsyrk = chx_correlationc.dsyrk
+
+    def recording_dsyrk(alpha, normalized, **kwargs):
+        observed["alpha"] = alpha
+        observed["means"] = normalized.mean(axis=1)
+        return original_dsyrk(alpha, normalized, **kwargs)
+
+    monkeypatch.setattr(chx_correlationc, "dsyrk", recording_dsyrk)
+    actual = chx_correlationc._symmetric_two_time_product(data, means, data.shape[1])
+    expected = np.dot(data, data.T) / np.outer(means, means) / data.shape[1]
+
+    assert observed["alpha"] == pytest.approx(1 / data.shape[1])
+    np.testing.assert_allclose(observed["means"], 1.0, rtol=1e-14, atol=1e-14)
+    np.testing.assert_allclose(actual, expected, rtol=2e-13, atol=1e-14)
+
+
+@pytest.mark.portable
+def test_array_two_time_preserves_zero_intensity_frame_results():
+    from pyCHX.chx_correlationc import auto_two_Arrayc
+
+    roi_mask = np.array([[1, 1]])
+    data = np.array([[1.0, 2.0], [0.0, 0.0], [2.0, 4.0], [-1.0, 1.0]])
+    means = np.average(data, axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        expected = np.dot(data, data.T) / means.reshape(1, -1) / means.reshape(-1, 1) / data.shape[1]
+
+    actual = auto_two_Arrayc(data, roi_mask)[:, :, 0]
+
+    np.testing.assert_allclose(actual, expected, equal_nan=True)
+
+
+@pytest.mark.portable
+def test_two_time_uses_all_physical_cores_without_roi_threading(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    blas_limits = []
+    numba_limits = []
+
+    def capture_limit(*, limits: int, user_api: str):
+        assert user_api == "blas"
+        blas_limits.append(limits)
+
+        @contextmanager
+        def context():
+            yield
+
+        return context()
+
+    @contextmanager
+    def capture_numba_limit(limit):
+        numba_limits.append(limit)
+        yield
+
+    def reject_roi_thread_pool(*args, **kwargs):
+        raise AssertionError("two-time ROI calculations must not use Python threads around scipy BLAS")
+
+    monkeypatch.setattr(chx_correlationc, "physical_core_count", lambda: 4)
+    monkeypatch.setattr(chx_correlationc, "threadpool_limits", capture_limit)
+    monkeypatch.setattr(chx_correlationc, "numba_thread_limit", capture_numba_limit)
+    monkeypatch.setattr(chx_correlationc, "ThreadPoolExecutor", reject_roi_thread_pool)
+    roi_mask = np.array([[1, 1], [2, 2]])
+    data = np.arange(16, dtype=float).reshape(4, 4) + 1
+    chx_correlationc.auto_two_Arrayc(data, roi_mask)
+    chx_correlationc.auto_two_Arrayc_ExplicitNorm(data, roi_mask, norm=data)
+    assert blas_limits == [4, 4]
+    assert numba_limits == [4, 4]
+
+
+@pytest.mark.portable
+def test_parallel_two_time_matrix_finishing_matches_serial_kernels():
+    from pyCHX._performance import (
+        mirror_and_normalize_two_time,
+        mirror_and_normalize_two_time_parallel,
+        mirror_two_time,
+        mirror_two_time_parallel,
+        store_symmetric_two_time_batch,
+    )
+
+    generator = np.random.default_rng(11)
+    upper_triangle = np.triu(generator.random((128, 128)))
+    expected_mirror = upper_triangle.copy()
+    actual_mirror = upper_triangle.copy()
+    mirror_two_time(expected_mirror)
+    mirror_two_time_parallel(actual_mirror)
+    np.testing.assert_array_equal(actual_mirror, expected_mirror)
+
+    norms = generator.random(128)
+    expected_normalized = upper_triangle.copy()
+    actual_normalized = upper_triangle.copy()
+    mirror_and_normalize_two_time(expected_normalized, norms, 17)
+    mirror_and_normalize_two_time_parallel(actual_normalized, norms, 17)
+    np.testing.assert_array_equal(actual_normalized, expected_normalized)
+
+    upper_batch = np.empty((128, 128, 2), dtype=np.float64, order="F")
+    upper_batch[:, :, 0] = upper_triangle
+    upper_batch[:, :, 1] = upper_triangle
+    row_norms = np.column_stack((np.ones(128), norms))
+    output = np.empty((128, 128, 2), dtype=np.float64)
+    store_symmetric_two_time_batch(
+        upper_batch,
+        row_norms,
+        np.array([1, 17]),
+        np.array([True, False]),
+        output,
+        0,
+        2,
+    )
+    np.testing.assert_array_equal(output[:, :, 0], expected_mirror)
+    np.testing.assert_array_equal(output[:, :, 1], expected_normalized)
+
+
+@pytest.mark.portable
+def test_two_time_batch_size_is_cache_and_memory_bounded(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    frame_count = 1_000
+    matrix_bytes = frame_count * frame_count * np.dtype(np.float64).itemsize
+    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: matrix_bytes * 40)
+    assert chx_correlationc._two_time_batch_size(frame_count, 100) == 2
+
+    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: matrix_bytes * 1_000)
+    assert chx_correlationc._two_time_batch_size(frame_count, 100) == 16
+    assert chx_correlationc._two_time_batch_size(frame_count, 7) == 7
+
+
+@pytest.mark.portable
+def test_two_time_supports_hundreds_of_rois_and_returns_c_contiguous_output(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    roi_mask = np.arange(1, 201, dtype=np.int64).reshape(10, 20)
+    data = 1.0 + np.arange(8 * 200, dtype=np.float64).reshape(8, 200) % 31
+    monkeypatch.setattr(chx_correlationc, "physical_core_count", lambda: 8)
+    actual = chx_correlationc.auto_two_Arrayc(data, roi_mask)
+
+    assert actual.shape == (8, 8, 200)
+    assert actual.flags.c_contiguous
+    np.testing.assert_allclose(actual, 1.0)
+
+
+@pytest.mark.portable
+def test_two_time_multiple_output_batches_match_original_operations(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    generator = np.random.default_rng(81)
+    roi_count = 20
+    pixels_per_roi = 3
+    frame_count = 12
+    roi_mask = np.repeat(np.arange(1, roi_count + 1), pixels_per_roi).reshape(6, 10)
+    data = 0.5 + generator.random((frame_count, roi_count * pixels_per_roi))
+    explicit_norm = 0.5 + generator.random(data.shape)
+    monkeypatch.setattr(chx_correlationc, "_two_time_batch_size", lambda *_: 7)
+
+    expected = []
+    expected_explicit = []
+    expected_without_norm = []
+    for roi_index in range(roi_count):
+        start = roi_index * pixels_per_roi
+        selected = data[:, start : start + pixels_per_roi]
+        means = selected.mean(axis=1)
+        expected.append(np.dot(selected, selected.T) / np.outer(means, means) / pixels_per_roi)
+        explicit_means = explicit_norm[:, start : start + pixels_per_roi].mean(axis=1)
+        expected_explicit.append(
+            np.dot(selected, selected.T) / np.outer(explicit_means, explicit_means) / pixels_per_roi
+        )
+        expected_without_norm.append(np.dot(selected, selected.T) / pixels_per_roi)
+
+    actual = chx_correlationc.auto_two_Arrayc(data, roi_mask)
+    actual_explicit = chx_correlationc.auto_two_Arrayc_ExplicitNorm(data, roi_mask, norm=explicit_norm)
+    actual_without_norm = chx_correlationc.auto_two_Arrayc_ExplicitNorm(data, roi_mask)
+    np.testing.assert_allclose(actual, np.stack(expected, axis=2), rtol=1e-15, atol=1e-15)
+    np.testing.assert_allclose(
+        actual_explicit,
+        np.stack(expected_explicit, axis=2),
+        rtol=1e-15,
+        atol=1e-15,
+    )
+    np.testing.assert_allclose(
+        actual_without_norm,
+        np.stack(expected_without_norm, axis=2),
+        rtol=1e-15,
+        atol=1e-15,
+    )
+
+
+@pytest.mark.portable
+def test_diagonal_numba_limit_uses_physical_core_count(monkeypatch):
+    from pyCHX import Two_Time_Correlation_Function as two_time
+
+    observed = []
+
+    @contextmanager
+    def recording_limit(limit):
+        observed.append(limit)
+        yield
+
+    monkeypatch.setattr(two_time, "physical_core_count", lambda: 7)
+    monkeypatch.setattr(two_time, "numba_thread_limit", recording_limit)
+    data = np.ones((360, 360, 8))
+    two_time.get_one_time_from_two_time(data)
+    assert observed == [7]
+
+
+@pytest.mark.portable
+def test_get_pixel_array_normalization_modes_are_exact():
+    from pyCHX.chx_correlationc import Get_Pixel_Arrayc
+
+    class SparseFrames:
+        beg = 1
+        end = 4
+        md = {"ncols": 2, "nrows": 4}
+
+        def __init__(self, frames):
+            self.frames = frames
+
+        def rdrawframe(self, index):
+            flattened = self.frames[index].ravel()
+            positions = np.flatnonzero(flattened).astype(np.int32)
+            return positions, flattened[positions]
+
+    frames = np.arange(1, 33, dtype=np.float64).reshape(4, 2, 4)
+    pixel_list = np.array([0, 2, 5, 7])
+    qind = np.array([1, 2, 1, 2])
+    norm_1d = np.array([1.5, 2.0, 2.5, 4.0])
+    norm_2d = np.multiply.outer(np.arange(1.0, 5.0), norm_1d)
+    imgsum = np.arange(10.0, 14.0)
+    mean_int_sets = np.array([[2.0, 3.0], [3.0, 4.0], [4.0, 5.0], [5.0, 6.0]])
+    cases = [
+        {},
+        {"norm": norm_1d},
+        {"norm": norm_2d},
+        {"imgsum": imgsum},
+        {"mean_int_sets": mean_int_sets, "qind": qind},
+        {"norm": norm_2d, "imgsum": imgsum, "mean_int_sets": mean_int_sets, "qind": qind},
+    ]
+
+    selected_frames = frames[SparseFrames.beg : SparseFrames.end].reshape(3, -1)[:, pixel_list]
+    for kwargs in cases:
+        expected = np.zeros_like(selected_frames)
+        for output_index, frame_index in enumerate(range(SparseFrames.beg, SparseFrames.end)):
+            mean_norm = mean_int_sets[frame_index, qind - 1] if kwargs.get("mean_int_sets") is not None else 1.0
+            sum_norm = imgsum[frame_index] if kwargs.get("imgsum") is not None else 1.0
+            if kwargs.get("norm") is norm_2d:
+                pixel_norm = norm_2d[frame_index]
+            elif kwargs.get("norm") is norm_1d:
+                pixel_norm = norm_1d
+            else:
+                pixel_norm = 1.0
+            expected[output_index] = selected_frames[output_index] / (mean_norm * sum_norm * pixel_norm)
+
+        actual = Get_Pixel_Arrayc(SparseFrames(frames), pixel_list, **kwargs).get_data()
+        np.testing.assert_array_equal(actual, expected)
+
+
+@pytest.mark.portable
+@pytest.mark.parametrize(
+    ("cal_error", "use_intensity_cache"),
+    [(False, False), (False, True), (True, False)],
+)
+def test_optimized_one_time_kernel_matches_legacy_operations_exactly(cal_error, use_intensity_cache):
+    from pyCHX.chx_correlationc import _one_time_process, _one_time_process_cached, _one_time_process_error
+
+    def legacy_process(
+        buf,
+        correlation,
+        past_norm,
+        future_norm,
+        labels,
+        num_bufs,
+        num_pixels,
+        images_per_level,
+        level,
+        buffer_number,
+        bad_counts,
+        level_lengths,
+        error_arrays=None,
+    ):
+        images_per_level[level] += 1
+        minimum = num_bufs // 2 if level else 0
+        for delay in range(minimum, min(images_per_level[level], num_bufs)):
+            time_index = int(level * num_bufs / 2 + delay)
+            past = buf[level, (buffer_number - delay) % num_bufs]
+            future = buf[level, buffer_number]
+            level_index = int(time_index - level_lengths[:level].sum())
+            normalize = images_per_level[level] - delay - bad_counts[level + 1][level_index]
+            if np.isnan(past).any() or np.isnan(future).any():
+                bad_counts[level + 1][level_index] += 1
+            elif error_arrays is None:
+                for weights, output in zip(
+                    [past * future, past, future],
+                    [correlation, past_norm, future_norm],
+                ):
+                    binned = np.bincount(labels, weights=weights)[1:]
+                    output[time_index] += (binned / num_pixels - output[time_index]) / normalize
+            else:
+                for weights, output in zip([past * future, past, future], error_arrays):
+                    output[time_index] += (weights - output[time_index]) / normalize
+
+    buf = np.array(
+        [
+            [
+                [1.25, 2.5, 3.75, 5.0],
+                [np.nan, np.nan, np.nan, np.nan],
+                [2.0, 4.5, 7.0, 9.5],
+                [3.5, 5.25, 8.75, 11.0],
+            ]
+        ]
+    )
+    labels = np.array([1, 1, 2, 2])
+    num_pixels = np.array([2, 2])
+    level_lengths = np.array([4])
+    shape = (4, 2)
+    legacy_arrays = [np.zeros(shape), np.zeros(shape), np.zeros(shape)]
+    optimized_arrays = [array.copy() for array in legacy_arrays]
+    legacy_images_per_level = np.array([3])
+    optimized_images_per_level = legacy_images_per_level.copy()
+    legacy_bad_counts = {1: np.zeros(4, dtype=np.int64)}
+    optimized_bad_counts = {1: np.zeros(4, dtype=np.int64)}
+
+    if cal_error:
+        legacy_error_arrays = [np.zeros((4, 4)), np.zeros((4, 4)), np.zeros((4, 4))]
+        optimized_error_arrays = [array.copy() for array in legacy_error_arrays]
+        legacy_process(
+            buf,
+            *legacy_arrays,
+            labels,
+            4,
+            num_pixels,
+            legacy_images_per_level,
+            0,
+            3,
+            legacy_bad_counts,
+            level_lengths,
+            legacy_error_arrays,
+        )
+        _one_time_process_error(
+            buf,
+            *optimized_arrays,
+            labels,
+            4,
+            num_pixels,
+            optimized_images_per_level,
+            0,
+            3,
+            optimized_bad_counts,
+            level_lengths,
+            *optimized_error_arrays,
+        )
+        for actual, expected in zip(optimized_error_arrays, legacy_error_arrays):
+            np.testing.assert_array_equal(actual, expected)
+    else:
+        legacy_process(
+            buf,
+            *legacy_arrays,
+            labels,
+            4,
+            num_pixels,
+            legacy_images_per_level,
+            0,
+            3,
+            legacy_bad_counts,
+            level_lengths,
+        )
+        optimized_arguments = [
+            buf,
+            *optimized_arrays,
+            labels,
+            4,
+            num_pixels,
+            optimized_images_per_level,
+            0,
+            3,
+            optimized_bad_counts,
+            level_lengths,
+        ]
+        if use_intensity_cache:
+            intensity_cache = np.zeros((1, 4, 2), dtype=np.float64)
+            for buffer_index, image in enumerate(buf[0]):
+                if not np.isnan(image).any():
+                    intensity_cache[0, buffer_index] = np.bincount(labels, weights=image)[1:]
+            optimized_arguments.append(intensity_cache)
+            _one_time_process_cached(*optimized_arguments)
+        else:
+            _one_time_process(*optimized_arguments)
+        for actual, expected in zip(optimized_arrays, legacy_arrays):
+            np.testing.assert_array_equal(actual, expected)
+
+    np.testing.assert_array_equal(optimized_images_per_level, legacy_images_per_level)
+    np.testing.assert_array_equal(optimized_bad_counts[1], legacy_bad_counts[1])
+
+
+@pytest.mark.portable
+@pytest.mark.parametrize("use_intensity_cache", [False, True])
+@pytest.mark.parametrize(("level", "current_time"), [(0, 8), (1, 8.5)])
+def test_optimized_two_time_kernel_matches_legacy_operations_exactly(level, current_time, use_intensity_cache):
+    from pyCHX.chx_correlationc import _create_intensity_buffer, _two_time_process, _two_time_process_cached
+
+    def legacy_process(
+        buf,
+        correlation,
+        labels,
+        num_bufs,
+        num_pixels,
+        images_per_level,
+        lag_steps,
+        current_time,
+        level,
+        buffer_number,
+    ):
+        images_per_level[level] += 1
+        minimum = 0 if level == 0 else num_bufs // 2
+        for delay in range(minimum, min(images_per_level[level], num_bufs)):
+            time_index = level * num_bufs / 2 + delay
+            past = buf[level, (buffer_number - delay) % num_bufs]
+            future = buf[level, buffer_number]
+            product_sum = np.bincount(labels, weights=past * future)[1:]
+            past_sum = np.bincount(labels, weights=past)[1:]
+            future_sum = np.bincount(labels, weights=future)[1:]
+            first_time = current_time - 1
+            second_time = current_time - lag_steps[int(time_index)] - 1
+            values = product_sum / (past_sum * future_sum) * num_pixels
+            if not isinstance(current_time, int):
+                shift = 2 ** (level - 1)
+                for offset in range(-shift + 1, shift + 1):
+                    correlation[:, int(first_time + offset), int(second_time + offset)] = values
+            else:
+                correlation[:, int(first_time), int(second_time)] = values
+
+    buf = np.array(
+        [
+            [
+                [1.25, 2.5, 3.75, 5.0],
+                [2.0, 4.5, 7.0, 9.5],
+                [3.5, 5.25, 8.75, 11.0],
+                [4.25, 6.5, 9.25, 12.5],
+            ],
+            [
+                [1.625, 3.5, 5.375, 7.25],
+                [2.75, 4.875, 7.875, 10.25],
+                [3.875, 5.875, 9.0, 11.75],
+                [2.9375, 4.5, 6.5625, 8.875],
+            ],
+        ]
+    )
+    labels = np.array([1, 1, 2, 2])
+    num_pixels = np.array([2, 2])
+    lag_steps = np.array([0, 1, 2, 3, 4, 6])
+    legacy_correlation = np.zeros((2, 12, 12))
+    optimized_correlation = legacy_correlation.copy()
+    legacy_images_per_level = np.array([3, 3])
+    optimized_images_per_level = legacy_images_per_level.copy()
+    arguments = (
+        buf,
+        labels,
+        4,
+        num_pixels,
+        lag_steps,
+        current_time,
+        level,
+        3,
+    )
+
+    legacy_process(
+        arguments[0],
+        legacy_correlation,
+        arguments[1],
+        arguments[2],
+        arguments[3],
+        legacy_images_per_level,
+        *arguments[4:],
+    )
+    optimized_arguments = [
+        arguments[0],
+        optimized_correlation,
+        arguments[1],
+        arguments[2],
+        arguments[3],
+        optimized_images_per_level,
+        *arguments[4:],
+    ]
+    if use_intensity_cache:
+        optimized_arguments.append(_create_intensity_buffer(buf, labels, len(num_pixels)))
+        _two_time_process_cached(*optimized_arguments)
+    else:
+        _two_time_process(*optimized_arguments)
+
+    np.testing.assert_array_equal(optimized_correlation, legacy_correlation)
+    np.testing.assert_array_equal(optimized_images_per_level, legacy_images_per_level)
+
+
+@pytest.mark.portable
+def test_two_time_intensity_cache_tracks_frames_before_the_first_correlated_lag():
+    from pyCHX.chx_correlationc import _create_intensity_buffer, _two_time_process_cached
+
+    buf = np.zeros((2, 4, 4), dtype=np.float64)
+    buf[1, 0] = [1.0, 2.0, 3.0, 4.0]
+    labels = np.array([1, 1, 2, 2])
+    intensity_buf = _create_intensity_buffer(buf, labels, 2)
+    intensity_buf[1, 0] = 0
+
+    _two_time_process_cached(
+        buf,
+        np.zeros((2, 8, 8)),
+        labels,
+        4,
+        np.array([2, 2]),
+        np.zeros(2, dtype=np.int64),
+        np.array([0, 1, 2, 3, 4, 6]),
+        1.5,
+        1,
+        0,
+        intensity_buf,
+    )
+
+    np.testing.assert_array_equal(intensity_buf[1, 0], [3.0, 7.0])
 
 
 @pytest.mark.portable

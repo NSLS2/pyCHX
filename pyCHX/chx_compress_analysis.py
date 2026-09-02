@@ -9,6 +9,7 @@ from matplotlib.figure import Figure
 from tqdm import tqdm
 
 from pyCHX._optional import imshow
+from pyCHX._performance import sparse_scatter_normalized
 from pyCHX.chx_compress import Multifile as _Multifile
 from pyCHX.chx_compress import compress_eigerdata as _compress_eigerdata
 from pyCHX.chx_compress import get_avg_imgc
@@ -128,24 +129,35 @@ def cal_waterfallc(
     # pre-allocate an array for performance
     # might be able to use list comprehension to make this faster
 
-    watf = np.zeros([int((FD.end - FD.beg) / sampling), len(qind)])
+    watf = np.zeros([len(range(FD.beg, FD.end, sampling)), len(qind)])
 
-    # fra_pix = np.zeros_like( pixelist, dtype=np.float64)
-
-    timg = np.zeros(FD.md["ncols"] * FD.md["nrows"], dtype=np.int32)
-    timg[pixelist] = np.arange(1, len(pixelist) + 1)
-
-    # maxqind = max(qind)
-    _ = np.bincount(qind)[1:]
-    n = 0
-    # for  i in tqdm(range( FD.beg , FD.end )):
-    for i in tqdm(range(FD.beg, FD.end, sampling), desc="Get waterfall for q index=%s" % qindex):
-        p, v = FD.rdrawframe(i)
-        w = np.where(timg[p])[0]
-        pxlist = timg[p[w]] - 1
-
-        watf[n][pxlist] = v[w]
-        n += 1
+    lookup = np.full(FD.md["ncols"] * FD.md["nrows"], -1, dtype=np.int64)
+    lookup[pixelist] = np.arange(len(pixelist), dtype=np.int64)
+    dummy_float_1d = np.ones(1, dtype=np.float64)
+    dummy_float_2d = np.ones((1, 1), dtype=np.float64)
+    dummy_int = np.zeros(len(pixelist), dtype=np.int64)
+    flags = np.zeros(4, dtype=np.bool_)
+    frames = range(FD.beg, FD.end, sampling)
+    for output_row, frame_index in enumerate(tqdm(frames, desc="Get waterfall for q index=%s" % qindex)):
+        if hasattr(FD, "_raw_frame_view"):
+            positions, values = FD._raw_frame_view(frame_index)
+        else:
+            positions, values = FD.rdrawframe(frame_index)
+        sparse_scatter_normalized(
+            positions,
+            values,
+            lookup,
+            watf,
+            output_row,
+            0,
+            dummy_float_1d,
+            dummy_float_2d,
+            dummy_int,
+            dummy_float_1d,
+            dummy_float_2d,
+            dummy_int,
+            flags,
+        )
 
     if bin_waterfall:
         watf_ = watf.copy()

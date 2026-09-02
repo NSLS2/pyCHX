@@ -39,6 +39,25 @@ def test_legacy_star_import_namespace_and_effective_bindings():
 
 
 @pytest.mark.portable
+def test_production_wildcard_import_order_keeps_optimized_bindings():
+    from pyCHX.chx_compress import compress_eigerdata
+    from pyCHX.chx_correlationc import Get_Pixel_Arrayc, auto_two_Arrayc
+    from pyCHX.chx_correlationp import cal_g2p
+    from pyCHX.Two_Time_Correlation_Function import get_one_time_from_two_time
+
+    namespace = {}
+    exec(
+        "from pyCHX.chx_packages import *\nfrom pyCHX.chx_xpcs_xsvs_jupyter_V1 import *",
+        namespace,
+    )
+    assert namespace["compress_eigerdata"] is compress_eigerdata
+    assert namespace["cal_g2p"] is cal_g2p
+    assert namespace["Get_Pixel_Arrayc"] is Get_Pixel_Arrayc
+    assert namespace["auto_two_Arrayc"] is auto_two_Arrayc
+    assert namespace["get_one_time_from_two_time"] is get_one_time_from_two_time
+
+
+@pytest.mark.portable
 def test_final_marker_and_color_values_are_preserved():
     import pyCHX.chx_packages as packages
 

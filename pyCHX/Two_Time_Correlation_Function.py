@@ -17,6 +17,12 @@ from skbeam.core.utils import multi_tau_lags
 from tqdm import tqdm
 
 from pyCHX._optional import imshow
+from pyCHX._performance import (
+    diagonal_nanmean,
+    normalize_diagonal_means,
+    numba_thread_limit,
+    physical_core_count,
+)
 from pyCHX.chx_libs import RUN_GUI
 from pyCHX.chx_libs import colors
 from pyCHX.chx_libs import colors as colors_array
@@ -944,17 +950,27 @@ def get_one_time_from_two_time(g12, norms=None, nopr=None):
     """
 
     m, n, noqs = g12.shape
-    if norms is None:
-        g2f12 = np.array([np.nanmean(g12.diagonal(i), axis=1) for i in range(m)])
-    else:
-        g2f12 = np.zeros([m, noqs])
-        for q in range(noqs):
-            yn = norms[:, q]
-            g2f12[:, q] = np.array(
+    if g12.size < 1_000_000:
+        if norms is None:
+            return np.array([np.nanmean(g12.diagonal(delay), axis=1) for delay in range(m)])
+        output = np.empty((m, noqs), dtype=np.float64)
+        for roi_index in range(noqs):
+            roi_norm = norms[:, roi_index]
+            output[:, roi_index] = np.asarray(
                 [
-                    np.nanmean(g12[:, :, q].diagonal(i)) / (np.average(yn[i:]) * np.average(yn[: m - i]) * nopr[q])
-                    for i in range(m)
+                    np.nanmean(g12[:, :, roi_index].diagonal(delay))
+                    / (np.average(roi_norm[delay:]) * np.average(roi_norm[: m - delay]) * nopr[roi_index])
+                    for delay in range(m)
                 ]
+            )
+        return output
+    with numba_thread_limit(min(physical_core_count(), max(1, m * noqs))):
+        g2f12 = diagonal_nanmean(np.asarray(g12))
+        if norms is not None:
+            g2f12 = normalize_diagonal_means(
+                g2f12,
+                np.asarray(norms, dtype=np.float64),
+                np.asarray(nopr, dtype=np.float64),
             )
     return g2f12
 
