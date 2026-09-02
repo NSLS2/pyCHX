@@ -456,20 +456,6 @@ def test_array_two_time_helpers_support_sparse_roi_labels():
 
 
 @pytest.mark.portable
-def test_two_time_worker_count_respects_affinity_and_memory(monkeypatch):
-    from pyCHX import chx_correlationc
-
-    frame_count = 1_000
-    matrix_bytes = frame_count * frame_count * 8
-    monkeypatch.setattr(chx_correlationc, "physical_core_count", lambda: 56)
-    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: matrix_bytes * 10)
-    assert chx_correlationc._two_time_worker_count(frame_count, 200) == 2
-
-    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: matrix_bytes * 1_000)
-    assert chx_correlationc._two_time_worker_count(frame_count, 200) == 56
-
-
-@pytest.mark.portable
 def test_production_two_time_path_prenormalizes_before_symmetric_blas(monkeypatch):
     from pyCHX import chx_correlationc
 
@@ -509,29 +495,65 @@ def test_array_two_time_preserves_zero_intensity_frame_results():
 
 
 @pytest.mark.portable
-def test_two_time_blas_limit_avoids_nested_parallelism(monkeypatch):
+def test_two_time_uses_all_physical_cores_without_roi_threading(monkeypatch):
     from pyCHX import chx_correlationc
 
-    limits = []
+    blas_limits = []
+    numba_limits = []
 
     def capture_limit(*, limits: int, user_api: str):
         assert user_api == "blas"
-        captured = limits
+        blas_limits.append(limits)
 
         @contextmanager
         def context():
-            limits_seen.append(captured)
             yield
 
         return context()
 
-    limits_seen = limits
+    @contextmanager
+    def capture_numba_limit(limit):
+        numba_limits.append(limit)
+        yield
+
+    def reject_roi_thread_pool(*args, **kwargs):
+        raise AssertionError("two-time ROI calculations must not use Python threads around scipy BLAS")
+
     monkeypatch.setattr(chx_correlationc, "physical_core_count", lambda: 4)
-    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: 10**12)
     monkeypatch.setattr(chx_correlationc, "threadpool_limits", capture_limit)
+    monkeypatch.setattr(chx_correlationc, "numba_thread_limit", capture_numba_limit)
+    monkeypatch.setattr(chx_correlationc, "ThreadPoolExecutor", reject_roi_thread_pool)
     roi_mask = np.array([[1, 1], [2, 2]])
-    chx_correlationc.auto_two_Arrayc(np.arange(16, dtype=float).reshape(4, 4) + 1, roi_mask)
-    assert limits == [1]
+    data = np.arange(16, dtype=float).reshape(4, 4) + 1
+    chx_correlationc.auto_two_Arrayc(data, roi_mask)
+    chx_correlationc.auto_two_Arrayc_ExplicitNorm(data, roi_mask, norm=data)
+    assert blas_limits == [4, 4]
+    assert numba_limits == [4, 4]
+
+
+@pytest.mark.portable
+def test_parallel_two_time_matrix_finishing_matches_serial_kernels():
+    from pyCHX._performance import (
+        mirror_and_normalize_two_time,
+        mirror_and_normalize_two_time_parallel,
+        mirror_two_time,
+        mirror_two_time_parallel,
+    )
+
+    generator = np.random.default_rng(11)
+    upper_triangle = np.triu(generator.random((128, 128)))
+    expected_mirror = upper_triangle.copy()
+    actual_mirror = upper_triangle.copy()
+    mirror_two_time(expected_mirror)
+    mirror_two_time_parallel(actual_mirror)
+    np.testing.assert_array_equal(actual_mirror, expected_mirror)
+
+    norms = generator.random(128)
+    expected_normalized = upper_triangle.copy()
+    actual_normalized = upper_triangle.copy()
+    mirror_and_normalize_two_time(expected_normalized, norms, 17)
+    mirror_and_normalize_two_time_parallel(actual_normalized, norms, 17)
+    np.testing.assert_array_equal(actual_normalized, expected_normalized)
 
 
 @pytest.mark.portable

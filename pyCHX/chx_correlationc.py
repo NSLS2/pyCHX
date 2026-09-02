@@ -20,9 +20,11 @@ from threadpoolctl import threadpool_limits
 from tqdm import tqdm
 
 from pyCHX._performance import (
-    available_memory_bytes,
     mirror_and_normalize_two_time,
+    mirror_and_normalize_two_time_parallel,
     mirror_two_time,
+    mirror_two_time_parallel,
+    numba_thread_limit,
     physical_core_count,
     sparse_scatter_normalized,
 )
@@ -1801,26 +1803,29 @@ def _select_two_time_rois(rois, index):
     return qind, selected_labels, pixel_counts
 
 
-def _two_time_worker_count(frame_count, roi_count):
-    """Bound concurrent square temporaries by physical cores and free RAM."""
-    temporary_bytes = max(1, frame_count * frame_count * np.dtype(np.float64).itemsize)
-    memory_workers = max(1, int(available_memory_bytes() * 0.20) // temporary_bytes)
-    return min(roi_count, physical_core_count(), memory_workers)
-
-
 def _symmetric_two_time_product(data, row_norm, pixel_count):
     """Compute one ROI matrix, pre-normalizing production-sized float inputs."""
+    use_parallel_finish = data.shape[0] >= 1_024
     if np.issubdtype(data.dtype, np.floating):
         if data.size >= 262_144 and np.all(np.isfinite(row_norm)) and np.all(row_norm != 0):
             normalized = np.asarray(data, dtype=np.float64, order="F") / row_norm[:, None]
             correlation = dsyrk(1.0 / pixel_count, normalized, lower=0, trans=0)
-            mirror_two_time(correlation)
+            if use_parallel_finish:
+                mirror_two_time_parallel(correlation)
+            else:
+                mirror_two_time(correlation)
         else:
             correlation = dsyrk(1.0, np.asarray(data, dtype=np.float64), lower=0, trans=0)
-            mirror_and_normalize_two_time(correlation, row_norm, pixel_count)
+            if use_parallel_finish:
+                mirror_and_normalize_two_time_parallel(correlation, row_norm, pixel_count)
+            else:
+                mirror_and_normalize_two_time(correlation, row_norm, pixel_count)
     else:
         correlation = np.dot(data, data.T).astype(np.float64)
-        mirror_and_normalize_two_time(correlation, row_norm, pixel_count)
+        if use_parallel_finish:
+            mirror_and_normalize_two_time_parallel(correlation, row_norm, pixel_count)
+        else:
+            mirror_and_normalize_two_time(correlation, row_norm, pixel_count)
     return correlation
 
 
@@ -1861,7 +1866,6 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
         DO = False
 
     if DO:
-        worker_count = _two_time_worker_count(noframes, len(qlist))
 
         def calculate_one(i):
             data_pixel_qi = data_pixel[:, roi_pixel_indices[i]]
@@ -1869,15 +1873,13 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
             correlation = _symmetric_two_time_product(data_pixel_qi, row_norm, nopr[i])
             g12b[:, :, i] = correlation
 
-        blas_threads = 1 if worker_count > 1 else physical_core_count()
-        with threadpool_limits(limits=blas_threads, user_api="blas"):
-            if worker_count == 1:
-                for i in tqdm(range(len(qlist))):
-                    calculate_one(i)
-            else:
-                work_order = sorted(range(len(qlist)), key=lambda i: (-nopr[i], i))
-                with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                    list(tqdm(executor.map(calculate_one, work_order), total=len(qlist)))
+        core_count = physical_core_count()
+        with (
+            threadpool_limits(limits=core_count, user_api="blas"),
+            numba_thread_limit(core_count),
+        ):
+            for i in tqdm(range(len(qlist))):
+                calculate_one(i)
         return np.ascontiguousarray(g12b)
 
 
@@ -1920,7 +1922,6 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
         DO = False
     if DO:
         roi_pixel_indices = [np.flatnonzero(qind == label) for label in qlist]
-        worker_count = _two_time_worker_count(noframes, len(qlist))
 
         def calculate_one(i):
             pixelist_qi = roi_pixel_indices[i]
@@ -1932,15 +1933,13 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
             correlation = _symmetric_two_time_product(data_pixel_qi, row_norm, nopr[i])
             g12b[:, :, i] = correlation
 
-        blas_threads = 1 if worker_count > 1 else physical_core_count()
-        with threadpool_limits(limits=blas_threads, user_api="blas"):
-            if worker_count == 1:
-                for i in tqdm(range(len(qlist))):
-                    calculate_one(i)
-            else:
-                work_order = sorted(range(len(qlist)), key=lambda i: (-nopr[i], i))
-                with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                    list(tqdm(executor.map(calculate_one, work_order), total=len(qlist)))
+        core_count = physical_core_count()
+        with (
+            threadpool_limits(limits=core_count, user_api="blas"),
+            numba_thread_limit(core_count),
+        ):
+            for i in tqdm(range(len(qlist))):
+                calculate_one(i)
         return np.ascontiguousarray(g12b)
 
 

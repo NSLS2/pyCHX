@@ -257,11 +257,34 @@ def mirror_and_normalize_two_time(matrix, row_norm, pixel_count):
             matrix[column, row] = value
 
 
+@njit(cache=True, nogil=True, parallel=True, error_model="numpy")
+def mirror_and_normalize_two_time_parallel(matrix, row_norm, pixel_count):
+    """Parallel large-matrix variant of :func:`mirror_and_normalize_two_time`."""
+    frame_count = matrix.shape[0]
+    for row in prange(frame_count):
+        for column in range(row, frame_count):
+            value = matrix[row, column]
+            value /= row_norm[column]
+            value /= row_norm[row]
+            value /= pixel_count
+            matrix[row, column] = value
+            matrix[column, row] = value
+
+
 @njit(cache=True, nogil=True)
 def mirror_two_time(matrix):
     """Copy an upper-triangular symmetric BLAS result to its lower half."""
     frame_count = matrix.shape[0]
     for row in range(frame_count):
+        for column in range(row + 1, frame_count):
+            matrix[column, row] = matrix[row, column]
+
+
+@njit(cache=True, nogil=True, parallel=True)
+def mirror_two_time_parallel(matrix):
+    """Parallel large-matrix variant of :func:`mirror_two_time`."""
+    frame_count = matrix.shape[0]
+    for row in prange(frame_count):
         for column in range(row + 1, frame_count):
             matrix[column, row] = matrix[row, column]
 
