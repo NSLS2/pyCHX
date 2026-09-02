@@ -4,6 +4,7 @@ import pickle as pkl
 import shutil
 import struct
 import sys
+import tempfile
 import time
 from multiprocessing import Pool, cpu_count
 
@@ -44,7 +45,57 @@ def _make_pool(task_count):
     """Create no more worker processes than either tasks or available CPUs."""
     if task_count < 1:
         raise ValueError("at least one multiprocessing task is required")
-    return Pool(processes=min(task_count, cpu_count()))
+    return Pool(processes=min(task_count, _available_cpu_count()))
+
+
+def _available_cpu_count():
+    """Return CPUs available to this process, respecting affinity limits."""
+    detected = cpu_count()
+    try:
+        return min(detected, len(os.sched_getaffinity(0)))
+    except (AttributeError, OSError):
+        return detected
+
+
+def _write_sparse_frame(stream, positions, values):
+    """Write one sparse CMP frame using the legacy native binary layout."""
+    stream.write(np.asarray(len(positions), dtype=np.uint32).tobytes())
+    if len(positions):
+        stream.write(np.asarray(positions, dtype=np.int32).tobytes())
+        stream.write(np.ascontiguousarray(values).tobytes())
+
+
+def _publish_file(source, destination):
+    """Copy *source* beside *destination* and atomically publish it."""
+    destination = os.path.abspath(destination)
+    destination_dir = os.path.dirname(destination)
+    descriptor, temporary = tempfile.mkstemp(
+        dir=destination_dir,
+        prefix=".%s." % os.path.basename(destination),
+        suffix=".tmp",
+    )
+    os.close(descriptor)
+    try:
+        shutil.copyfile(source, temporary)
+        shutil.copymode(source, temporary)
+        os.replace(temporary, destination)
+    finally:
+        if os.path.exists(temporary):
+            os.remove(temporary)
+
+
+def _staged_init_compress_eigerdata(images, mask, md, filename, new_path, **kwargs):
+    """Run serial compression locally, then publish its completed output."""
+    staging_dir = tempfile.mkdtemp(prefix="pychx-compress-", dir=new_path)
+    staged_filename = os.path.join(staging_dir, os.path.basename(filename))
+    try:
+        result = init_compress_eigerdata(images, mask, md, staged_filename, **kwargs)
+        _publish_file(staged_filename, filename)
+        if kwargs.get("with_pickle", True):
+            _publish_file(staged_filename + ".pkl", filename + ".pkl")
+        return result
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def _collect_pool_results(pool, results, show_progress=False):
@@ -181,11 +232,12 @@ def compress_eigerdata(
                 new_path=new_path,
             )
         else:
-            return init_compress_eigerdata(
+            return _staged_init_compress_eigerdata(
                 images,
                 mask,
                 md,
                 filename,
+                new_path,
                 bad_pixel_threshold=bad_pixel_threshold,
                 hot_pixel_threshold=hot_pixel_threshold,
                 bad_pixel_low_threshold=bad_pixel_low_threshold,
@@ -224,11 +276,12 @@ def compress_eigerdata(
                     new_path=new_path,
                 )
             else:
-                return init_compress_eigerdata(
+                return _staged_init_compress_eigerdata(
                     images,
                     mask,
                     md,
                     filename,
+                    new_path,
                     bad_pixel_threshold=bad_pixel_threshold,
                     hot_pixel_threshold=hot_pixel_threshold,
                     bad_pixel_low_threshold=bad_pixel_low_threshold,
@@ -334,6 +387,7 @@ def para_compress_eigerdata(
 ):
 
     data_path_ = data_path
+    raw_data_copied = False
     if dtypes == "uid":
         uid = md["uid"]  # images
         if not direct_load_data:
@@ -350,9 +404,10 @@ def para_compress_eigerdata(
                 print("Copying...")
                 copy_data(data_path, new_path)
                 # print(data_path, new_path)
-                new_master_file = new_path + os.path.basename(data_path)
+                new_master_file = os.path.join(new_path, os.path.basename(data_path))
                 data_path_ = new_master_file
                 images_ = EigerImages(new_master_file, images_per_file, md)
+                raw_data_copied = True
                 # print(md)
             if reverse:
                 images_ = reverse_updown(images_)  # Why not np.flipud?
@@ -375,67 +430,71 @@ def para_compress_eigerdata(
         num_sub = int(np.ceil(N / cpu_core_number))
         Nf = int(np.ceil(N / num_sub))
         print("The sub compressed file number was changed from %s to %s" % (num_sub_old, num_sub))
-    create_compress_header(md, filename + "-header", nobytes, bins, rot90=rot90)
-    # print( 'done for header here')
-    # print(data_path_, images_per_file)
-    results = para_segment_compress_eigerdata(
-        images=images,
-        mask=mask,
-        md=md,
-        filename=filename,
-        num_sub=num_sub,
-        bad_pixel_threshold=bad_pixel_threshold,
-        hot_pixel_threshold=hot_pixel_threshold,
-        bad_pixel_low_threshold=bad_pixel_low_threshold,
-        nobytes=nobytes,
-        bins=bins,
-        dtypes=dtypes,
-        num_max_para_process=num_max_para_process,
-        reverse=reverse,
-        rot90=rot90,
-        direct_load_data=direct_load_data,
-        data_path=data_path_,
-        images_per_file=images_per_file,
-    )
+    staging_dir = tempfile.mkdtemp(prefix="pychx-compress-", dir=new_path)
+    staged_filename = os.path.join(staging_dir, os.path.basename(filename))
+    try:
+        create_compress_header(md, staged_filename + "-header", nobytes, bins, rot90=rot90)
+        results = para_segment_compress_eigerdata(
+            images=images,
+            mask=mask,
+            md=md,
+            filename=staged_filename,
+            num_sub=num_sub,
+            bad_pixel_threshold=bad_pixel_threshold,
+            hot_pixel_threshold=hot_pixel_threshold,
+            bad_pixel_low_threshold=bad_pixel_low_threshold,
+            nobytes=nobytes,
+            bins=bins,
+            dtypes=dtypes,
+            num_max_para_process=num_max_para_process,
+            reverse=reverse,
+            rot90=rot90,
+            direct_load_data=direct_load_data,
+            data_path=data_path_,
+            images_per_file=images_per_file,
+        )
 
-    res_ = [results[k].get() for k in list(sorted(results.keys()))]
-    imgsum = np.zeros(N)
-    bad_frame_list = np.zeros(N, dtype=bool)
-    good_count = 0
-    for i in range(Nf):
-        mask_, avg_img_, imgsum_, bad_frame_list_ = res_[i]
-        imgsum[i * num_sub : (i + 1) * num_sub] = imgsum_
-        bad_frame_list[i * num_sub : (i + 1) * num_sub] = bad_frame_list_
-        segment_good_count = len(imgsum_) - np.count_nonzero(bad_frame_list_)
-        if i == 0:
-            mask = mask_
-            avg_img = np.zeros_like(avg_img_, dtype=np.float64)
+        res_ = [results[k].get() for k in list(sorted(results.keys()))]
+        imgsum = np.zeros(N)
+        bad_frame_list = np.zeros(N, dtype=bool)
+        good_count = 0
+        for i in range(Nf):
+            mask_, avg_img_, imgsum_, bad_frame_list_ = res_[i]
+            imgsum[i * num_sub : (i + 1) * num_sub] = imgsum_
+            bad_frame_list[i * num_sub : (i + 1) * num_sub] = bad_frame_list_
+            segment_good_count = len(imgsum_) - np.count_nonzero(bad_frame_list_)
+            if i == 0:
+                mask = mask_
+                avg_img = np.zeros_like(avg_img_, dtype=np.float64)
+            else:
+                mask *= mask_
+            if segment_good_count and not np.any(np.isnan(avg_img_)):
+                avg_img += avg_img_ * segment_good_count
+                good_count += segment_good_count
+
+        bad_frame_list = np.where(bad_frame_list)[0]
+        if good_count:
+            avg_img /= good_count
         else:
-            mask *= mask_
-        if segment_good_count and not np.any(np.isnan(avg_img_)):
-            avg_img += avg_img_ * segment_good_count
-            good_count += segment_good_count
+            avg_img.fill(np.nan)
 
-    bad_frame_list = np.where(bad_frame_list)[0]
-    if good_count:
-        avg_img /= good_count
-    else:
-        avg_img.fill(np.nan)
-
-    if len(bad_frame_list):
-        print("Bad frame list are: %s" % bad_frame_list)
-    else:
-        print("No bad frames are involved.")
-    print("Combining the seperated compressed files together...")
-    combine_compressed(filename, Nf, del_old=True)
-    del results
-    del res_
-    if with_pickle:
-        with open(filename + ".pkl", "wb") as stream:
-            pkl.dump([mask, avg_img, imgsum, bad_frame_list], stream)
-    if copy_rawdata:
-        delete_data(data_path, new_path)
-    return mask, avg_img, imgsum, bad_frame_list
+        if len(bad_frame_list):
+            print("Bad frame list are: %s" % bad_frame_list)
+        else:
+            print("No bad frames are involved.")
+        print("Combining the seperated compressed files together...")
+        combine_compressed(staged_filename, Nf, del_old=True)
+        _publish_file(staged_filename, filename)
+        if with_pickle:
+            staged_pickle = staged_filename + ".pkl"
+            with open(staged_pickle, "wb") as stream:
+                pkl.dump([mask, avg_img, imgsum, bad_frame_list], stream)
+            _publish_file(staged_pickle, filename + ".pkl")
+        return mask, avg_img, imgsum, bad_frame_list
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+        if raw_data_copied:
+            delete_data(data_path, new_path)
 
 
 def combine_compressed(filename, Nf, del_old=True):
@@ -575,11 +634,12 @@ def segment_compress_eigerdata(
             detector = get_detector(db[uid])
             images = load_data(uid, detector, reverse=reverse, rot90=rot90)[N1:N2]
         else:
-            images = EigerImages(data_path, images_per_file, md)[N1:N2]
+            images = EigerImages(data_path, images_per_file, md)
             if reverse:
-                images = reverse_updown(EigerImages(data_path, images_per_file, md))[N1:N2]
+                images = reverse_updown(images)
             if rot90:
                 images = rot90_clockwise(images)
+            images = images[N1:N2]
     else:
         images = images[N1:N2]
 
@@ -608,33 +668,24 @@ def segment_compress_eigerdata(
         # print('The frames will be binned by %s'%bins)
         dtype = np.float64
 
-    fp = open(filename, "wb")
-    for n in range(Nimg):
-        t1, t2 = time_edge[n]
-        if bins != 1:
-            img = np.array(np.average(images[t1:t2], axis=0), dtype=dtype)
-        else:
-            img = np.array(images[t1], dtype=dtype)
-        mask &= img < hot_pixel_threshold
-        p = np.where((np.ravel(img) > 0) * np.ravel(mask))[0]  # don't use masked data
-        v = np.ravel(np.array(img, dtype=dtype))[p]
-        dlen = len(p)
-        imgsum[n] = v.sum()
-        if (dlen == 0) or (imgsum[n] > bad_pixel_threshold) or (imgsum[n] <= bad_pixel_low_threshold):
-            dlen = 0
-            fp.write(struct.pack("@I", dlen))
-        else:
-            np.ravel(avg_img)[p] += v
-            good_count += 1
-            fp.write(struct.pack("@I", dlen))
-            fp.write(struct.pack("@{}i".format(dlen), *p))
-            if bins == 1:
-                fp.write(struct.pack("@{}{}".format(dlen, "ih"[nobytes == 2]), *v))
+    with open(filename, "wb") as stream:
+        for n in range(Nimg):
+            t1, t2 = time_edge[n]
+            if bins != 1:
+                img = np.asarray(np.average(images[t1:t2], axis=0), dtype=dtype)
             else:
-                fp.write(struct.pack("@{}{}".format(dlen, "dd"[nobytes == 2]), *v))  # n +=1
-        del p, v, img
-        fp.flush()
-    fp.close()
+                img = np.asarray(images[t1], dtype=dtype)
+            mask &= img < hot_pixel_threshold
+            flat_img = img.ravel()
+            p = np.flatnonzero((flat_img > 0) * mask.ravel())
+            v = flat_img[p]
+            imgsum[n] = v.sum()
+            if (len(p) == 0) or (imgsum[n] > bad_pixel_threshold) or (imgsum[n] <= bad_pixel_low_threshold):
+                _write_sparse_frame(stream, (), ())
+            else:
+                avg_img.ravel()[p] += v
+                good_count += 1
+                _write_sparse_frame(stream, p, v)
     if good_count:
         avg_img /= good_count
     else:
@@ -868,21 +919,12 @@ def init_compress_eigerdata(
         if (imgsum[n] > bad_pixel_threshold) or (imgsum[n] <= bad_pixel_low_threshold):
             # if imgsum[n] >=bad_pixel_threshold :
             dlen = 0
-            fp.write(struct.pack("@I", dlen))
+            _write_sparse_frame(fp, (), ())
         else:
             np.ravel(avg_img)[p] += v
             good_count += 1
             frac += dlen / Nopix
-            # s_fmt ='@I{}i{}{}'.format( dlen,dlen,'ih'[nobytes==2])
-            fp.write(struct.pack("@I", dlen))
-            fp.write(struct.pack("@{}i".format(dlen), *p))
-            if bins == 1:
-                if nobytes != 8:
-                    fp.write(struct.pack("@{}{}".format(dlen, "ih"[nobytes == 2]), *v))
-                else:
-                    fp.write(struct.pack("@{}{}".format(dlen, "dd"[nobytes == 2]), *v))
-            else:
-                fp.write(struct.pack("@{}{}".format(dlen, "dd"[nobytes == 2]), *v))
+            _write_sparse_frame(fp, p, v)
         # n +=1
 
     fp.close()

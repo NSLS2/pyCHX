@@ -1,3 +1,5 @@
+import struct
+
 import numpy as np
 import pytest
 
@@ -94,6 +96,145 @@ def test_compressed_file_round_trip(tmp_path):
 
 
 @pytest.mark.portable
+@pytest.mark.parametrize(
+    ("nobytes", "bins", "value_format"),
+    [(2, 1, "h"), (4, 1, "i"), (4, 2, "d")],
+)
+def test_compressed_payload_keeps_legacy_binary_layout(tmp_path, nobytes, bins, value_format):
+    from pyCHX.chx_compress import init_compress_eigerdata
+
+    frames = np.array(
+        [
+            [[0, 1, 2], [3, 0, 4]],
+            [[5, 0, 6], [0, 7, 8]],
+            [[9, 10, 0], [11, 12, 0]],
+        ],
+        dtype=np.int32,
+    )
+    mask = np.ones(frames.shape[1:], dtype=bool)
+    filename = tmp_path / "layout.cmp"
+
+    init_compress_eigerdata(
+        frames,
+        mask.copy(),
+        {"pixel_mask": mask.copy()},
+        str(filename),
+        nobytes=nobytes,
+        bins=bins,
+        with_pickle=False,
+    )
+
+    expected = bytearray()
+    for start in range(0, len(frames), bins):
+        image = np.average(frames[start : start + bins], axis=0)
+        positions = np.flatnonzero(image.ravel() > 0)
+        values = image.ravel()[positions]
+        if bins == 1:
+            values = values.astype({2: np.int16, 4: np.int32}[nobytes])
+        expected.extend(struct.pack("@I", len(positions)))
+        expected.extend(struct.pack("@{}i".format(len(positions)), *positions))
+        expected.extend(struct.pack("@{}{}".format(len(positions), value_format), *values))
+
+    assert filename.read_bytes()[1024:] == bytes(expected)
+
+
+@pytest.mark.portable
+def test_compress_eigerdata_stages_then_publishes_serial_output(tmp_path):
+    from pyCHX.chx_compress import compress_eigerdata
+
+    frames = np.arange(1, 25, dtype=np.int32).reshape(4, 2, 3)
+    mask = np.ones(frames.shape[1:], dtype=bool)
+    destination = tmp_path / "destination" / "serial.cmp"
+    staging = tmp_path / "staging"
+    destination.parent.mkdir()
+    staging.mkdir()
+
+    compress_eigerdata(
+        frames,
+        mask.copy(),
+        {"pixel_mask": mask.copy()},
+        str(destination),
+        force_compress=True,
+        dtypes="images",
+        direct_load_data=False,
+        with_pickle=False,
+        new_path=str(staging),
+    )
+
+    assert destination.is_file()
+    assert list(staging.iterdir()) == []
+
+
+@pytest.mark.portable
+def test_parallel_compression_stages_and_publishes_identical_cmp(tmp_path):
+    from pyCHX.chx_compress import init_compress_eigerdata, para_compress_eigerdata
+
+    frames = np.arange(1, 31, dtype=np.int32).reshape(5, 2, 3)
+    mask = np.ones(frames.shape[1:], dtype=bool)
+    metadata = {
+        "beam_center_x": 0,
+        "beam_center_y": 0,
+        "count_time": 0,
+        "detector_distance": 0,
+        "frame_time": 0,
+        "incident_wavelength": 0,
+        "pixel_mask": mask.copy(),
+        "x_pixel_size": 75,
+        "y_pixel_size": 75,
+    }
+    serial = tmp_path / "serial.cmp"
+    parallel = tmp_path / "destination" / "parallel.cmp"
+    staging = tmp_path / "staging"
+    parallel.parent.mkdir()
+    staging.mkdir()
+
+    init_compress_eigerdata(
+        frames,
+        mask.copy(),
+        metadata.copy(),
+        str(serial),
+        with_pickle=False,
+    )
+    para_compress_eigerdata(
+        frames,
+        mask.copy(),
+        metadata.copy(),
+        str(parallel),
+        num_sub=2,
+        dtypes="images",
+        cpu_core_number=2,
+        with_pickle=False,
+        copy_rawdata=False,
+        new_path=str(staging),
+    )
+
+    assert parallel.read_bytes() == serial.read_bytes()
+    assert list(staging.iterdir()) == []
+
+
+@pytest.mark.portable
+def test_atomic_publish_preserves_existing_destination_on_copy_failure(monkeypatch, tmp_path):
+    from pyCHX import chx_compress
+
+    source = tmp_path / "source.cmp"
+    destination = tmp_path / "destination.cmp"
+    source.write_bytes(b"new complete data")
+    destination.write_bytes(b"existing data")
+
+    def fail_during_copy(_source, temporary):
+        with open(temporary, "wb") as stream:
+            stream.write(b"partial")
+        raise OSError("simulated copy failure")
+
+    monkeypatch.setattr(chx_compress.shutil, "copyfile", fail_during_copy)
+    with pytest.raises(OSError, match="simulated copy failure"):
+        chx_compress._publish_file(source, destination)
+
+    assert destination.read_bytes() == b"existing data"
+    assert list(tmp_path.glob(".destination.cmp.*.tmp")) == []
+
+
+@pytest.mark.portable
 def test_compression_keeps_a_partial_final_frame_bin(tmp_path):
     from pyCHX.chx_compress import (
         Multifile,
@@ -183,6 +324,7 @@ def test_parallel_compression_weights_segment_averages_by_valid_frames(monkeypat
     monkeypatch.setattr(chx_compress, "para_segment_compress_eigerdata", lambda **kwargs: segment_results)
     monkeypatch.setattr(chx_compress, "create_compress_header", lambda *args, **kwargs: None)
     monkeypatch.setattr(chx_compress, "combine_compressed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(chx_compress, "_publish_file", lambda *args, **kwargs: None)
 
     _, average, intensity, bad_frames = chx_compress.para_compress_eigerdata(
         np.zeros((5, 1, 1)),
@@ -282,17 +424,18 @@ def test_serial_and_parallel_g2_error_estimates_agree(tmp_path):
 
     filename, frames, ring_mask = _make_compressed_correlation_input(tmp_path)
     ring_mask = np.select([ring_mask == 1, ring_mask == 2], [2, 5], default=0)
+    norm = np.linspace(1.0, 2.0, np.count_nonzero(ring_mask))
     serial_file = Multifile(str(filename), beg=0, end=len(frames))
     parallel_file = Multifile(str(filename), beg=0, end=len(frames))
     gpf_file = Multifile(str(filename), beg=0, end=len(frames))
     try:
         serial_g2, serial_lags, serial_error, _ = cal_g2c(
-            serial_file, ring_mask, bad_frame_list=[], cal_error=True
+            serial_file, ring_mask, bad_frame_list=[], norm=norm, cal_error=True
         )
         parallel_g2, parallel_lags, parallel_error = cal_g2p(
-            parallel_file, ring_mask, bad_frame_list=[], cal_error=True
+            parallel_file, ring_mask, bad_frame_list=[], norm=norm, cal_error=True
         )
-        numerator, past, future = cal_GPF(gpf_file, ring_mask, bad_frame_list=[])
+        numerator, past, future = cal_GPF(gpf_file, ring_mask, bad_frame_list=[], norm=norm)
     finally:
         serial_file.FID.close()
         parallel_file.FID.close()
@@ -303,6 +446,46 @@ def test_serial_and_parallel_g2_error_estimates_agree(tmp_path):
     np.testing.assert_allclose(parallel_error, serial_error, rtol=1e-13, atol=0)
     reconstructed_g2, _ = get_g2_from_ROI_GPF(numerator, past, future, ring_mask)
     np.testing.assert_allclose(reconstructed_g2[: len(serial_g2)], serial_g2, rtol=1e-13, atol=0)
+
+
+@pytest.mark.portable
+@pytest.mark.parametrize(
+    ("norm_kind", "cal_error"),
+    [(None, False), ("1d", False), ("2d", True)],
+)
+def test_parallel_g2_worker_grouping_is_exact(tmp_path, monkeypatch, norm_kind, cal_error):
+    import skbeam.core.roi as roi
+
+    from pyCHX import chx_correlationp
+    from pyCHX.chx_compress import Multifile
+
+    filename, frames, ring_mask = _make_compressed_correlation_input(tmp_path)
+    ring_mask = np.select([ring_mask == 1, ring_mask == 2], [2, 5], default=0)
+    _, pixel_list = roi.extract_label_indices(ring_mask)
+    base_norm = np.linspace(1.0, 2.0, len(pixel_list))
+    if norm_kind == "1d":
+        norm = base_norm
+    elif norm_kind == "2d":
+        norm = np.multiply.outer(np.linspace(1.0, 1.5, len(frames)), base_norm)
+    else:
+        norm = None
+
+    def calculate(worker_count):
+        monkeypatch.setattr(chx_correlationp, "_available_cpu_count", lambda: worker_count)
+        with Multifile(str(filename), beg=0, end=len(frames)) as compressed:
+            return chx_correlationp.cal_g2p(
+                compressed,
+                ring_mask,
+                bad_frame_list=[3, 7],
+                imgsum=np.linspace(10.0, 20.0, len(frames)),
+                norm=norm,
+                cal_error=cal_error,
+            )
+
+    grouped = calculate(1)
+    one_roi_per_worker = calculate(8)
+    for grouped_value, ungrouped_value in zip(grouped, one_roi_per_worker):
+        np.testing.assert_array_equal(grouped_value, ungrouped_value)
 
 
 @pytest.mark.portable
@@ -446,3 +629,17 @@ def test_pool_size_is_limited_by_available_cpus(monkeypatch):
     assert created_with == [4]
     with pytest.raises(ValueError, match="at least one"):
         chx_compress._make_pool(0)
+
+
+@pytest.mark.portable
+def test_pool_size_respects_cpu_affinity(monkeypatch):
+    from pyCHX import chx_compress
+
+    created_with = []
+    sentinel = object()
+    monkeypatch.setattr(chx_compress, "cpu_count", lambda: 32)
+    monkeypatch.setattr(chx_compress.os, "sched_getaffinity", lambda _pid: set(range(3)))
+    monkeypatch.setattr(chx_compress, "Pool", lambda processes: created_with.append(processes) or sentinel)
+
+    assert chx_compress._make_pool(10) is sentinel
+    assert created_with == [3]

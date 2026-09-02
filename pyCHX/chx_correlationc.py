@@ -36,6 +36,39 @@ def _one_time_process(
     norm,
     lev_len,
 ):
+    """Run the one-time kernel without an external intensity cache."""
+    return _one_time_process_cached(
+        buf,
+        G,
+        past_intensity_norm,
+        future_intensity_norm,
+        label_array,
+        num_bufs,
+        num_pixels,
+        img_per_level,
+        level,
+        buf_no,
+        norm,
+        lev_len,
+        None,
+    )
+
+
+def _one_time_process_cached(
+    buf,
+    G,
+    past_intensity_norm,
+    future_intensity_norm,
+    label_array,
+    num_bufs,
+    num_pixels,
+    img_per_level,
+    level,
+    buf_no,
+    norm,
+    lev_len,
+    intensity_buf,
+):
     """Reference implementation of the inner loop of multi-tau one time
     correlation
     This helper function calculates G, past_intensity_norm and
@@ -68,6 +101,8 @@ def _one_time_process(
         to track bad images
     lev_len : array
         length of each level
+    intensity_buf : array, optional
+        cached, unnormalized ROI sums for each ring-buffer slot
     Notes
     -----
     .. math::
@@ -81,30 +116,40 @@ def _one_time_process(
     # in multi-tau correlation, the subsequent levels have half as many
     # buffers as the first
     i_min = num_bufs // 2 if level else 0
-    # maxqind=G.shape[1]
+    level_offset = lev_len[:level].sum()
+    future_img = buf[level, buf_no]
+    future_has_nan = np.isnan(future_img).any()
+    if not future_has_nan:
+        future_binned = np.bincount(label_array, weights=future_img)[1:]
+        if intensity_buf is not None:
+            intensity_buf[level, buf_no] = future_binned
+        product = np.empty_like(future_img)
     for i in range(i_min, min(img_per_level[level], num_bufs)):
         # compute the index into the autocorrelation matrix
         t_index = int(level * num_bufs / 2 + i)
         delay_no = (buf_no - i) % num_bufs
         # get the images for correlating
         past_img = buf[level, delay_no]
-        future_img = buf[level, buf_no]
         # find the normalization that can work both for bad_images
         #  and good_images
-        ind = int(t_index - lev_len[:level].sum())
+        ind = int(t_index - level_offset)
         normalize = img_per_level[level] - i - norm[level + 1][ind]
         # take out the past_ing and future_img created using bad images
         # (bad images are converted to np.nan array)
-        if np.isnan(past_img).any() or np.isnan(future_img).any():
+        if future_has_nan or np.isnan(past_img).any():
             norm[level + 1][ind] += 1
         else:
-            for w, arr in zip(
-                [past_img * future_img, past_img, future_img], [G, past_intensity_norm, future_intensity_norm]
-            ):
-                binned = np.bincount(label_array, weights=w)[1:]
-                # nonz = np.where(w)[0]
-                # binned = np.bincount(label_array[nonz], weights=w[nonz], minlength=maxqind+1 )[1:]
-                arr[t_index] += (binned / num_pixels - arr[t_index]) / normalize
+            np.multiply(past_img, future_img, out=product)
+            product_binned = np.bincount(label_array, weights=product)[1:]
+            if intensity_buf is None:
+                past_binned = np.bincount(label_array, weights=past_img)[1:]
+            else:
+                past_binned = intensity_buf[level, delay_no]
+            G[t_index] += (product_binned / num_pixels - G[t_index]) / normalize
+            past_intensity_norm[t_index] += (past_binned / num_pixels - past_intensity_norm[t_index]) / normalize
+            future_intensity_norm[t_index] += (
+                future_binned / num_pixels - future_intensity_norm[t_index]
+            ) / normalize
     return None  # modifies arguments in place!
 
 
@@ -171,21 +216,24 @@ def _one_time_process_error(
     # in multi-tau correlation, the subsequent levels have half as many
     # buffers as the first
     i_min = num_bufs // 2 if level else 0
-    # maxqind=G.shape[1]
+    level_offset = lev_len[:level].sum()
+    future_img = buf[level, buf_no]
+    future_has_nan = np.isnan(future_img).any()
+    if not future_has_nan:
+        product = np.empty_like(future_img)
     for i in range(i_min, min(img_per_level[level], num_bufs)):
         # compute the index into the autocorrelation matrix
         t_index = int(level * num_bufs / 2 + i)
         delay_no = (buf_no - i) % num_bufs
         # get the images for correlating
         past_img = buf[level, delay_no]
-        future_img = buf[level, buf_no]
         # find the normalization that can work both for bad_images
         #  and good_images
-        ind = int(t_index - lev_len[:level].sum())
+        ind = int(t_index - level_offset)
         normalize = img_per_level[level] - i - norm[level + 1][ind]
         # take out the past_ing and future_img created using bad images
         # (bad images are converted to np.nan array)
-        if np.isnan(past_img).any() or np.isnan(future_img).any():
+        if future_has_nan or np.isnan(past_img).any():
             norm[level + 1][ind] += 1
         else:
 
@@ -197,8 +245,9 @@ def _one_time_process_error(
             #    #binned = np.bincount(label_array[nonz], weights=w[nonz], minlength=maxqind+1 )[1:]
             #    arr[t_index] += ((binned / num_pixels -
             #                      arr[t_index]) / normalize)
+            np.multiply(past_img, future_img, out=product)
             for w, arr in zip(
-                [past_img * future_img, past_img, future_img],
+                [product, past_img, future_img],
                 [
                     G_err,
                     past_intensity_norm_err,
@@ -536,7 +585,7 @@ def lazy_one_time(
     # create a shorthand reference to the results and state named tuple
     s = internal_state
 
-    qind, pixelist = roi.extract_label_indices(labels)
+    pixelist = s.pixel_list
     # iterate over the images to compute multi-tau correlation
 
     fra_pix = np.zeros_like(pixelist, dtype=np.float64)
@@ -546,32 +595,36 @@ def lazy_one_time(
 
     if bad_frame_list is None:
         bad_frame_list = []
+    bad_frames = set(bad_frame_list)
+    has_imgsum_norm = imgsum is not None
+    has_pixel_norm = norm is not None
+    pixel_norm_is_2d = has_pixel_norm and len(norm.shape) > 1
     for i in tqdm(range(FD.beg, FD.end)):
-        if i in bad_frame_list:
+        if i in bad_frames:
             fra_pix[:] = np.nan
         else:
             p, v = FD.rdrawframe(i)
-            w = np.where(timg[p])[0]
-            pxlist = timg[p[w]] - 1
+            mapped_pixels = timg[p]
+            selected = mapped_pixels != 0
+            pxlist = mapped_pixels[selected] - 1
+            values = v[selected]
 
-            if imgsum is None:
-                if norm is None:
-                    fra_pix[pxlist] = v[w]
+            if not has_imgsum_norm:
+                if not has_pixel_norm:
+                    fra_pix[pxlist] = values
                 else:
-                    S = norm.shape
-                    if len(S) > 1:
-                        fra_pix[pxlist] = v[w] / norm[i, pxlist]  # -1.0
+                    if pixel_norm_is_2d:
+                        fra_pix[pxlist] = values / norm[i, pxlist]  # -1.0
                     else:
-                        fra_pix[pxlist] = v[w] / norm[pxlist]  # -1.0
+                        fra_pix[pxlist] = values / norm[pxlist]  # -1.0
             else:
-                if norm is None:
-                    fra_pix[pxlist] = v[w] / imgsum[i]
+                if not has_pixel_norm:
+                    fra_pix[pxlist] = values / imgsum[i]
                 else:
-                    S = norm.shape
-                    if len(S) > 1:
-                        fra_pix[pxlist] = v[w] / imgsum[i] / norm[i, pxlist]
+                    if pixel_norm_is_2d:
+                        fra_pix[pxlist] = values / imgsum[i] / norm[i, pxlist]
                     else:
-                        fra_pix[pxlist] = v[w] / imgsum[i] / norm[pxlist]
+                        fra_pix[pxlist] = values / imgsum[i] / norm[pxlist]
         level = 0
         # increment buffer
         s.cur[0] = (1 + s.cur[0]) % num_bufs
@@ -634,9 +687,13 @@ def lazy_one_time(
                 prev = 1 + (s.cur[level - 1] - 2) % num_bufs
                 s.cur[level] = 1 + s.cur[level] % num_bufs
 
-                s.buf[level, s.cur[level] - 1] = (
-                    s.buf[level - 1, prev - 1] + s.buf[level - 1, s.cur[level - 1] - 1]
-                ) / 2
+                level_buffer = s.buf[level, s.cur[level] - 1]
+                np.add(
+                    s.buf[level - 1, prev - 1],
+                    s.buf[level - 1, s.cur[level - 1] - 1],
+                    out=level_buffer,
+                )
+                level_buffer /= 2
 
                 # make the track_level zero once that level is processed
                 s.track_level[level] = False
@@ -1033,31 +1090,37 @@ def lazy_two_time(
         two_time_internal_state = _init_state_two_time(num_levels, num_bufs, labels, num_frames)
     # create a shorthand reference to the results and state named tuple
     s = two_time_internal_state
-    qind, pixelist = roi.extract_label_indices(labels)
+    pixelist = s.pixel_list
     # iterate over the images to compute multi-tau correlation
     fra_pix = np.zeros_like(pixelist, dtype=np.float64)
     timg = np.zeros(FD.md["ncols"] * FD.md["nrows"], dtype=np.int32)
     timg[pixelist] = np.arange(1, len(pixelist) + 1)
     if bad_frame_list is None:
         bad_frame_list = []
+    bad_frames = set(bad_frame_list)
+    has_imgsum_norm = imgsum is not None
+    has_pixel_norm = norm is not None
+    intensity_buf = _create_intensity_buffer(s.buf, s.label_array, len(s.num_pixels))
 
     for i in tqdm(range(FD.beg, FD.end)):
-        if i in bad_frame_list:
+        if i in bad_frames:
             fra_pix[:] = np.nan
         else:
             p, v = FD.rdrawframe(i)
-            w = np.where(timg[p])[0]
-            pxlist = timg[p[w]] - 1
-            if imgsum is None:
-                if norm is None:
-                    fra_pix[pxlist] = v[w]
+            mapped_pixels = timg[p]
+            selected = mapped_pixels != 0
+            pxlist = mapped_pixels[selected] - 1
+            values = v[selected]
+            if not has_imgsum_norm:
+                if not has_pixel_norm:
+                    fra_pix[pxlist] = values
                 else:
-                    fra_pix[pxlist] = v[w] / norm[pxlist]  # -1.0
+                    fra_pix[pxlist] = values / norm[pxlist]  # -1.0
             else:
-                if norm is None:
-                    fra_pix[pxlist] = v[w] / imgsum[i]
+                if not has_pixel_norm:
+                    fra_pix[pxlist] = values / imgsum[i]
                 else:
-                    fra_pix[pxlist] = v[w] / imgsum[i] / norm[pxlist]
+                    fra_pix[pxlist] = values / imgsum[i] / norm[pxlist]
 
         level = 0
         # increment buffer
@@ -1068,7 +1131,7 @@ def lazy_two_time(
         # Put the ROI pixels into the ring buffer.
         s.buf[0, s.cur[0] - 1] = fra_pix
         fra_pix[:] = 0
-        _two_time_process(
+        _two_time_process_cached(
             s.buf,
             s.g2,
             s.label_array,
@@ -1079,6 +1142,7 @@ def lazy_two_time(
             s.current_img_time,
             level=0,
             buf_no=s.cur[0] - 1,
+            intensity_buf=intensity_buf,
         )
         # time frame for each level
         s.time_ind[0].append(s.current_img_time)
@@ -1095,9 +1159,13 @@ def lazy_two_time(
                 prev = 1 + (s.cur[level - 1] - 2) % num_bufs
                 s.cur[level] = 1 + s.cur[level] % num_bufs
                 s.count_level[level] = 1 + s.count_level[level]
-                s.buf[level, s.cur[level] - 1] = (
-                    s.buf[level - 1, prev - 1] + s.buf[level - 1, s.cur[level - 1] - 1]
-                ) / 2
+                level_buffer = s.buf[level, s.cur[level] - 1]
+                np.add(
+                    s.buf[level - 1, prev - 1],
+                    s.buf[level - 1, s.cur[level - 1] - 1],
+                    out=level_buffer,
+                )
+                level_buffer /= 2
 
                 t1_idx = (s.count_level[level] - 1) * 2
 
@@ -1110,7 +1178,7 @@ def lazy_two_time(
                 # for multi-tau levels greater than one
                 # Again, this is modifying things in place. See comment
                 # on previous call above.
-                _two_time_process(
+                _two_time_process_cached(
                     s.buf,
                     s.g2,
                     s.label_array,
@@ -1121,6 +1189,7 @@ def lazy_two_time(
                     current_img_time,
                     level=level,
                     buf_no=s.cur[level] - 1,
+                    intensity_buf=intensity_buf,
                 )
                 level += 1
 
@@ -1150,6 +1219,44 @@ def two_time_state_to_results(state):
 
 def _two_time_process(
     buf, g2, label_array, num_bufs, num_pixels, img_per_level, lag_steps, current_img_time, level, buf_no
+):
+    """Run the two-time kernel without an external intensity cache."""
+    return _two_time_process_cached(
+        buf,
+        g2,
+        label_array,
+        num_bufs,
+        num_pixels,
+        img_per_level,
+        lag_steps,
+        current_img_time,
+        level,
+        buf_no,
+        None,
+    )
+
+
+def _create_intensity_buffer(buf, label_array, num_rois):
+    """Create ROI-sum caches matching the current correlation buffers."""
+    intensity_buf = np.empty((*buf.shape[:2], num_rois), dtype=np.float64)
+    for level in range(buf.shape[0]):
+        for buf_no in range(buf.shape[1]):
+            intensity_buf[level, buf_no] = np.bincount(label_array, weights=buf[level, buf_no])[1:]
+    return intensity_buf
+
+
+def _two_time_process_cached(
+    buf,
+    g2,
+    label_array,
+    num_bufs,
+    num_pixels,
+    img_per_level,
+    lag_steps,
+    current_img_time,
+    level,
+    buf_no,
+    intensity_buf,
 ):
     """
     Parameters
@@ -1189,21 +1296,34 @@ def _two_time_process(
     else:
         i_min = num_bufs // 2
 
-    for i in range(i_min, min(img_per_level[level], num_bufs)):
+    future_img = buf[level, buf_no]
+    future_binned = np.bincount(label_array, weights=future_img)[1:]
+    if intensity_buf is not None:
+        intensity_buf[level, buf_no] = future_binned
+
+    i_max = min(img_per_level[level], num_bufs)
+    if i_min >= i_max:
+        return
+
+    product = np.empty_like(future_img)
+    for i in range(i_min, i_max):
         t_index = level * num_bufs / 2 + i
         delay_no = (buf_no - i) % num_bufs
         past_img = buf[level, delay_no]
-        future_img = buf[level, buf_no]
 
         # print( np.sum( past_img ), np.sum( future_img ))
 
         #  get the matrix of correlation function without normalizations
-        tmp_binned = np.bincount(label_array, weights=past_img * future_img)[1:]
+        np.multiply(past_img, future_img, out=product)
+        tmp_binned = np.bincount(label_array, weights=product)[1:]
         # get the matrix of past intensity normalizations
-        pi_binned = np.bincount(label_array, weights=past_img)[1:]
+        if intensity_buf is None:
+            pi_binned = np.bincount(label_array, weights=past_img)[1:]
+        else:
+            pi_binned = intensity_buf[level, delay_no]
 
         # get the matrix of future intensity normalizations
-        fi_binned = np.bincount(label_array, weights=future_img)[1:]
+        fi_binned = future_binned
 
         tind1 = current_img_time - 1
         tind2 = current_img_time - lag_steps[int(t_index)] - 1
@@ -1598,45 +1718,29 @@ class Get_Pixel_Arrayc(object):
         timg = np.zeros(self.FD.md["ncols"] * self.FD.md["nrows"], dtype=np.int32)
         timg[self.pixelist] = np.arange(1, len(self.pixelist) + 1)
 
-        if self.mean_int_sets is not None:
-            # Mean_Int_Qind = np.array( self.qind.copy(), dtype=np.float)
-            Mean_Int_Qind = np.ones(len(self.qind), dtype=np.float64)
-            noqs = len(np.unique(self.qind))
-            nopr = np.bincount(self.qind - 1)
-            noprs = np.concatenate([np.array([0]), np.cumsum(nopr)])
-            qind_ = np.zeros_like(self.qind)
-            for j in range(noqs):
-                qind_[noprs[j] : noprs[j + 1]] = np.where(self.qind == j + 1)[0]
+        has_mean_norm = self.mean_int_sets is not None
+        has_imgsum_norm = self.imgsum is not None
+        has_pixel_norm = self.norm is not None
+        pixel_norm_is_2d = has_pixel_norm and len(self.norm.shape) > 1
 
         n = 0
         for i in tqdm(range(self.beg, self.end)):
             p, v = self.FD.rdrawframe(i)
-            w = np.where(timg[p])[0]
-            pxlist = timg[p[w]] - 1
+            mapped_pixels = timg[p]
+            selected = mapped_pixels != 0
+            pxlist = mapped_pixels[selected] - 1
+            values = v[selected]
 
-            if self.mean_int_sets is not None:  # for normalization of each averaged ROI of each frame
-                for j in range(noqs):
-                    # if i ==100:
-                    #    if j==0:
-                    #        print( self.mean_int_sets[i][j] )
-                    #        print( qind_[ noprs[j]: noprs[j+1] ] )
-                    Mean_Int_Qind[qind_[noprs[j] : noprs[j + 1]]] = self.mean_int_sets[i][j]
-                norm_Mean_Int_Qind = Mean_Int_Qind[pxlist]  # self.mean_int_set or Mean_Int_Qind[pxlist]
-
-                # if i==100:
-                #    print( i, Mean_Int_Qind[ self.qind== 11    ])
-
-                # print('Do norm_mean_int here')
-                # if i ==10:
-                #    print( norm_Mean_Int_Qind )
+            if has_mean_norm:  # for normalization of each averaged ROI of each frame
+                norm_Mean_Int_Qind = self.mean_int_sets[i][self.qind[pxlist] - 1]
             else:
                 norm_Mean_Int_Qind = 1.0
-            if self.imgsum is not None:
+            if has_imgsum_norm:
                 norm_imgsum = self.imgsum[i]
             else:
                 norm_imgsum = 1.0
-            if self.norm is not None:
-                if len((self.norm).shape) > 1:
+            if has_pixel_norm:
+                if pixel_norm_is_2d:
                     norm_avgimg_roi = self.norm[i][pxlist]
                     # print('here')
 
@@ -1648,7 +1752,7 @@ class Get_Pixel_Arrayc(object):
             norms = norm_Mean_Int_Qind * norm_imgsum * norm_avgimg_roi
             # if i==100:
             #    print(norm_Mean_Int_Qind[:100])
-            data_array[n][pxlist] = v[w] / norms
+            data_array[n, pxlist] = values / norms
             n += 1
 
         return data_array
@@ -1694,6 +1798,7 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
     """
 
     qind, qlist, nopr = _select_two_time_rois(rois, index)
+    roi_pixel_indices = [np.flatnonzero(qind == label) for label in qlist]
     noframes = data_pixel.shape[0]
     # print( qlist )
     try:
@@ -1707,16 +1812,21 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
         DO = False
 
     if DO:
-        for i, qi in enumerate(tqdm(qlist)):
+        for i, pixelist_qi in enumerate(tqdm(roi_pixel_indices)):
             # print (qi-1)
-            pixelist_qi = np.where(qind == qi)[0]
             # print (pixelist_qi.shape,  data_pixel[qi].shape)
             data_pixel_qi = data_pixel[:, pixelist_qi]
             sum1 = (np.average(data_pixel_qi, axis=1)).reshape(1, noframes)
             sum2 = sum1.T
             # print( qi, qlist, )
             # print( g12b[:,:,qi -1 ] )
-            g12b[:, :, i] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[i]
+            correlation = np.dot(data_pixel_qi, data_pixel_qi.T)
+            if not np.issubdtype(correlation.dtype, np.inexact):
+                correlation = correlation.astype(np.float64)
+            correlation /= sum1
+            correlation /= sum2
+            correlation /= nopr[i]
+            g12b[:, :, i] = correlation
         return g12b
 
 

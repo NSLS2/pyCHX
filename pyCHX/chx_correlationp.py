@@ -10,14 +10,14 @@ import logging
 
 import numpy as np
 import skbeam.core.roi as roi
-from skbeam.core.roi import extract_label_indices
 from tqdm import tqdm
 
-from pyCHX.chx_compress import _collect_pool_results, _make_pool, apply_async, pass_FD
-from pyCHX.chx_correlationc import _one_time_process as _one_time_processp
+from pyCHX.chx_compress import _available_cpu_count, _collect_pool_results, _make_pool, apply_async, pass_FD
+from pyCHX.chx_correlationc import _create_intensity_buffer
+from pyCHX.chx_correlationc import _one_time_process_cached as _one_time_processp_cached
 from pyCHX.chx_correlationc import _one_time_process_error as _one_time_process_errorp
 from pyCHX.chx_correlationc import _select_two_time_rois
-from pyCHX.chx_correlationc import _two_time_process as _two_time_processp
+from pyCHX.chx_correlationc import _two_time_process_cached as _two_time_processp_cached
 from pyCHX.chx_correlationc import _validate_and_transform_inputs
 
 logger = logging.getLogger(__name__)
@@ -151,39 +151,44 @@ def lazy_two_timep(
     # create a shorthand reference to the results and state named tuple
     s = internal_state
 
-    qind, pixelist = roi.extract_label_indices(labels)
+    pixelist = s.pixel_list
     # iterate over the images to compute multi-tau correlation
     fra_pix = np.zeros_like(pixelist, dtype=np.float64)
     timg = np.zeros(FD.md["ncols"] * FD.md["nrows"], dtype=np.int32)
     timg[pixelist] = np.arange(1, len(pixelist) + 1)
     if bad_frame_list is None:
         bad_frame_list = []
+    bad_frames = set(bad_frame_list)
+    has_imgsum_norm = imgsum is not None
+    has_pixel_norm = norm is not None
+    pixel_norm_is_2d = has_pixel_norm and len(norm.shape) > 1
+    intensity_buf = _create_intensity_buffer(s.buf, s.label_array, len(s.num_pixels))
 
     for i in range(FD.beg, FD.end):
-        if i in bad_frame_list:
+        if i in bad_frames:
             fra_pix[:] = np.nan
         else:
             p, v = FD.rdrawframe(i)
-            w = np.where(timg[p])[0]
-            pxlist = timg[p[w]] - 1
-            if imgsum is None:
-                if norm is None:
-                    fra_pix[pxlist] = v[w]
+            mapped_pixels = timg[p]
+            selected = mapped_pixels != 0
+            pxlist = mapped_pixels[selected] - 1
+            values = v[selected]
+            if not has_imgsum_norm:
+                if not has_pixel_norm:
+                    fra_pix[pxlist] = values
                 else:
-                    S = norm.shape
-                    if len(S) > 1:
-                        fra_pix[pxlist] = v[w] / norm[i, pxlist]  # -1.0
+                    if pixel_norm_is_2d:
+                        fra_pix[pxlist] = values / norm[i, pxlist]  # -1.0
                     else:
-                        fra_pix[pxlist] = v[w] / norm[pxlist]  # -1.0
+                        fra_pix[pxlist] = values / norm[pxlist]  # -1.0
             else:
-                if norm is None:
-                    fra_pix[pxlist] = v[w] / imgsum[i]
+                if not has_pixel_norm:
+                    fra_pix[pxlist] = values / imgsum[i]
                 else:
-                    S = norm.shape
-                    if len(S) > 1:
-                        fra_pix[pxlist] = v[w] / imgsum[i] / norm[i, pxlist]
+                    if pixel_norm_is_2d:
+                        fra_pix[pxlist] = values / imgsum[i] / norm[i, pxlist]
                     else:
-                        fra_pix[pxlist] = v[w] / imgsum[i] / norm[pxlist]
+                        fra_pix[pxlist] = values / imgsum[i] / norm[pxlist]
         level = 0
         # increment buffer
         s.cur[0] = (1 + s.cur[0]) % num_bufs
@@ -194,7 +199,7 @@ def lazy_two_timep(
         # Put the ROI pixels into the ring buffer.
         s.buf[0, s.cur[0] - 1] = fra_pix
         fra_pix[:] = 0
-        _two_time_processp(
+        _two_time_processp_cached(
             s.buf,
             s.g2,
             s.label_array,
@@ -205,6 +210,7 @@ def lazy_two_timep(
             s.current_img_time,
             level=0,
             buf_no=s.cur[0] - 1,
+            intensity_buf=intensity_buf,
         )
         # time frame for each level
         s.time_ind[0].append(s.current_img_time)
@@ -221,9 +227,13 @@ def lazy_two_timep(
                 prev = 1 + (s.cur[level - 1] - 2) % num_bufs
                 s.cur[level] = 1 + s.cur[level] % num_bufs
                 s.count_level[level] = 1 + s.count_level[level]
-                s.buf[level, s.cur[level] - 1] = (
-                    s.buf[level - 1, prev - 1] + s.buf[level - 1, s.cur[level - 1] - 1]
-                ) / 2
+                level_buffer = s.buf[level, s.cur[level] - 1]
+                np.add(
+                    s.buf[level - 1, prev - 1],
+                    s.buf[level - 1, s.cur[level - 1] - 1],
+                    out=level_buffer,
+                )
+                level_buffer /= 2
                 t1_idx = (s.count_level[level] - 1) * 2
                 current_img_time = ((s.time_ind[level - 1])[t1_idx] + (s.time_ind[level - 1])[t1_idx + 1]) / 2.0
                 # time frame for each level
@@ -234,7 +244,7 @@ def lazy_two_timep(
                 # for multi-tau levels greater than one
                 # Again, this is modifying things in place. See comment
                 # on previous call above.
-                _two_time_processp(
+                _two_time_processp_cached(
                     s.buf,
                     s.g2,
                     s.label_array,
@@ -245,6 +255,7 @@ def lazy_two_timep(
                     current_img_time,
                     level=level,
                     buf_no=s.cur[level] - 1,
+                    intensity_buf=intensity_buf,
                 )
                 level += 1
 
@@ -277,19 +288,12 @@ def cal_c12p(FD, ring_mask, bad_frame_list=None, good_start=0, num_buf=8, num_le
     roi_labels = np.unique(ring_mask)
     roi_labels = roi_labels[roi_labels > 0]
     ring_masks = [np.array(ring_mask == label, dtype=np.int64) for label in roi_labels]
-    qind, pixelist = roi.extract_label_indices(ring_mask)
+    qind, _ = roi.extract_label_indices(ring_mask)
     if norm is not None:
-        S = norm.shape
-        if len(S) > 1:
-            norms = [
-                norm[:, np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
-                for i in roi_labels
-            ]
+        if len(norm.shape) > 1:
+            norms = [norm[:, qind == label] for label in roi_labels]
         else:
-            norms = [
-                norm[np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
-                for i in roi_labels
-            ]
+            norms = [norm[qind == label] for label in roi_labels]
     inputs = range(len(ring_masks))
     pool = _make_pool(len(inputs))
     internal_state = None
@@ -408,6 +412,8 @@ class _internal_statep:
             self.past_intensity_all = np.zeros_like(self.G_all)
             # matrix for normalizing G into g2
             self.future_intensity_all = np.zeros_like(self.G_all)
+        else:
+            self.intensity_buf = np.zeros((num_levels, num_bufs, num_rois), dtype=np.float64)
 
     def __getstate__(self):
         """This is called before pickling."""
@@ -434,40 +440,45 @@ def lazy_one_timep(
         internal_state = _internal_statep(num_levels, num_bufs, labels, cal_error)
     # create a shorthand reference to the results and state named tuple
     s = internal_state
-    qind, pixelist = roi.extract_label_indices(labels)
+    pixelist = s.pixel_list
     # iterate over the images to compute multi-tau correlation
     fra_pix = np.zeros_like(pixelist, dtype=np.float64)
     timg = np.zeros(FD.md["ncols"] * FD.md["nrows"], dtype=np.int32)
     timg[pixelist] = np.arange(1, len(pixelist) + 1)
     if bad_frame_list is None:
         bad_frame_list = []
+    intensity_buf = getattr(s, "intensity_buf", None)
+    bad_frames = set(bad_frame_list)
+    has_imgsum_norm = imgsum is not None
+    has_pixel_norm = norm is not None
+    pixel_norm_is_2d = has_pixel_norm and len(norm.shape) > 1
     # for  i in tqdm(range( FD.beg , FD.end )):
     for i in range(FD.beg, FD.end):
-        if i in bad_frame_list:
+        if i in bad_frames:
             fra_pix[:] = np.nan
         else:
             p, v = FD.rdrawframe(i)
-            w = np.where(timg[p])[0]
-            pxlist = timg[p[w]] - 1
-            if imgsum is None:
-                if norm is None:
+            mapped_pixels = timg[p]
+            selected = mapped_pixels != 0
+            pxlist = mapped_pixels[selected] - 1
+            values = v[selected]
+            if not has_imgsum_norm:
+                if not has_pixel_norm:
                     # print ('here')
-                    fra_pix[pxlist] = v[w]
+                    fra_pix[pxlist] = values
                 else:
-                    S = norm.shape
-                    if len(S) > 1:
-                        fra_pix[pxlist] = v[w] / norm[i, pxlist]  # -1.0
+                    if pixel_norm_is_2d:
+                        fra_pix[pxlist] = values / norm[i, pxlist]  # -1.0
                     else:
-                        fra_pix[pxlist] = v[w] / norm[pxlist]  # -1.0
+                        fra_pix[pxlist] = values / norm[pxlist]  # -1.0
             else:
-                if norm is None:
-                    fra_pix[pxlist] = v[w] / imgsum[i]
+                if not has_pixel_norm:
+                    fra_pix[pxlist] = values / imgsum[i]
                 else:
-                    S = norm.shape
-                    if len(S) > 1:
-                        fra_pix[pxlist] = v[w] / imgsum[i] / norm[i, pxlist]
+                    if pixel_norm_is_2d:
+                        fra_pix[pxlist] = values / imgsum[i] / norm[i, pxlist]
                     else:
-                        fra_pix[pxlist] = v[w] / imgsum[i] / norm[pxlist]
+                        fra_pix[pxlist] = values / imgsum[i] / norm[pxlist]
 
         level = 0
         # increment buffer
@@ -503,7 +514,7 @@ def lazy_one_timep(
                 s.future_intensity_all,
             )
         else:
-            _one_time_processp(
+            _one_time_processp_cached(
                 s.buf,
                 s.G,
                 s.past_intensity,
@@ -516,6 +527,7 @@ def lazy_one_timep(
                 buf_no,
                 s.norm,
                 s.lev_len,
+                intensity_buf,
             )
 
         # print (s.G)
@@ -531,9 +543,13 @@ def lazy_one_timep(
                 prev = 1 + (s.cur[level - 1] - 2) % num_bufs
                 s.cur[level] = 1 + s.cur[level] % num_bufs
 
-                s.buf[level, s.cur[level] - 1] = (
-                    s.buf[level - 1, prev - 1] + s.buf[level - 1, s.cur[level - 1] - 1]
-                ) / 2
+                level_buffer = s.buf[level, s.cur[level] - 1]
+                np.add(
+                    s.buf[level - 1, prev - 1],
+                    s.buf[level - 1, s.cur[level - 1] - 1],
+                    out=level_buffer,
+                )
+                level_buffer /= 2
 
                 # make the track_level zero once that level is processed
                 s.track_level[level] = False
@@ -561,7 +577,7 @@ def lazy_one_timep(
                         s.future_intensity_all,
                     )
                 else:
-                    _one_time_processp(
+                    _one_time_processp_cached(
                         s.buf,
                         s.G,
                         s.past_intensity,
@@ -574,6 +590,7 @@ def lazy_one_timep(
                         buf_no,
                         s.norm,
                         s.lev_len,
+                        intensity_buf,
                     )
 
                 level += 1
@@ -606,6 +623,50 @@ def lazy_one_timep(
         return g2, s.lag_steps[:g_max]  # , s
 
 
+def _balance_roi_jobs(pixel_counts, worker_count):
+    """Assign ROI indices to workers using largest-pixel-count-first packing."""
+    roi_count = len(pixel_counts)
+    if roi_count <= worker_count:
+        return [[index] for index in range(roi_count)]
+
+    groups = [[] for _ in range(worker_count)]
+    group_pixels = np.zeros(worker_count, dtype=np.int64)
+    for index in sorted(range(roi_count), key=lambda item: (-pixel_counts[item], item)):
+        group = int(np.argmin(group_pixels))
+        groups[group].append(index)
+        group_pixels[group] += pixel_counts[index]
+    return groups
+
+
+def _run_one_time_group(
+    FD,
+    num_levels,
+    num_bufs,
+    ring_mask,
+    jobs,
+    bad_frame_list,
+    imgsum,
+    cal_error,
+):
+    """Calculate one or more ROIs sequentially inside one worker."""
+    group_results = []
+    for index, label, norm in jobs:
+        label_mask = np.asarray(ring_mask == label, dtype=np.int64)
+        result = lazy_one_timep(
+            FD,
+            num_levels,
+            num_bufs,
+            label_mask,
+            None,
+            bad_frame_list,
+            imgsum,
+            norm,
+            cal_error,
+        )
+        group_results.append((index, result))
+    return group_results
+
+
 def cal_g2p(
     FD,
     ring_mask,
@@ -635,43 +696,34 @@ def cal_g2p(
     print("%s frames will be processed..." % (noframes - 1))
     roi_labels = np.unique(ring_mask)
     roi_labels = roi_labels[roi_labels > 0]
-    ring_masks = [np.array(ring_mask == label, dtype=np.int64) for label in roi_labels]
-    qind, pixelist = roi.extract_label_indices(ring_mask)
+    qind, _ = roi.extract_label_indices(ring_mask)
     nopr = np.array([np.count_nonzero(qind == label) for label in roi_labels])
     if norm is not None:
-        S = norm.shape
-        if len(S) > 1:
-            norms = [
-                norm[:, np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
-                for i in roi_labels
-            ]
+        if len(norm.shape) > 1:
+            norms = [norm[:, qind == label] for label in roi_labels]
         else:
-            norms = [
-                norm[np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
-                for i in roi_labels
-            ]
-    inputs = range(len(ring_masks))
-    pool = _make_pool(len(inputs))
-    internal_state = None
+            norms = [norm[qind == label] for label in roi_labels]
+    else:
+        norms = [None] * len(roi_labels)
+    inputs = range(len(roi_labels))
+    worker_count = min(len(roi_labels), _available_cpu_count())
+    groups = _balance_roi_jobs(nopr, worker_count)
+    pool = _make_pool(len(groups))
     print("Starting assign the tasks...")
     results = {}
-    if norm is not None:
-        for i in tqdm(inputs):
-            results[i] = apply_async(
-                pool,
-                lazy_one_timep,
-                (FD, num_lev, num_buf, ring_masks[i], internal_state, bad_frame_list, imgsum, norms[i], cal_error),
-            )
-    else:
-        # print ('for norm is None')
-        for i in tqdm(inputs):
-            results[i] = apply_async(
-                pool,
-                lazy_one_timep,
-                (FD, num_lev, num_buf, ring_masks[i], internal_state, bad_frame_list, imgsum, None, cal_error),
-            )
+    for group_number, group in enumerate(tqdm(groups)):
+        jobs = [(i, roi_labels[i], norms[i]) for i in group]
+        results[group_number] = apply_async(
+            pool,
+            _run_one_time_group,
+            (FD, num_lev, num_buf, ring_mask, jobs, bad_frame_list, imgsum, cal_error),
+        )
     print("Starting running the tasks...")
-    res = _collect_pool_results(pool, results, show_progress=True)
+    grouped_results = _collect_pool_results(pool, results, show_progress=True)
+    res = [None] * len(roi_labels)
+    for group_result in grouped_results:
+        for index, result in group_result:
+            res[index] = result
     len_lag = 10**10
     for i in inputs:  # to get the smallest length of lag_step,
         # *****************************
@@ -683,11 +735,11 @@ def cal_g2p(
 
     # lag_steps  = res[0][1]
     if not cal_error:
-        g2 = np.zeros([len(lag_steps), len(ring_masks)])
+        g2 = np.zeros([len(lag_steps), len(roi_labels)])
     else:
-        g2 = np.zeros([int((num_lev + 1) * num_buf / 2), len(ring_masks)])
+        g2 = np.zeros([int((num_lev + 1) * num_buf / 2), len(roi_labels)])
         g2_err = np.zeros_like(g2)
-        # g2_G = np.zeros((  int( (num_lev + 1) * num_buf / 2),  len(pixelist)) )
+        # g2_G = np.zeros((  int( (num_lev + 1) * num_buf / 2),  number of ROI pixels) )
         # g2_P = np.zeros_like(  g2_G )
         # g2_F = np.zeros_like(  g2_G )
     Gmax = 0
@@ -730,6 +782,7 @@ def cal_g2p(
 
     del results
     del res
+    del grouped_results
     if cal_error:
         print("G2 with error bar calculation DONE!")
         return g2[:Gmax, :], lag_steps_err[:Gmax], g2_err[:Gmax, :] / np.sqrt(nopr)
@@ -770,10 +823,7 @@ def cal_GPF(
     ring_masks = [np.array(ring_mask == label, dtype=np.int64) for label in roi_labels]
     qind, pixelist = roi.extract_label_indices(ring_mask)
     if norm is not None:
-        norms = [
-            norm[np.isin(pixelist, extract_label_indices(np.array(ring_mask == i, dtype=np.int64))[1])]
-            for i in roi_labels
-        ]
+        norms = [norm[qind == label] for label in roi_labels]
 
     inputs = range(len(ring_masks))
     pool = _make_pool(len(inputs))
