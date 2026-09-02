@@ -152,6 +152,9 @@ def _iter_binned_images(images, start, stop, bins, reverse=False, rot90=False):
     direct_eiger = all(hasattr(images, attribute) for attribute in ("_entry", "images_per_file"))
     if not direct_eiger:
         sliced = images[start:stop]
+        if bins == 1:
+            yield from sliced
+            return
         for local_start, local_stop in _frame_bin_edges(stop - start, bins):
             yield np.average(sliced[local_start:local_stop], axis=0)
         return
@@ -167,6 +170,9 @@ def _iter_binned_images(images, start, stop, bins, reverse=False, rot90=False):
             block = block[:, ::-1, :]
         if rot90:
             block = np.rot90(block, axes=(1, 2))
+        if bins == 1:
+            yield from block
+            continue
         for local_start, local_stop in _frame_bin_edges(len(block), bins):
             yield np.average(block[local_start:local_stop], axis=0)
 

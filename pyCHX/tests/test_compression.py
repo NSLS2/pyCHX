@@ -354,6 +354,39 @@ def test_compression_keeps_a_partial_final_frame_bin(tmp_path):
 
 
 @pytest.mark.portable
+def test_unbinned_eiger_blocks_preserve_integer_frames_without_cast_warnings(tmp_path):
+    from pyCHX.chx_compress import _compress_segment
+
+    invalid = np.iinfo(np.uint32).max
+    frames = np.array([[[1, invalid, 2]], [[3, invalid, 4]]], dtype=np.uint32)
+
+    class DirectEigerFrames:
+        images_per_file = len(frames)
+        valid_keys = ["data_000001"]
+        _entry = {"data_000001": frames}
+
+    detector_mask = np.array([[True, False, True]])
+    with np.errstate(all="raise"):
+        final_mask, average, intensity, bad_frames = _compress_segment(
+            DirectEigerFrames(),
+            detector_mask.copy(),
+            str(tmp_path / "segment.cmp"),
+            bad_pixel_threshold=1e15,
+            hot_pixel_threshold=2**30,
+            bad_pixel_low_threshold=0,
+            nobytes=4,
+            bins=1,
+            start=0,
+            stop=len(frames),
+        )
+
+    np.testing.assert_array_equal(final_mask, detector_mask)
+    np.testing.assert_array_equal(average, [[2, 0, 3]])
+    np.testing.assert_array_equal(intensity, [3, 7])
+    np.testing.assert_array_equal(bad_frames, [False, False])
+
+
+@pytest.mark.portable
 def test_parallel_compression_weights_segment_averages_by_valid_frames(monkeypatch, tmp_path):
     from pyCHX import chx_compress
 

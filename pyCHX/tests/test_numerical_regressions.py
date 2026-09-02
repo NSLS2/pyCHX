@@ -494,6 +494,21 @@ def test_production_two_time_path_prenormalizes_before_symmetric_blas(monkeypatc
 
 
 @pytest.mark.portable
+def test_array_two_time_preserves_zero_intensity_frame_results():
+    from pyCHX.chx_correlationc import auto_two_Arrayc
+
+    roi_mask = np.array([[1, 1]])
+    data = np.array([[1.0, 2.0], [0.0, 0.0], [2.0, 4.0], [-1.0, 1.0]])
+    means = np.average(data, axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        expected = np.dot(data, data.T) / means.reshape(1, -1) / means.reshape(-1, 1) / data.shape[1]
+
+    actual = auto_two_Arrayc(data, roi_mask)[:, :, 0]
+
+    np.testing.assert_allclose(actual, expected, equal_nan=True)
+
+
+@pytest.mark.portable
 def test_two_time_blas_limit_avoids_nested_parallelism(monkeypatch):
     from pyCHX import chx_correlationc
 

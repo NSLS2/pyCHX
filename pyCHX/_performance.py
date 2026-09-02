@@ -243,7 +243,7 @@ def process_one_time_block(
                     track_level[level] = False
 
 
-@njit(cache=True, nogil=True)
+@njit(cache=True, nogil=True, error_model="numpy")
 def mirror_and_normalize_two_time(matrix, row_norm, pixel_count):
     """Normalize the computed upper triangle and mirror it in place."""
     frame_count = matrix.shape[0]
