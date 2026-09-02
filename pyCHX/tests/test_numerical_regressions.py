@@ -1,5 +1,6 @@
 import ast
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -149,6 +150,56 @@ def test_one_time_correlation_is_mean_of_two_time_diagonals():
     expected = np.array([[np.mean(np.diag(two_time[:, :, q], lag)) for q in range(2)] for lag in range(5)])
 
     np.testing.assert_allclose(get_one_time_from_two_time(two_time), expected)
+
+
+@pytest.mark.portable
+def test_one_time_from_two_time_preserves_nan_and_explicit_normalization_semantics():
+    from pyCHX.Two_Time_Correlation_Function import get_one_time_from_two_time
+
+    two_time = np.arange(72, dtype=float).reshape(6, 6, 2)
+    two_time[1, 3, 0] = np.nan
+    two_time[2, 2, 1] = np.nan
+    norms = np.linspace(1.0, 3.0, 12).reshape(6, 2)
+    pixel_counts = np.array([3, 7])
+    expected = np.empty((6, 2))
+    for delay in range(6):
+        for roi_index in range(2):
+            expected[delay, roi_index] = np.nanmean(np.diag(two_time[:, :, roi_index], delay)) / (
+                np.average(norms[delay:, roi_index])
+                * np.average(norms[: 6 - delay, roi_index])
+                * pixel_counts[roi_index]
+            )
+
+    np.testing.assert_allclose(
+        get_one_time_from_two_time(two_time, norms=norms, nopr=pixel_counts),
+        expected,
+        rtol=1e-14,
+        atol=0,
+    )
+
+
+@pytest.mark.portable
+def test_compiled_two_time_diagonal_reducer_matches_numpy():
+    from pyCHX.Two_Time_Correlation_Function import get_one_time_from_two_time
+
+    generator = np.random.default_rng(20260902)
+    two_time = generator.random((360, 360, 8))
+    two_time[10, 17, 3] = np.nan
+    norms = 1.0 + generator.random((360, 8))
+    pixel_counts = np.arange(2, 10)
+    expected = np.empty((360, 8))
+    for delay in range(360):
+        diagonal = np.nanmean(two_time.diagonal(delay), axis=1)
+        expected[delay] = diagonal / (
+            norms[delay:].mean(axis=0) * norms[: 360 - delay].mean(axis=0) * pixel_counts
+        )
+
+    np.testing.assert_allclose(
+        get_one_time_from_two_time(two_time, norms=norms, nopr=pixel_counts),
+        expected,
+        rtol=2e-13,
+        atol=0,
+    )
 
 
 @pytest.mark.portable
@@ -402,6 +453,102 @@ def test_array_two_time_helpers_support_sparse_roi_labels():
 
     with pytest.raises(ValueError, match="ROI labels not present"):
         auto_two_Arrayc(data, roi_mask, index=3)
+
+
+@pytest.mark.portable
+def test_two_time_worker_count_respects_affinity_and_memory(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    frame_count = 1_000
+    matrix_bytes = frame_count * frame_count * 8
+    monkeypatch.setattr(chx_correlationc, "physical_core_count", lambda: 56)
+    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: matrix_bytes * 10)
+    assert chx_correlationc._two_time_worker_count(frame_count, 200) == 2
+
+    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: matrix_bytes * 1_000)
+    assert chx_correlationc._two_time_worker_count(frame_count, 200) == 56
+
+
+@pytest.mark.portable
+def test_production_two_time_path_prenormalizes_before_symmetric_blas(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    generator = np.random.default_rng(9)
+    data = 1.0 + generator.random((512, 512))
+    means = data.mean(axis=1)
+    observed = {}
+    original_dsyrk = chx_correlationc.dsyrk
+
+    def recording_dsyrk(alpha, normalized, **kwargs):
+        observed["alpha"] = alpha
+        observed["means"] = normalized.mean(axis=1)
+        return original_dsyrk(alpha, normalized, **kwargs)
+
+    monkeypatch.setattr(chx_correlationc, "dsyrk", recording_dsyrk)
+    actual = chx_correlationc._symmetric_two_time_product(data, means, data.shape[1])
+    expected = np.dot(data, data.T) / np.outer(means, means) / data.shape[1]
+
+    assert observed["alpha"] == pytest.approx(1 / data.shape[1])
+    np.testing.assert_allclose(observed["means"], 1.0, rtol=1e-14, atol=1e-14)
+    np.testing.assert_allclose(actual, expected, rtol=2e-13, atol=1e-14)
+
+
+@pytest.mark.portable
+def test_two_time_blas_limit_avoids_nested_parallelism(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    limits = []
+
+    def capture_limit(*, limits: int, user_api: str):
+        assert user_api == "blas"
+        captured = limits
+
+        @contextmanager
+        def context():
+            limits_seen.append(captured)
+            yield
+
+        return context()
+
+    limits_seen = limits
+    monkeypatch.setattr(chx_correlationc, "physical_core_count", lambda: 4)
+    monkeypatch.setattr(chx_correlationc, "available_memory_bytes", lambda: 10**12)
+    monkeypatch.setattr(chx_correlationc, "threadpool_limits", capture_limit)
+    roi_mask = np.array([[1, 1], [2, 2]])
+    chx_correlationc.auto_two_Arrayc(np.arange(16, dtype=float).reshape(4, 4) + 1, roi_mask)
+    assert limits == [1]
+
+
+@pytest.mark.portable
+def test_two_time_supports_hundreds_of_rois_and_returns_c_contiguous_output(monkeypatch):
+    from pyCHX import chx_correlationc
+
+    roi_mask = np.arange(1, 201, dtype=np.int64).reshape(10, 20)
+    data = 1.0 + np.arange(8 * 200, dtype=np.float64).reshape(8, 200) % 31
+    monkeypatch.setattr(chx_correlationc, "physical_core_count", lambda: 8)
+    actual = chx_correlationc.auto_two_Arrayc(data, roi_mask)
+
+    assert actual.shape == (8, 8, 200)
+    assert actual.flags.c_contiguous
+    np.testing.assert_allclose(actual, 1.0)
+
+
+@pytest.mark.portable
+def test_diagonal_numba_limit_uses_physical_core_count(monkeypatch):
+    from pyCHX import Two_Time_Correlation_Function as two_time
+
+    observed = []
+
+    @contextmanager
+    def recording_limit(limit):
+        observed.append(limit)
+        yield
+
+    monkeypatch.setattr(two_time, "physical_core_count", lambda: 7)
+    monkeypatch.setattr(two_time, "numba_thread_limit", recording_limit)
+    data = np.ones((360, 360, 8))
+    two_time.get_one_time_from_two_time(data)
+    assert observed == [7]
 
 
 @pytest.mark.portable

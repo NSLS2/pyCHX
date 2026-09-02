@@ -1,3 +1,4 @@
+import pickle
 import struct
 
 import numpy as np
@@ -213,6 +214,53 @@ def test_parallel_compression_stages_and_publishes_identical_cmp(tmp_path):
 
 
 @pytest.mark.portable
+def test_parallel_compression_keeps_partial_final_bin_byte_identical(tmp_path):
+    from pyCHX.chx_compress import init_compress_eigerdata, para_compress_eigerdata
+
+    frames = np.arange(1, 31, dtype=np.int32).reshape(5, 2, 3)
+    mask = np.ones(frames.shape[1:], dtype=bool)
+    metadata = {
+        "beam_center_x": 0,
+        "beam_center_y": 0,
+        "count_time": 0,
+        "detector_distance": 0,
+        "frame_time": 0,
+        "incident_wavelength": 0,
+        "pixel_mask": mask.copy(),
+        "x_pixel_size": 0,
+        "y_pixel_size": 0,
+    }
+    serial = tmp_path / "serial-binned.cmp"
+    parallel = tmp_path / "parallel-binned.cmp"
+
+    expected = init_compress_eigerdata(
+        frames,
+        mask.copy(),
+        metadata.copy(),
+        str(serial),
+        bins=2,
+        with_pickle=False,
+    )
+    actual = para_compress_eigerdata(
+        frames,
+        mask.copy(),
+        metadata.copy(),
+        str(parallel),
+        num_sub=2,
+        bins=2,
+        dtypes="images",
+        cpu_core_number=2,
+        with_pickle=False,
+        copy_rawdata=False,
+        new_path=str(tmp_path),
+    )
+
+    assert parallel.read_bytes() == serial.read_bytes()
+    for actual_value, expected_value in zip(actual, expected):
+        np.testing.assert_allclose(actual_value, expected_value)
+
+
+@pytest.mark.portable
 def test_atomic_publish_preserves_existing_destination_on_copy_failure(monkeypatch, tmp_path):
     from pyCHX import chx_compress
 
@@ -309,19 +357,12 @@ def test_compression_keeps_a_partial_final_frame_bin(tmp_path):
 def test_parallel_compression_weights_segment_averages_by_valid_frames(monkeypatch, tmp_path):
     from pyCHX import chx_compress
 
-    class Result:
-        def __init__(self, value):
-            self.value = value
-
-        def get(self):
-            return self.value
-
     mask = np.ones((1, 1), dtype=bool)
-    segment_results = {
-        0: Result((mask.copy(), np.array([[2.0]]), np.array([1.0, 2.0, 3.0]), np.array([False, True, False]))),
-        1: Result((mask.copy(), np.array([[8.0]]), np.array([4.0, 5.0]), np.array([False, False]))),
-    }
-    monkeypatch.setattr(chx_compress, "para_segment_compress_eigerdata", lambda **kwargs: segment_results)
+    segment_results = [
+        (0, (mask.copy(), np.array([[2.0]]), np.array([1.0, 2.0, 3.0]), np.array([False, True, False]))),
+        (1, (mask.copy(), np.array([[8.0]]), np.array([4.0, 5.0]), np.array([False, False]))),
+    ]
+    monkeypatch.setattr(chx_compress, "_iter_parallel_segment_results", lambda **kwargs: segment_results)
     monkeypatch.setattr(chx_compress, "create_compress_header", lambda *args, **kwargs: None)
     monkeypatch.setattr(chx_compress, "combine_compressed", lambda *args, **kwargs: None)
     monkeypatch.setattr(chx_compress, "_publish_file", lambda *args, **kwargs: None)
@@ -369,6 +410,44 @@ def test_compression_handles_an_all_bad_segment_without_dividing_by_zero(tmp_pat
     assert np.isnan(segment_average).all()
     np.testing.assert_array_equal(serial_bad, [0, 1, 2])
     np.testing.assert_array_equal(segment_bad, [True, True, True])
+
+
+@pytest.mark.portable
+def test_parallel_hot_pixel_masking_preserves_segment_boundaries(tmp_path):
+    from pyCHX.chx_compress import Multifile, para_compress_eigerdata
+
+    frames = np.array([[[200, 1]], [[2, 2]], [[5, 3]], [[6, 4]]], dtype=np.int32)
+    mask = np.ones((1, 2), dtype=bool)
+    metadata = {
+        "beam_center_x": 0,
+        "beam_center_y": 0,
+        "count_time": 0,
+        "detector_distance": 0,
+        "frame_time": 0,
+        "incident_wavelength": 0,
+        "pixel_mask": mask.copy(),
+        "x_pixel_size": 0,
+        "y_pixel_size": 0,
+    }
+    filename = tmp_path / "hot-pixel.cmp"
+    final_mask, _, _, _ = para_compress_eigerdata(
+        frames,
+        mask.copy(),
+        metadata,
+        str(filename),
+        num_sub=2,
+        hot_pixel_threshold=100,
+        dtypes="images",
+        cpu_core_number=2,
+        with_pickle=False,
+        copy_rawdata=False,
+        new_path=str(tmp_path),
+    )
+
+    assert not final_mask[0, 0]
+    with Multifile(str(filename), 0, len(frames)) as compressed:
+        assert compressed.rdframe(1)[0, 0] == 0
+        assert compressed.rdframe(2)[0, 0] == 5
 
 
 @pytest.mark.portable
@@ -601,6 +680,50 @@ def test_frame_intensity_sampling_reports_source_frame_indices(tmp_path):
 
 
 @pytest.mark.portable
+def test_read_compressed_reconstructs_average_and_bad_frames_in_one_pass(tmp_path, monkeypatch):
+    from pyCHX import chx_compress
+
+    filename, frames, _ = _make_compressed_correlation_input(tmp_path)
+    threshold = float(frames[7].sum() - 1)
+    calls = []
+    original = chx_compress.Multifile._raw_frame_view
+
+    def counted(self, frame_index):
+        calls.append(frame_index)
+        return original(self, frame_index)
+
+    monkeypatch.setattr(chx_compress.Multifile, "_raw_frame_view", counted)
+    _, average, intensity, bad_frames = chx_compress.read_compressed_eigerdata(
+        np.ones(frames.shape[1:], dtype=bool),
+        str(filename),
+        0,
+        len(frames),
+        bad_pixel_threshold=threshold,
+        bad_pixel_low_threshold=-1,
+        bad_frame_list=[2],
+        with_pickle=False,
+    )
+    expected_bad = np.unique(np.concatenate(([2], np.flatnonzero(frames.sum(axis=(1, 2)) > threshold))))
+
+    assert calls == list(range(len(frames)))
+    np.testing.assert_array_equal(intensity, frames.sum(axis=(1, 2)))
+    np.testing.assert_array_equal(bad_frames, expected_bad)
+    np.testing.assert_allclose(average, np.delete(frames, expected_bad, axis=0).mean(axis=0))
+
+
+@pytest.mark.portable
+def test_waterfall_sparse_extraction_matches_dense_frames(tmp_path):
+    from pyCHX.chx_compress import Multifile
+    from pyCHX.chx_compress_analysis import cal_waterfallc
+
+    filename, frames, ring_mask = _make_compressed_correlation_input(tmp_path)
+    with Multifile(str(filename), beg=0, end=len(frames)) as compressed:
+        actual = cal_waterfallc(compressed, ring_mask, qindex=2)
+
+    np.testing.assert_array_equal(actual, frames[:, ring_mask == 2])
+
+
+@pytest.mark.portable
 def test_collect_pool_results_always_reaps_workers():
     from pyCHX.chx_compress import _collect_pool_results
 
@@ -643,3 +766,148 @@ def test_pool_size_respects_cpu_affinity(monkeypatch):
 
     assert chx_compress._make_pool(10) is sentinel
     assert created_with == [3]
+
+
+@pytest.mark.portable
+def test_pool_size_prefers_physical_cores_within_affinity(monkeypatch):
+    from pyCHX import chx_compress
+
+    monkeypatch.setattr(chx_compress, "cpu_count", lambda: 256)
+    monkeypatch.setattr(chx_compress.os, "sched_getaffinity", lambda _pid: set(range(56)))
+    monkeypatch.setattr(chx_compress, "physical_core_count", lambda cpu_ids: 28)
+    assert chx_compress._available_cpu_count() == 28
+
+
+@pytest.mark.portable
+@pytest.mark.parametrize(("nobytes", "dtype"), [(2, np.uint16), (4, np.uint32), (8, np.float64)])
+def test_multifile_indexed_views_support_legacy_value_widths_and_random_access(tmp_path, nobytes, dtype):
+    from pyCHX.chx_compress import Multifile, create_compress_header
+
+    filename = tmp_path / f"legacy-{nobytes}.cmp"
+    metadata = {"img_shape": (2, 3)}
+    create_compress_header(metadata, str(filename), nobytes=nobytes)
+    values = [np.asarray([1, 3], dtype=dtype), np.asarray([], dtype=dtype), np.asarray([7], dtype=dtype)]
+    positions = [
+        np.asarray([0, 5], dtype=np.int32),
+        np.asarray([], dtype=np.int32),
+        np.asarray([2], dtype=np.int32),
+    ]
+    with filename.open("ab") as stream:
+        for frame_positions, frame_values in zip(positions, values):
+            stream.write(np.asarray(len(frame_positions), dtype=np.uint32).tobytes())
+            stream.write(frame_positions.tobytes())
+            stream.write(frame_values.tobytes())
+
+    with Multifile(str(filename), beg=1, end=3) as compressed:
+        for frame_index in (2, 1, 2):
+            actual_positions, actual_values = compressed._raw_frame_view(frame_index)
+            np.testing.assert_array_equal(actual_positions, positions[frame_index])
+            np.testing.assert_array_equal(actual_values, values[frame_index])
+            assert not actual_positions.flags.writeable
+            assert not actual_values.flags.writeable
+
+        restored = pickle.loads(pickle.dumps(compressed))
+        try:
+            public_positions, public_values = restored.rdrawframe(2)
+            assert public_positions.flags.writeable
+            assert public_values.flags.writeable
+            public_values[:] = 0
+            np.testing.assert_array_equal(restored.rdrawframe(2)[1], values[2])
+        finally:
+            restored.close()
+
+    compressed.reopen()
+    try:
+        np.testing.assert_array_equal(compressed.rdrawframe(1)[0], positions[1])
+    finally:
+        compressed.close()
+    closed_copy = pickle.loads(pickle.dumps(compressed))
+    assert closed_copy.FID.closed
+    closed_copy.reopen()
+    try:
+        np.testing.assert_array_equal(closed_copy.rdrawframe(2)[1], values[2])
+    finally:
+        closed_copy.close()
+
+
+@pytest.mark.portable
+@pytest.mark.parametrize("corruption", ["header", "frame_header", "payload", "negative_length"])
+def test_multifile_rejects_malformed_or_truncated_input(tmp_path, corruption):
+    from pyCHX.chx_compress import Multifile, create_compress_header
+
+    filename = tmp_path / "broken.cmp"
+    if corruption == "header":
+        filename.write_bytes(b"Version-COMP0001")
+        with pytest.raises(ValueError, match="header"):
+            Multifile(str(filename), 0, 1)
+        return
+
+    create_compress_header({"img_shape": (2, 2)}, str(filename), nobytes=4)
+    if corruption == "frame_header":
+        with pytest.raises(ValueError, match="first frame"):
+            Multifile(str(filename), 0, 1)
+        return
+    with filename.open("ab") as stream:
+        stream.write(struct.pack("@i", -1 if corruption == "negative_length" else 2))
+        if corruption == "payload":
+            stream.write(np.asarray([0], dtype=np.int32).tobytes())
+    if corruption == "negative_length":
+        with pytest.raises(ValueError, match="negative"):
+            Multifile(str(filename), 0, 1)
+    else:
+        with Multifile(str(filename), 0, 1) as compressed:
+            with pytest.raises(ValueError, match="truncated"):
+                compressed._raw_frame_view(0)
+
+
+@pytest.mark.portable
+def test_cal_g2p_traverses_each_cmp_frame_once(tmp_path, monkeypatch):
+    from pyCHX.chx_compress import Multifile
+    from pyCHX.chx_correlationp import cal_g2p
+
+    filename, frames, ring_mask = _make_compressed_correlation_input(tmp_path)
+    with Multifile(str(filename), 0, len(frames)) as compressed:
+        calls = []
+        original = compressed._raw_frame_view
+
+        def counted(frame_index):
+            calls.append(frame_index)
+            return original(frame_index)
+
+        monkeypatch.setattr(compressed, "_raw_frame_view", counted)
+        cal_g2p(compressed, ring_mask, bad_frame_list=[])
+        traversed = compressed._bytes_traversed
+
+    assert calls == list(range(len(frames)))
+    assert traversed == filename.stat().st_size - 1024 + 4 * len(frames)
+
+
+@pytest.mark.portable
+def test_cal_g2p_supports_hundreds_of_sparse_rois(tmp_path, monkeypatch):
+    from pyCHX import chx_correlationp
+    from pyCHX.chx_compress import Multifile, init_compress_eigerdata
+    from pyCHX.chx_correlationc import cal_g2c
+
+    roi_mask = np.arange(1, 201, dtype=np.int64).reshape(10, 20)
+    frame_number = np.arange(16, dtype=np.int32)[:, None, None]
+    frames = 1 + (frame_number + roi_mask[None, :, :]) % 23
+    detector_mask = np.ones(roi_mask.shape, dtype=bool)
+    filename = tmp_path / "many-rois.cmp"
+    init_compress_eigerdata(
+        frames,
+        detector_mask.copy(),
+        {"pixel_mask": detector_mask.copy()},
+        str(filename),
+        with_pickle=False,
+    )
+    monkeypatch.setattr(chx_correlationp, "_available_cpu_count", lambda: 8)
+    monkeypatch.setattr(chx_correlationp, "available_memory_bytes", lambda: 1)
+    with (
+        Multifile(str(filename), 0, len(frames)) as serial_file,
+        Multifile(str(filename), 0, len(frames)) as parallel_file,
+    ):
+        expected, expected_lags = cal_g2c(serial_file, roi_mask, bad_frame_list=[5])
+        actual, actual_lags = chx_correlationp.cal_g2p(parallel_file, roi_mask, bad_frame_list=[5])
+
+    np.testing.assert_array_equal(actual_lags, expected_lags)
+    np.testing.assert_allclose(actual, expected, rtol=1e-13, atol=0)

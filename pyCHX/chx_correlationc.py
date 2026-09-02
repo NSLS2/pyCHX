@@ -8,14 +8,24 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 from collections import namedtuple
+from concurrent.futures import ThreadPoolExecutor
 
 import matplotlib.pyplot as plt
 import numpy as np
 import skbeam.core.roi as roi
+from scipy.linalg.blas import dsyrk
 from skbeam.core.roi import extract_label_indices
 from skbeam.core.utils import multi_tau_lags
+from threadpoolctl import threadpool_limits
 from tqdm import tqdm
 
+from pyCHX._performance import (
+    available_memory_bytes,
+    mirror_and_normalize_two_time,
+    mirror_two_time,
+    physical_core_count,
+    sparse_scatter_normalized,
+)
 from pyCHX.chx_generic_functions import plot1D
 from pyCHX.chx_libs import markers
 
@@ -1713,47 +1723,63 @@ class Get_Pixel_Arrayc(object):
         Return: 2-D array, shape as (len(images), len(pixellist))
         """
 
-        data_array = np.zeros([self.length, len(self.pixelist)], dtype=np.float64)
-        # fra_pix = np.zeros_like( pixelist, dtype=np.float64)
-        timg = np.zeros(self.FD.md["ncols"] * self.FD.md["nrows"], dtype=np.int32)
-        timg[self.pixelist] = np.arange(1, len(self.pixelist) + 1)
+        pixelist = np.asarray(self.pixelist, dtype=np.int64)
+        data_array = np.zeros([self.length, len(pixelist)], dtype=np.float64, order="C")
+        lookup = np.full(self.FD.md["ncols"] * self.FD.md["nrows"], -1, dtype=np.int64)
+        lookup[pixelist] = np.arange(len(pixelist), dtype=np.int64)
 
         has_mean_norm = self.mean_int_sets is not None
         has_imgsum_norm = self.imgsum is not None
         has_pixel_norm = self.norm is not None
-        pixel_norm_is_2d = has_pixel_norm and len(self.norm.shape) > 1
+        pixel_norm_is_2d = has_pixel_norm and np.ndim(self.norm) > 1
+        norm_1d = np.asarray(
+            self.norm if has_pixel_norm and not pixel_norm_is_2d else np.ones(1), dtype=np.float64
+        )
+        norm_2d = np.asarray(self.norm if pixel_norm_is_2d else np.ones((1, 1)), dtype=np.float64)
+        imgsum = np.asarray(self.imgsum if has_imgsum_norm else np.ones(1), dtype=np.float64)
+        mean_int_sets = np.asarray(self.mean_int_sets if has_mean_norm else np.ones((1, 1)), dtype=np.float64)
+        qind = np.asarray(self.qind if has_mean_norm else np.zeros(len(pixelist)), dtype=np.int64)
+        norm_columns = np.arange(len(pixelist), dtype=np.int64)
+        flags = np.asarray(
+            [has_pixel_norm and not pixel_norm_is_2d, pixel_norm_is_2d, has_imgsum_norm, has_mean_norm],
+            dtype=np.bool_,
+        )
 
-        n = 0
-        for i in tqdm(range(self.beg, self.end)):
-            p, v = self.FD.rdrawframe(i)
-            mapped_pixels = timg[p]
-            selected = mapped_pixels != 0
-            pxlist = mapped_pixels[selected] - 1
-            values = v[selected]
-
-            if has_mean_norm:  # for normalization of each averaged ROI of each frame
-                norm_Mean_Int_Qind = self.mean_int_sets[i][self.qind[pxlist] - 1]
-            else:
-                norm_Mean_Int_Qind = 1.0
-            if has_imgsum_norm:
-                norm_imgsum = self.imgsum[i]
-            else:
-                norm_imgsum = 1.0
-            if has_pixel_norm:
-                if pixel_norm_is_2d:
-                    norm_avgimg_roi = self.norm[i][pxlist]
-                    # print('here')
-
+        def fill_range(start, stop):
+            for frame_index in range(start, stop):
+                if hasattr(self.FD, "_raw_frame_view"):
+                    positions, values = self.FD._raw_frame_view(frame_index)
                 else:
-                    norm_avgimg_roi = self.norm[pxlist]
-            else:
-                norm_avgimg_roi = 1.0
+                    positions, values = self.FD.rdrawframe(frame_index)
+                sparse_scatter_normalized(
+                    positions,
+                    values,
+                    lookup,
+                    data_array,
+                    frame_index - self.beg,
+                    frame_index,
+                    norm_1d,
+                    norm_2d,
+                    norm_columns,
+                    imgsum,
+                    mean_int_sets,
+                    qind,
+                    flags,
+                )
 
-            norms = norm_Mean_Int_Qind * norm_imgsum * norm_avgimg_roi
-            # if i==100:
-            #    print(norm_Mean_Int_Qind[:100])
-            data_array[n, pxlist] = values / norms
-            n += 1
+        if hasattr(self.FD, "_raw_frame_view") and self.length > 1:
+            self.FD._ensure_index()
+            worker_count = min(physical_core_count(), self.length)
+            chunk_size = max(1, (self.length + worker_count - 1) // worker_count)
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = [
+                    executor.submit(fill_range, start, min(start + chunk_size, self.end))
+                    for start in range(self.beg, self.end, chunk_size)
+                ]
+                for future in futures:
+                    future.result()
+        else:
+            fill_range(self.beg, self.end)
 
         return data_array
 
@@ -1773,6 +1799,29 @@ def _select_two_time_rois(rois, index):
         raise ValueError("rois contains no positive ROI labels")
     pixel_counts = np.array([np.count_nonzero(qind == label) for label in selected_labels])
     return qind, selected_labels, pixel_counts
+
+
+def _two_time_worker_count(frame_count, roi_count):
+    """Bound concurrent square temporaries by physical cores and free RAM."""
+    temporary_bytes = max(1, frame_count * frame_count * np.dtype(np.float64).itemsize)
+    memory_workers = max(1, int(available_memory_bytes() * 0.20) // temporary_bytes)
+    return min(roi_count, physical_core_count(), memory_workers)
+
+
+def _symmetric_two_time_product(data, row_norm, pixel_count):
+    """Compute one ROI matrix, pre-normalizing production-sized float inputs."""
+    if np.issubdtype(data.dtype, np.floating):
+        if data.size >= 262_144 and np.all(np.isfinite(row_norm)) and np.all(row_norm != 0):
+            normalized = np.asarray(data, dtype=np.float64, order="F") / row_norm[:, None]
+            correlation = dsyrk(1.0 / pixel_count, normalized, lower=0, trans=0)
+            mirror_two_time(correlation)
+        else:
+            correlation = dsyrk(1.0, np.asarray(data, dtype=np.float64), lower=0, trans=0)
+            mirror_and_normalize_two_time(correlation, row_norm, pixel_count)
+    else:
+        correlation = np.dot(data, data.T).astype(np.float64)
+        mirror_and_normalize_two_time(correlation, row_norm, pixel_count)
+    return correlation
 
 
 def auto_two_Arrayc(data_pixel, rois, index=None):
@@ -1812,22 +1861,24 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
         DO = False
 
     if DO:
-        for i, pixelist_qi in enumerate(tqdm(roi_pixel_indices)):
-            # print (qi-1)
-            # print (pixelist_qi.shape,  data_pixel[qi].shape)
-            data_pixel_qi = data_pixel[:, pixelist_qi]
-            sum1 = (np.average(data_pixel_qi, axis=1)).reshape(1, noframes)
-            sum2 = sum1.T
-            # print( qi, qlist, )
-            # print( g12b[:,:,qi -1 ] )
-            correlation = np.dot(data_pixel_qi, data_pixel_qi.T)
-            if not np.issubdtype(correlation.dtype, np.inexact):
-                correlation = correlation.astype(np.float64)
-            correlation /= sum1
-            correlation /= sum2
-            correlation /= nopr[i]
+        worker_count = _two_time_worker_count(noframes, len(qlist))
+
+        def calculate_one(i):
+            data_pixel_qi = data_pixel[:, roi_pixel_indices[i]]
+            row_norm = np.average(data_pixel_qi, axis=1)
+            correlation = _symmetric_two_time_product(data_pixel_qi, row_norm, nopr[i])
             g12b[:, :, i] = correlation
-        return g12b
+
+        blas_threads = 1 if worker_count > 1 else physical_core_count()
+        with threadpool_limits(limits=blas_threads, user_api="blas"):
+            if worker_count == 1:
+                for i in tqdm(range(len(qlist))):
+                    calculate_one(i)
+            else:
+                work_order = sorted(range(len(qlist)), key=lambda i: (-nopr[i], i))
+                with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                    list(tqdm(executor.map(calculate_one, work_order), total=len(qlist)))
+        return np.ascontiguousarray(g12b)
 
 
 def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
@@ -1868,18 +1919,29 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
         """TO be done here  """
         DO = False
     if DO:
-        for i, qi in enumerate(tqdm(qlist)):
-            pixelist_qi = np.where(qind == qi)[0]
+        roi_pixel_indices = [np.flatnonzero(qind == label) for label in qlist]
+        worker_count = _two_time_worker_count(noframes, len(qlist))
+
+        def calculate_one(i):
+            pixelist_qi = roi_pixel_indices[i]
             data_pixel_qi = data_pixel[:, pixelist_qi]
             if norm is not None:
-                norm1 = norm[:, pixelist_qi]
-                sum1 = (np.average(norm1, axis=1)).reshape(1, noframes)
-                sum2 = sum1.T
+                row_norm = np.average(norm[:, pixelist_qi], axis=1)
             else:
-                sum1 = 1
-                sum2 = 1
-            g12b[:, :, i] = np.dot(data_pixel_qi, data_pixel_qi.T) / sum1 / sum2 / nopr[i]
-        return g12b
+                row_norm = np.ones(noframes, dtype=np.float64)
+            correlation = _symmetric_two_time_product(data_pixel_qi, row_norm, nopr[i])
+            g12b[:, :, i] = correlation
+
+        blas_threads = 1 if worker_count > 1 else physical_core_count()
+        with threadpool_limits(limits=blas_threads, user_api="blas"):
+            if worker_count == 1:
+                for i in tqdm(range(len(qlist))):
+                    calculate_one(i)
+            else:
+                work_order = sorted(range(len(qlist)), key=lambda i: (-nopr[i], i))
+                with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                    list(tqdm(executor.map(calculate_one, work_order), total=len(qlist)))
+        return np.ascontiguousarray(g12b)
 
 
 def two_time_norm(data_pixel, rois, index=None):

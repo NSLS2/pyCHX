@@ -32,6 +32,7 @@ dependencies = [
     "ipython>=8",
     "lmfit>=1.1,<2",
     "matplotlib>=3.6,<4",
+    "numba>=0.61",
     "numpy>=1.23,<3",
     "pandas>=1.5,<4",
     "pillow>=9",
@@ -42,6 +43,7 @@ dependencies = [
     "scikit-image>=0.20,<1",
     "scipy>=1.9,<2",
     "tifffile>=2022.8",
+    "threadpoolctl>=3.1",
     "tqdm>=4.64",
     "xray-vision>=0.1.1,<0.2",
 ]
