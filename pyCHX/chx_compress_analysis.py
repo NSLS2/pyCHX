@@ -307,9 +307,20 @@ def plot_each_ring_mean_intensityc(times, mean_int_sets, xlabel="Frame", save=Fa
     if "uid" in kwargs.keys():
         uid = kwargs["uid"]
     ax.set_title("%s--Mean intensity of each ROI" % uid)
+    # Keep markers useful on short scans without asking matplotlib to render
+    # one marker per frame for very large datasets.
+    marker_stride = max(1, len(times) // 1000)
     for i in range(num_rings):
         # print(  markers[i],  colors[i] )
-        ax.plot(times, mean_int_sets[:, i], label="ROI " + str(i + 1), marker=markers[i], color=colors[i], ls="-")
+        ax.plot(
+            times,
+            mean_int_sets[:, i],
+            label="ROI " + str(i + 1),
+            marker=markers[i],
+            markevery=marker_stride,
+            color=colors[i],
+            ls="-",
+        )
         ax.set_xlabel(xlabel)
         ax.set_ylabel("Mean Intensity")
     ax.legend(loc="best", fontsize="x-small", fancybox=True, framealpha=0.5)

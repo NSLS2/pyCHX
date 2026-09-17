@@ -689,6 +689,34 @@ def test_mean_intensity_supports_sparse_labels_and_partial_sampling(tmp_path):
 
 
 @pytest.mark.portable
+def test_mean_intensity_uses_buffered_sequential_reads(tmp_path, monkeypatch):
+    from pyCHX.chx_compress import Multifile, mean_intensityc
+
+    filename, frames, ring_mask = _make_compressed_correlation_input(tmp_path)
+    expected = np.column_stack([frames[:, ring_mask == label].mean(axis=1) for label in (1, 2)])
+
+    with Multifile(str(filename), beg=0, end=len(frames)) as compressed:
+        calls = []
+        original = compressed.rdrawframe
+
+        def counted(frame_index):
+            calls.append(frame_index)
+            return original(frame_index)
+
+        monkeypatch.setattr(compressed, "rdrawframe", counted)
+        monkeypatch.setattr(
+            compressed,
+            "_raw_frame_view",
+            lambda _frame_index: pytest.fail("sequential ROI scan unexpectedly used mmap"),
+        )
+        actual, labels = mean_intensityc(compressed, ring_mask)
+
+    assert calls == list(range(len(frames)))
+    np.testing.assert_array_equal(labels, [1, 2])
+    np.testing.assert_allclose(actual, expected)
+
+
+@pytest.mark.portable
 def test_frame_intensity_sampling_reports_source_frame_indices(tmp_path):
     from pyCHX.chx_compress import Multifile, get_each_frame_intensityc
 

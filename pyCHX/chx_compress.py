@@ -1847,10 +1847,11 @@ def mean_intensityc(FD, labeled_array, sampling=1, index=None, multi_cor=False):
     roi_lookup[pixelist] = qind - 1
     norm = np.bincount(qind, minlength=len(index) + 1)[1:]
     for output_row, frame_index in enumerate(tqdm(sample_indices, desc="Get ROI intensity of each frame")):
-        if hasattr(FD, "_raw_frame_view"):
-            positions, values = FD._raw_frame_view(frame_index)
-        else:
-            positions, values = FD.rdrawframe(frame_index)
+        # This is a strictly forward, one-pass scan.  Buffered reads are much
+        # more predictable than page-faulting an mmap on network filesystems
+        # such as Lustre, while still populating the page cache for later
+        # mmap-based correlation work.
+        positions, values = FD.rdrawframe(frame_index)
         sparse_roi_sums(positions, values, roi_lookup, mean_intensity[output_row])
 
     mean_intensity /= norm
