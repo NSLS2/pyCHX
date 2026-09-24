@@ -1,10 +1,12 @@
 import operator
 import os
 import pickle as pkl
+import queue as _queue
 import shutil
 import struct
 import sys
 import tempfile
+import threading as _threading
 import time
 from multiprocessing import Pool, cpu_count
 
@@ -1327,6 +1329,7 @@ class Multifile:
         self._mmap = None
         self._frame_offsets = None
         self._bytes_traversed = 0
+        self._buffered_read_stats = None
 
         if reverse:
             nrows = self.md["nrows"]
@@ -1439,8 +1442,83 @@ class Multifile:
         for index in indices:
             yield index, self._raw_frame_view(index)
 
+    def _iter_raw_frames_buffered(self, start, end, block_size=8 * 1024**2):
+        """Yield contiguous private frame views from bounded sequential reads."""
+        if start < self.beg or end > self.end or end < start:
+            raise IndexError("Error, record out of range")
+        if block_size < 4:
+            raise ValueError("block_size must be at least four bytes")
+        if start == end:
+            return
+
+        self.seekimg(start)
+        self.FID.seek(-np.dtype(np.int32).itemsize, os.SEEK_CUR)
+        buffer_start = self.FID.tell()
+        buffer = b""
+        offset = 0
+        last_length = None
+
+        def ensure_bytes(required):
+            nonlocal buffer, buffer_start, offset
+            if len(buffer) - offset >= required:
+                return
+            buffer_start += offset
+            buffer = buffer[offset:]
+            offset = 0
+            while len(buffer) < required:
+                read_size = max(block_size, required - len(buffer))
+                read_offset = self.FID.tell()
+                if self._buffered_read_stats is None:
+                    chunk = self.FID.read(read_size)
+                else:
+                    started = time.perf_counter()
+                    chunk = self.FID.read(read_size)
+                    elapsed = time.perf_counter() - started
+                    self._buffered_read_stats.append((read_offset, len(chunk), elapsed))
+                if not chunk:
+                    break
+                buffer += chunk
+
+        for frame_index in range(start, end):
+            ensure_bytes(np.dtype(np.int32).itemsize)
+            if len(buffer) - offset < np.dtype(np.int32).itemsize:
+                raise ValueError("malformed compressed file: truncated frame header")
+            length = struct.unpack_from("@i", buffer, offset)[0]
+            if length < 0:
+                raise ValueError("malformed compressed file: negative sparse-frame length")
+            record_size = np.dtype(np.int32).itemsize + length * (np.dtype(np.int32).itemsize + self.byts)
+            ensure_bytes(record_size)
+            if len(buffer) - offset < record_size:
+                raise ValueError("malformed compressed file: truncated sparse-frame payload")
+            positions = np.frombuffer(
+                buffer,
+                dtype=np.int32,
+                count=length,
+                offset=offset + np.dtype(np.int32).itemsize,
+            )
+            values = np.frombuffer(
+                buffer,
+                dtype=self.valtype,
+                count=length,
+                offset=offset + np.dtype(np.int32).itemsize * (length + 1),
+            )
+            positions.flags.writeable = False
+            values.flags.writeable = False
+            offset += record_size
+            last_length = length
+            self._bytes_traversed += record_size
+            yield frame_index, (positions, values)
+
+        self.FID.seek(buffer_start + offset, os.SEEK_SET)
+        self.dlen = last_length
+        self.recno = end - 1
+        self.imgread = 1
+        self._last_buffered_scan = (start, end)
+
     def _reset_io_counters(self):
         self._bytes_traversed = 0
+        if self._buffered_read_stats is not None:
+            self._buffered_read_stats = []
 
     def _readImage(self):
         p, v = self._readImageRaw()
@@ -1810,6 +1888,8 @@ def mean_intensityc(FD, labeled_array, sampling=1, index=None, multi_cor=False):
         The labels for each element of the `mean_intensity` list
     """
 
+    stage_stats = getattr(FD, "_roi_intensity_stats", None)
+    setup_started = time.perf_counter() if stage_stats is not None else None
     qind, pixelist = roi.extract_label_indices(labeled_array)
     sx, sy = FD.md["ncols"], FD.md["nrows"]
     if labeled_array.shape != (sx, sy):
@@ -1831,9 +1911,10 @@ def mean_intensityc(FD, labeled_array, sampling=1, index=None, multi_cor=False):
     if len(index) == 0:
         raise ValueError("labeled_array contains no positive ROI labels")
 
-    remapped_qind = np.zeros_like(qind, dtype=np.int64)
+    output_labels = np.zeros(available_labels.size, dtype=np.int64)
     for output_label, input_label in enumerate(index, start=1):
-        remapped_qind[qind == input_label] = output_label
+        output_labels[np.searchsorted(available_labels, input_label)] = output_label
+    remapped_qind = output_labels[np.searchsorted(available_labels, qind)]
     selected = remapped_qind > 0
     qind = remapped_qind[selected]
     pixelist = pixelist[selected]
@@ -1846,16 +1927,79 @@ def mean_intensityc(FD, labeled_array, sampling=1, index=None, multi_cor=False):
     roi_lookup = np.full(FD.md["ncols"] * FD.md["nrows"], -1, dtype=np.int64)
     roi_lookup[pixelist] = qind - 1
     norm = np.bincount(qind, minlength=len(index) + 1)[1:]
-    for output_row, frame_index in enumerate(tqdm(sample_indices, desc="Get ROI intensity of each frame")):
-        # This is a strictly forward, one-pass scan.  Buffered reads are much
-        # more predictable than page-faulting an mmap on network filesystems
-        # such as Lustre, while still populating the page cache for later
-        # mmap-based correlation work.
-        positions, values = FD.rdrawframe(frame_index)
-        sparse_roi_sums(positions, values, roi_lookup, mean_intensity[output_row])
+    if stage_stats is not None:
+        stage_stats["roi_setup_seconds"] = time.perf_counter() - setup_started
+    if sampling == 1 and hasattr(FD, "_iter_raw_frames_buffered"):
+        block_size = getattr(FD, "_buffered_read_block_size", 8 * 1024**2)
+        frames = FD._iter_raw_frames_buffered(FD.beg, FD.end, block_size=block_size)
+        if getattr(FD, "_roi_intensity_prefetch", True):
+            frames = _iter_prefetched_frames(frames)
+    else:
+        frames = ((frame_index, FD.rdrawframe(frame_index)) for frame_index in sample_indices)
+    traversal_started = time.perf_counter() if stage_stats is not None else None
+    reduction_seconds = 0.0
+    for output_row, (_, (positions, values)) in enumerate(
+        tqdm(frames, total=len(sample_indices), desc="Get ROI intensity of each frame")
+    ):
+        if stage_stats is None:
+            sparse_roi_sums(positions, values, roi_lookup, mean_intensity[output_row])
+        else:
+            reduction_started = time.perf_counter()
+            sparse_roi_sums(positions, values, roi_lookup, mean_intensity[output_row])
+            reduction_seconds += time.perf_counter() - reduction_started
 
+    division_started = time.perf_counter() if stage_stats is not None else None
     mean_intensity /= norm
+    if stage_stats is not None:
+        traversal_seconds = division_started - traversal_started
+        stage_stats["read_and_reduce_seconds"] = traversal_seconds
+        stage_stats["sparse_reduction_seconds"] = reduction_seconds
+        stage_stats["reader_and_iteration_seconds"] = max(0.0, traversal_seconds - reduction_seconds)
+        stage_stats["division_seconds"] = time.perf_counter() - division_started
     return mean_intensity, index
+
+
+def _iter_prefetched_frames(frames):
+    """Overlap one private frame read with reduction using a bounded queue."""
+    pending = _queue.Queue(maxsize=1)
+    cancelled = _threading.Event()
+
+    def put(item):
+        while not cancelled.is_set():
+            try:
+                pending.put(item, timeout=0.05)
+                return True
+            except _queue.Full:
+                pass
+        return False
+
+    def produce():
+        try:
+            for frame in frames:
+                if not put(("frame", frame)):
+                    return
+        except BaseException as error:  # noqa: BLE001 - propagate producer failures
+            put(("error", error))
+        finally:
+            put(("done", None))
+
+    producer = _threading.Thread(target=produce, name="pychx-cmp-prefetch", daemon=True)
+    producer.start()
+    try:
+        while True:
+            kind, value = pending.get()
+            if kind == "frame":
+                yield value
+            elif kind == "error":
+                raise value
+            else:
+                break
+    finally:
+        cancelled.set()
+        close = getattr(frames, "close", None)
+        if close is not None:
+            close()
+        producer.join()
 
 
 def _get_mean_intensity_one_q(FD, sampling, labels):

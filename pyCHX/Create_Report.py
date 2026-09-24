@@ -1901,6 +1901,38 @@ def recursively_load_dict_contents_from_group(h5file, path):
     return ans
 
 
+def _write_xpcs_metadata(h5file, key, metadata):
+    """Write one legacy metadata dictionary using the established layout."""
+    dataset = h5file.create_dataset(key, (1,), dtype="i")
+    for metadata_key in metadata:
+        try:
+            dataset.attrs[str(metadata_key)] = metadata[metadata_key]
+        except Exception:
+            pass
+
+
+def _write_xpcs_dataframe(frame, filename, key):
+    """Write one pandas object using the legacy fixed-format representation."""
+    frame.to_hdf(filename, key=key, mode="a")
+
+
+def _write_xpcs_array(h5file, key, value):
+    """Write one ordinary result dataset without changing creation properties."""
+    dataset = h5file.create_dataset(key, data=value)
+    # This legacy Python attribute does not alter the HDF5 fill value.
+    dataset.set_fill_value = np.nan
+
+
+def _open_xpcs_h5(filename):
+    """Open the results file through an independently measurable boundary."""
+    return h5py.File(filename, "w")
+
+
+def _close_xpcs_h5(h5file):
+    """Close and implicitly flush the results file."""
+    h5file.close()
+
+
 def export_xpcs_results_to_h5(filename, export_dir, export_dict):
     """
     YG. May 10, 2017
@@ -1917,18 +1949,13 @@ def export_xpcs_results_to_h5(filename, export_dir, export_dict):
     dicts = ["md", "qval_dict", "qval_dict_v", "qval_dict_p"]
     dict_nest = ["taus_uids", "g2_uids"]
 
-    with h5py.File(fout, "w") as hf:
+    hf = _open_xpcs_h5(fout)
+    try:
         flag = False
         for key in list(export_dict.keys()):
             # print( key )
             if key in dicts:  # =='md' or key == 'qval_dict':
-                md = export_dict[key]
-                meta_data = hf.create_dataset(key, (1,), dtype="i")
-                for key_ in md.keys():
-                    try:
-                        meta_data.attrs[str(key_)] = md[key_]
-                    except Exception:
-                        pass
+                _write_xpcs_metadata(hf, key, export_dict[key])
             elif key in dict_nest:
                 # print(key)
                 try:
@@ -1938,25 +1965,17 @@ def export_xpcs_results_to_h5(filename, export_dir, export_dict):
 
             elif key in ["g2_fit_paras", "g2b_fit_paras", "spec_km_pds", "spec_pds", "qr_1d_pds"]:
                 try:
-                    export_dict[key].to_hdf(
-                        fout,
-                        key=key,
-                        mode="a",
-                    )
+                    _write_xpcs_dataframe(export_dict[key], fout, key)
                 except Exception:
                     flag = True
             else:
-                data = hf.create_dataset(key, data=export_dict[key])
-                # add this fill line at Octo 27, 2017
-                data.set_fill_value = np.nan
+                _write_xpcs_array(hf, key, export_dict[key])
+    finally:
+        _close_xpcs_h5(hf)
     if flag:
         for key in list(export_dict.keys()):
             if key in ["g2_fit_paras", "g2b_fit_paras", "spec_km_pds", "spec_pds", "qr_1d_pds"]:
-                export_dict[key].to_hdf(
-                    fout,
-                    key=key,
-                    mode="a",
-                )
+                _write_xpcs_dataframe(export_dict[key], fout, key)
 
     print("The xpcs analysis results are exported to %s with filename as %s" % (export_dir, filename))
 

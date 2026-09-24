@@ -58,6 +58,13 @@ def test_production_wildcard_import_order_keeps_optimized_bindings():
 
 
 @pytest.mark.portable
+def test_parallel_correlation_wildcard_does_not_export_instrumentation_modules():
+    namespace = {}
+    exec("from pyCHX.chx_correlationp import *", namespace)
+    assert "time" not in namespace
+
+
+@pytest.mark.portable
 def test_final_marker_and_color_values_are_preserved():
     import pyCHX.chx_packages as packages
 

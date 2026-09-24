@@ -301,34 +301,85 @@ def plot_each_ring_mean_intensityc(times, mean_int_sets, xlabel="Frame", save=Fa
     Plot time dependent mean intensity of each ring
     """
     num_rings = mean_int_sets.shape[1]
-
-    fig, ax = plt.subplots(figsize=(8, 8))
     uid = "uid"
     if "uid" in kwargs.keys():
         uid = kwargs["uid"]
-    ax.set_title("%s--Mean intensity of each ROI" % uid)
-    # Keep markers useful on short scans without asking matplotlib to render
-    # one marker per frame for very large datasets.
-    marker_stride = max(1, len(times) // 1000)
-    for i in range(num_rings):
-        # print(  markers[i],  colors[i] )
-        ax.plot(
-            times,
-            mean_int_sets[:, i],
-            label="ROI " + str(i + 1),
-            marker=markers[i],
-            markevery=marker_stride,
-            color=colors[i],
-            ls="-",
+    if num_rings > 20:
+        fig, (heatmap_axes, summary_axes) = plt.subplots(
+            2,
+            1,
+            figsize=(11, 7),
+            gridspec_kw={"height_ratios": (3, 1)},
+            constrained_layout=True,
         )
+        finite = mean_int_sets[np.isfinite(mean_int_sets)]
+        if finite.size:
+            vmin, vmax = np.percentile(finite, [1, 99])
+            if vmin == vmax:
+                vmin = None
+                vmax = None
+        else:
+            vmin = None
+            vmax = None
+        if len(times):
+            left = times[0]
+            right = times[-1] if len(times) > 1 else times[0] + 1
+        else:
+            left, right = 0, 1
+        image = heatmap_axes.imshow(
+            mean_int_sets.T,
+            origin="lower",
+            aspect="auto",
+            interpolation="nearest",
+            cmap="viridis",
+            vmin=vmin,
+            vmax=vmax,
+            extent=(left, right, 0.5, num_rings + 0.5),
+        )
+        heatmap_axes.set_title(f"{uid} — ROI mean intensity")
+        heatmap_axes.set_ylabel("ROI")
+        colorbar = fig.colorbar(image, ax=heatmap_axes, pad=0.015)
+        colorbar.set_label("Mean intensity")
+
+        with np.errstate(invalid="ignore"):
+            lower, median, upper = np.nanpercentile(mean_int_sets, [10, 50, 90], axis=1)
+        summary_axes.fill_between(times, lower, upper, color="tab:blue", alpha=0.2, label="10–90%")
+        summary_axes.plot(times, median, color="tab:blue", linewidth=1.2, label="Median ROI")
+        summary_axes.set_xlabel(xlabel)
+        summary_axes.set_ylabel("Intensity")
+        summary_axes.grid(alpha=0.2)
+        summary_axes.legend(loc="best", frameon=False, ncol=2)
+    else:
+        fig, ax = plt.subplots(figsize=(10, 6), constrained_layout=True)
+        ax.set_title(f"{uid} — Mean intensity of each ROI")
+        marker_stride = max(1, len(times) // 1000)
+        for i in range(num_rings):
+            ax.plot(
+                times,
+                mean_int_sets[:, i],
+                label="ROI " + str(i + 1),
+                marker=markers[i],
+                markevery=marker_stride,
+                color=colors[i],
+                linewidth=1,
+                markersize=3,
+            )
         ax.set_xlabel(xlabel)
-        ax.set_ylabel("Mean Intensity")
-    ax.legend(loc="best", fontsize="x-small", fancybox=True, framealpha=0.5)
+        ax.set_ylabel("Mean intensity")
+        ax.grid(alpha=0.2)
+        ax.legend(
+            loc="upper left",
+            bbox_to_anchor=(1.01, 1),
+            fontsize="x-small",
+            fancybox=False,
+            frameon=False,
+            ncol=max(1, int(np.ceil(num_rings / 12))),
+        )
 
     if save:
         path = kwargs["path"]
         fp = path + "%s_t_ROIs" % uid + ".png"
-        fig.savefig(fp, dpi=fig.dpi)
+        fig.savefig(fp, dpi=fig.dpi, pil_kwargs={"compress_level": 3})
         save_arrays(
             np.hstack([times.reshape(len(times), 1), mean_int_sets]),
             label=["frame"] + ["ROI_%d" % i for i in range(num_rings)],

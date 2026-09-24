@@ -687,6 +687,26 @@ def test_mean_intensity_supports_sparse_labels_and_partial_sampling(tmp_path):
     np.testing.assert_array_equal(subset_labels, [5])
     np.testing.assert_allclose(subset[:, 0], expected[:, 1])
 
+    reordered_file = Multifile(str(filename), beg=0, end=len(frames))
+    try:
+        reordered, reordered_labels = mean_intensityc(reordered_file, roi_mask, sampling=5, index=[5, 2])
+    finally:
+        reordered_file.close()
+
+    np.testing.assert_array_equal(reordered_labels, [5, 2])
+    np.testing.assert_allclose(reordered, expected[:, ::-1])
+
+    duplicate_file = Multifile(str(filename), beg=0, end=len(frames))
+    try:
+        with np.errstate(invalid="ignore"):
+            duplicated, duplicate_labels = mean_intensityc(duplicate_file, roi_mask, sampling=5, index=[2, 2])
+    finally:
+        duplicate_file.close()
+
+    np.testing.assert_array_equal(duplicate_labels, [2, 2])
+    assert np.isnan(duplicated[:, 0]).all()
+    np.testing.assert_allclose(duplicated[:, 1], expected[:, 0])
+
 
 @pytest.mark.portable
 def test_mean_intensity_uses_buffered_sequential_reads(tmp_path, monkeypatch):
@@ -697,23 +717,96 @@ def test_mean_intensity_uses_buffered_sequential_reads(tmp_path, monkeypatch):
 
     with Multifile(str(filename), beg=0, end=len(frames)) as compressed:
         calls = []
-        original = compressed.rdrawframe
+        compressed._buffered_read_stats = []
+        original = compressed._iter_raw_frames_buffered
 
-        def counted(frame_index):
-            calls.append(frame_index)
-            return original(frame_index)
+        def counted(start, end, block_size=8 * 1024**2):
+            for frame_index, frame in original(start, end, block_size):
+                calls.append(frame_index)
+                yield frame_index, frame
 
-        monkeypatch.setattr(compressed, "rdrawframe", counted)
         monkeypatch.setattr(
             compressed,
-            "_raw_frame_view",
-            lambda _frame_index: pytest.fail("sequential ROI scan unexpectedly used mmap"),
+            "_iter_raw_frames_buffered",
+            counted,
         )
+        monkeypatch.setattr(compressed, "rdrawframe", lambda _frame_index: pytest.fail("used per-frame reads"))
         actual, labels = mean_intensityc(compressed, ring_mask)
+        traversed = compressed._bytes_traversed
+        read_stats = compressed._buffered_read_stats
 
     assert calls == list(range(len(frames)))
+    assert traversed == filename.stat().st_size - 1024
+    assert sum(read_size for _, read_size, _ in read_stats) == traversed
+    assert all(elapsed >= 0 for _, _, elapsed in read_stats)
     np.testing.assert_array_equal(labels, [1, 2])
     np.testing.assert_allclose(actual, expected)
+
+
+@pytest.mark.portable
+def test_mean_intensity_bounded_prefetch_matches_serial_reader(tmp_path):
+    from pyCHX.chx_compress import Multifile, mean_intensityc
+
+    filename, _, ring_mask = _make_compressed_correlation_input(tmp_path)
+    with (
+        Multifile(str(filename), beg=0, end=20) as serial_file,
+        Multifile(str(filename), beg=0, end=20) as prefetched_file,
+    ):
+        prefetched_file._roi_intensity_prefetch = True
+        serial, serial_labels = mean_intensityc(serial_file, ring_mask)
+        prefetched, prefetched_labels = mean_intensityc(prefetched_file, ring_mask)
+
+    np.testing.assert_array_equal(prefetched_labels, serial_labels)
+    np.testing.assert_array_equal(prefetched, serial)
+
+
+@pytest.mark.portable
+def test_bounded_prefetch_propagates_errors_and_closes_early():
+    import threading
+
+    from pyCHX.chx_compress import _iter_prefetched_frames
+
+    def broken_frames():
+        yield 1
+        raise RuntimeError("read failed")
+
+    prefetched = _iter_prefetched_frames(broken_frames())
+    assert next(prefetched) == 1
+    with pytest.raises(RuntimeError, match="read failed"):
+        next(prefetched)
+
+    prefetched = _iter_prefetched_frames(iter(range(100)))
+    assert next(prefetched) == 0
+    prefetched.close()
+    assert not any(thread.name == "pychx-cmp-prefetch" for thread in threading.enumerate())
+
+
+@pytest.mark.portable
+def test_mean_intensity_honors_private_buffer_size(tmp_path, monkeypatch):
+    from pyCHX.chx_compress import Multifile, mean_intensityc
+
+    filename, frames, ring_mask = _make_compressed_correlation_input(tmp_path)
+    with Multifile(str(filename), beg=0, end=len(frames)) as compressed:
+        block_sizes = []
+        compressed._roi_intensity_stats = {}
+        original = compressed._iter_raw_frames_buffered
+
+        def counted(start, end, block_size=8 * 1024**2):
+            block_sizes.append(block_size)
+            yield from original(start, end, block_size)
+
+        monkeypatch.setattr(compressed, "_iter_raw_frames_buffered", counted)
+        compressed._buffered_read_block_size = 64
+        mean_intensityc(compressed, ring_mask)
+
+    assert block_sizes == [64]
+    assert set(compressed._roi_intensity_stats) == {
+        "roi_setup_seconds",
+        "read_and_reduce_seconds",
+        "sparse_reduction_seconds",
+        "reader_and_iteration_seconds",
+        "division_seconds",
+    }
 
 
 @pytest.mark.portable
@@ -861,6 +954,14 @@ def test_multifile_indexed_views_support_legacy_value_widths_and_random_access(t
             stream.write(frame_values.tobytes())
 
     with Multifile(str(filename), beg=1, end=3) as compressed:
+        buffered_frames = list(compressed._iter_raw_frames_buffered(1, 3, block_size=7))
+        assert [frame_index for frame_index, _ in buffered_frames] == [1, 2]
+        for frame_index, (actual_positions, actual_values) in buffered_frames:
+            np.testing.assert_array_equal(actual_positions, positions[frame_index])
+            np.testing.assert_array_equal(actual_values, values[frame_index])
+            assert not actual_positions.flags.writeable
+            assert not actual_values.flags.writeable
+
         for frame_index in (2, 1, 2):
             actual_positions, actual_values = compressed._raw_frame_view(frame_index)
             np.testing.assert_array_equal(actual_positions, positions[frame_index])
@@ -920,6 +1021,8 @@ def test_multifile_rejects_malformed_or_truncated_input(tmp_path, corruption):
         with Multifile(str(filename), 0, 1) as compressed:
             with pytest.raises(ValueError, match="truncated"):
                 compressed._raw_frame_view(0)
+            with pytest.raises(ValueError, match="truncated"):
+                list(compressed._iter_raw_frames_buffered(0, 1, block_size=7))
 
 
 @pytest.mark.portable
@@ -930,18 +1033,69 @@ def test_cal_g2p_traverses_each_cmp_frame_once(tmp_path, monkeypatch):
     filename, frames, ring_mask = _make_compressed_correlation_input(tmp_path)
     with Multifile(str(filename), 0, len(frames)) as compressed:
         calls = []
-        original = compressed._raw_frame_view
+        original = compressed._iter_raw_frames_buffered
 
-        def counted(frame_index):
-            calls.append(frame_index)
-            return original(frame_index)
+        def counted(start, end, block_size=8 * 1024**2):
+            for frame_index, frame in original(start, end, block_size):
+                calls.append(frame_index)
+                yield frame_index, frame
 
-        monkeypatch.setattr(compressed, "_raw_frame_view", counted)
+        monkeypatch.setattr(compressed, "_iter_raw_frames_buffered", counted)
+        monkeypatch.setattr(compressed, "_raw_frame_view", lambda _frame_index: pytest.fail("used indexed reads"))
         cal_g2p(compressed, ring_mask, bad_frame_list=[])
         traversed = compressed._bytes_traversed
 
     assert calls == list(range(len(frames)))
-    assert traversed == filename.stat().st_size - 1024 + 4 * len(frames)
+    assert traversed == filename.stat().st_size - 1024
+
+
+@pytest.mark.portable
+def test_cal_g2p_buffered_reader_matches_indexed_reader(tmp_path):
+    from pyCHX.chx_compress import Multifile
+    from pyCHX.chx_correlationp import cal_g2p
+
+    filename, frames, ring_mask = _make_compressed_correlation_input(tmp_path)
+    with (
+        Multifile(str(filename), 0, len(frames)) as buffered_file,
+        Multifile(str(filename), 0, len(frames)) as indexed_file,
+        Multifile(str(filename), 0, len(frames)) as previously_scanned_file,
+    ):
+        indexed_file._one_time_use_buffered_reader = False
+        buffered_g2, buffered_lags = cal_g2p(buffered_file, ring_mask, bad_frame_list=[3])
+        indexed_g2, indexed_lags = cal_g2p(indexed_file, ring_mask, bad_frame_list=[3])
+        list(previously_scanned_file._iter_raw_frames_buffered(0, len(frames)))
+        previously_scanned_file._one_time_stats = {}
+        scanned_g2, scanned_lags = cal_g2p(previously_scanned_file, ring_mask, bad_frame_list=[3])
+
+    np.testing.assert_array_equal(buffered_lags, indexed_lags)
+    np.testing.assert_array_equal(buffered_g2, indexed_g2)
+    assert buffered_file._last_buffered_scan == (0, len(frames))
+    np.testing.assert_array_equal(scanned_lags, indexed_lags)
+    np.testing.assert_array_equal(scanned_g2, indexed_g2)
+    assert previously_scanned_file._one_time_stats["reader"] == "buffered"
+
+
+@pytest.mark.portable
+def test_cal_g2p_double_buffer_matches_single_buffer(tmp_path):
+    from pyCHX.chx_compress import Multifile
+    from pyCHX.chx_correlationp import cal_g2p
+
+    filename, frames, ring_mask = _make_compressed_correlation_input(tmp_path)
+    with (
+        Multifile(str(filename), 0, len(frames)) as single_file,
+        Multifile(str(filename), 0, len(frames)) as double_file,
+    ):
+        single_file._one_time_stats = {}
+        double_file._one_time_stats = {}
+        single_file._one_time_double_buffer = False
+        double_file._one_time_double_buffer = True
+        single_g2, single_lags = cal_g2p(single_file, ring_mask, bad_frame_list=[3])
+        double_g2, double_lags = cal_g2p(double_file, ring_mask, bad_frame_list=[3])
+
+    np.testing.assert_array_equal(double_lags, single_lags)
+    np.testing.assert_array_equal(double_g2, single_g2)
+    assert single_file._one_time_stats["double_buffer"] is False
+    assert double_file._one_time_stats["double_buffer"] is True
 
 
 @pytest.mark.portable

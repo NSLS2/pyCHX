@@ -25,7 +25,12 @@ from matplotlib.figure import Figure
 from pandas import DataFrame
 from PIL import Image
 from scipy.special import erf
-from skbeam.core.utils import angle_grid, multi_tau_lags, radial_grid, radius_to_twotheta
+from skbeam.core.utils import (  # noqa: F401 - angle/radial grids are legacy wildcard exports
+    angle_grid,
+    multi_tau_lags,
+    radial_grid,
+    radius_to_twotheta,
+)
 from skimage.draw import disk, ellipse, polygon
 from skimage.filters import prewitt
 from tqdm import tqdm
@@ -300,6 +305,14 @@ def get_masked_qval_qwid_dict(roi_mask, mask, setup_pargs, geometry):
     return qval_dict, qwid_dict
 
 
+def _grouped_min_max(values, groups, group_count):
+    minimum = np.full(group_count, np.inf, dtype=np.float64)
+    maximum = np.full(group_count, -np.inf, dtype=np.float64)
+    np.minimum.at(minimum, groups, values)
+    np.maximum.at(maximum, groups, values)
+    return minimum, maximum
+
+
 def get_qval_qwid_dict(roi_mask, setup_pargs, geometry="saxs"):
     """YG Dev April 6, 2019
     Get qval_dict and qwid_dict by giving roi_mask, setup_pargs
@@ -329,58 +342,54 @@ def get_qval_qwid_dict(roi_mask, setup_pargs, geometry="saxs"):
     """
 
     origin = setup_pargs["center"]  # [::-1]
-    shape = roi_mask.shape
-    qp_map = radial_grid(origin, shape)
-    phi_map = np.degrees(angle_grid(origin, shape))
-    two_theta = radius_to_twotheta(setup_pargs["Ldet"], setup_pargs["dpix"] * qp_map)
-    q_map = utils.twotheta_to_q(two_theta, setup_pargs["lambda_"])
-    qind, pixelist = roi.extract_label_indices(roi_mask)
-    Qval = np.unique(qind)
+    selected = roi_mask > 0
+    Qval, groups = np.unique(roi_mask[selected], return_inverse=True)
     qval_dict_ = {}
     qwid_dict_ = {}
-    for j, i in enumerate(Qval):
-        qval = q_map[roi_mask == i]
-        # print( qval )
-        if geometry == "saxs":
-            qval_dict_[j] = [(qval.max() + qval.min()) / 2]  # np.mean(qval)
-            qwid_dict_[j] = [qval.max() - qval.min()]
+    if Qval.size == 0 or geometry not in {"saxs", "ang_saxs", "flow_saxs"}:
+        return qval_dict_, qwid_dict_
 
-        elif geometry == "ang_saxs":
-            aval = phi_map[roi_mask == i]
-            # print(j,i,qval, aval)
-            qval_dict_[j] = np.zeros(2)
-            qwid_dict_[j] = np.zeros(2)
+    rows, columns = np.nonzero(selected)
+    x = np.arange(roi_mask.shape[1])[columns] - origin[1]
+    y = np.arange(roi_mask.shape[0])[rows] - origin[0]
+    radii = np.sqrt(x * x + y * y)
+    two_theta = radius_to_twotheta(setup_pargs["Ldet"], setup_pargs["dpix"] * radii)
+    q_values = utils.twotheta_to_q(two_theta, setup_pargs["lambda_"])
+    q_min, q_max = _grouped_min_max(q_values, groups, Qval.size)
+    if geometry == "saxs":
+        for index in range(Qval.size):
+            qval_dict_[index] = [(q_max[index] + q_min[index]) / 2]
+            qwid_dict_[index] = [q_max[index] - q_min[index]]
+        return qval_dict_, qwid_dict_
 
-            qval_dict_[j][0] = (qval.max() + qval.min()) / 2  # np.mean(qval)
-            qwid_dict_[j][0] = qval.max() - qval.min()
+    angles = np.degrees(np.arctan2(y, x))
+    if geometry == "ang_saxs":
+        angle_min, angle_max = _grouped_min_max(angles, groups, Qval.size)
+    else:
+        center_row = origin[0]
+        lower = rows >= center_row
+        angle_min, angle_max = _grouped_min_max(angles[lower], groups[lower], Qval.size)
+        missing = np.isinf(angle_min)
+        if np.any(missing):
+            upper_min, upper_max = _grouped_min_max(
+                angles[~lower] + 180,
+                groups[~lower],
+                Qval.size,
+            )
+            angle_min[missing] = upper_min[missing]
+            angle_max[missing] = upper_max[missing]
 
-            if ((aval.max() * aval.min()) < 0) & (aval.max() > 90):
-                qval_dict_[j][1] = (aval.max() + aval.min()) / 2 - 180  # np.mean(qval)
-                qwid_dict_[j][1] = abs(aval.max() - aval.min() - 360)
-                # print('here -- %s'%j)
-            else:
-                qval_dict_[j][1] = (aval.max() + aval.min()) / 2  # np.mean(qval)
-                qwid_dict_[j][1] = abs(aval.max() - aval.min())
-
-        elif geometry == "flow_saxs":
-            sx, sy = roi_mask.shape
-            cx, cy = origin
-            aval = (phi_map[cx:])[roi_mask[cx:] == i]
-            if len(aval) == 0:
-                aval = (phi_map[:cx])[roi_mask[:cx] == i] + 180
-
-            qval_dict_[j] = np.zeros(2)
-            qwid_dict_[j] = np.zeros(2)
-            qval_dict_[j][0] = (qval.max() + qval.min()) / 2  # np.mean(qval)
-            qwid_dict_[j][0] = qval.max() - qval.min()
-            # print(aval)
-            if ((aval.max() * aval.min()) < 0) & (aval.max() > 90):
-                qval_dict_[j][1] = (aval.max() + aval.min()) / 2 - 180  # np.mean(qval)
-                qwid_dict_[j][1] = abs(aval.max() - aval.min() - 360)
-                # print('here -- %s'%j)
-            else:
-                qval_dict_[j][1] = (aval.max() + aval.min()) / 2  # np.mean(qval)
-                qwid_dict_[j][1] = abs(aval.max() - aval.min())
+    for index in range(Qval.size):
+        qval_dict_[index] = np.zeros(2)
+        qwid_dict_[index] = np.zeros(2)
+        qval_dict_[index][0] = (q_max[index] + q_min[index]) / 2
+        qwid_dict_[index][0] = q_max[index] - q_min[index]
+        if ((angle_max[index] * angle_min[index]) < 0) & (angle_max[index] > 90):
+            qval_dict_[index][1] = (angle_max[index] + angle_min[index]) / 2 - 180
+            qwid_dict_[index][1] = abs(angle_max[index] - angle_min[index] - 360)
+        else:
+            qval_dict_[index][1] = (angle_max[index] + angle_min[index]) / 2
+            qwid_dict_[index][1] = abs(angle_max[index] - angle_min[index])
 
     return qval_dict_, qwid_dict_
 
@@ -472,13 +481,10 @@ def shift_mask(new_cen, new_mask, old_cen, old_roi_mask, limit_qnum=None):
     x1, x2, y1, y2 = [old_cen[0] - down, old_cen[0] + up, old_cen[1] - left, old_cen[1] + right]
     nroi_mask_ = old_roi_mask[x1:x2, y1:y2] * new_mask
     nroi_mask = np.zeros_like(nroi_mask_)
-    qind, pixelist = roi.extract_label_indices(nroi_mask_)
-    qu = np.unique(qind)
-    # noqs = len( qu )
-    # nopr = np.bincount(qind, minlength=(noqs+1))[1:]
-    # qm = nopr>0
-    for j, qv in enumerate(qu):
-        nroi_mask[nroi_mask_ == qv] = j + 1
+    selected = nroi_mask_ > 0
+    if np.any(selected):
+        _, inverse = np.unique(nroi_mask_[selected], return_inverse=True)
+        nroi_mask[selected] = inverse + 1
     if limit_qnum is not None:
         nroi_mask[nroi_mask > limit_qnum] = 0
     return nroi_mask
@@ -557,8 +563,6 @@ def plot_q_g2fitpara_general(
         master_plot,
         mastp,
     ) = get_short_long_labels_from_qval_dict(qval_dict_, geometry=geometry)
-    fps = []
-
     # print(qr_label, qz_label, short_ulabel, long_ulabel)
     # $print( num_short, num_long )
     beta, relaxation_rate, baseline, alpha = (
@@ -2688,8 +2692,26 @@ def combine_images(filenames, outputfile, outsize=(2000, 2400)):
                     w, h = image.size
                     # print('pos {0},{1} size {2},{3}'.format(x, y, w, h))
                     result.paste(image, (x, y, x + w, y + h))
-    result.save(outputfile, quality=100, optimize=True)
+    if os.path.splitext(outputfile)[1].lower() == ".png":
+        result.save(outputfile, compress_level=3)
+    else:
+        result.save(outputfile, quality=100, optimize=True)
     print("The combined image is saved as: %s" % outputfile)
+
+
+def _adjust_g2_page_layout(figure, row_count, column_count):
+    """Apply a fixed compact layout without an extra renderer pass."""
+    if row_count == 1:
+        figure.subplots_adjust(left=0.08, right=0.98, bottom=0.14, top=0.80, wspace=0.30)
+    else:
+        figure.subplots_adjust(left=0.07, right=0.98, bottom=0.07, top=0.91, wspace=0.32, hspace=0.42)
+
+
+def _size_g2_page(figure, row_count, column_count):
+    """Size a g2 page from its grid while keeping panels comfortably wide."""
+    width = max(9.0, 3.2 * column_count)
+    height = max(4.0, 1.0 + 2.75 * row_count)
+    figure.set_size_inches(width, height)
 
 
 def get_qval_dict(qr_center, qz_center=None, qval_dict=None, multi_qr_for_one_qz=True, one_qz_multi_qr=True):
@@ -5623,6 +5645,23 @@ def get_g2_fit_general(
     return fit_res, lags_, np.array(model_data).T
 
 
+def _cluster_nearby_values(values, absolute_tolerance):
+    """Replace values within a narrow tolerance with their shared mean."""
+    values = np.asarray(values, dtype=float)
+    grouped = values.copy()
+    order = np.argsort(values)
+    start = 0
+    while start < len(order):
+        stop = start + 1
+        reference = values[order[start]]
+        while stop < len(order) and values[order[stop]] - reference <= absolute_tolerance:
+            stop += 1
+        members = order[start:stop]
+        grouped[members] = np.mean(values[members])
+        start = stop
+    return grouped
+
+
 def get_short_long_labels_from_qval_dict(qval_dict, geometry="saxs"):
     """Y.G. 2016, Dec 26
     Get short/long labels from a qval_dict
@@ -5814,6 +5853,16 @@ def plot_g2_general(
     else:
         g2_dict_, taus_dict_, qval_dict_, fit_res_ = g2_dict, taus_dict, qval_dict, fit_res
 
+    grouping_qval_dict = qval_dict_
+    if geometry == "ang_saxs":
+        q_values = np.asarray([value[0] for value in qval_dict_.values()])
+        grouped_q_values = _cluster_nearby_values(q_values, absolute_tolerance=2e-6)
+        grouping_qval_dict = {}
+        for (key, value), grouped_q in zip(qval_dict_.items(), grouped_q_values):
+            grouped_value = np.asarray(value, dtype=float).copy()
+            grouped_value[0] = grouped_q
+            grouping_qval_dict[key] = grouped_value
+
     (
         qr_label,
         qz_label,
@@ -5828,8 +5877,8 @@ def plot_g2_general(
         ind_long,
         master_plot,
         mastp,
-    ) = get_short_long_labels_from_qval_dict(qval_dict_, geometry=geometry)
-    fps = []
+    ) = get_short_long_labels_from_qval_dict(grouping_qval_dict, geometry=geometry)
+    all_fps = []
 
     # $print( num_short, num_long )
 
@@ -5863,31 +5912,35 @@ def plot_g2_general(
                 else:
                     fig = plt.figure(figsize=(10, 10))
 
+        figure_list = fig if isinstance(fig, list) else [fig]
+
         if master_plot == "qz":
             if geometry == "ang_saxs":
-                title_short = "Angle= %.2f" % (short_ulabel[s_ind]) + r"$^\circ$"
+                title_short = f"φ = {short_ulabel[s_ind]:.2f}°"
             elif geometry == "gi_saxs":
                 title_short = r"$Q_z= $" + "%.4f" % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
             else:
                 title_short = ""
         else:  # qr
-            if geometry == "ang_saxs" or geometry == "gi_saxs":
+            if geometry == "ang_saxs":
+                title_short = f"|q| = {short_ulabel[s_ind]:.5f} Å⁻¹"
+            elif geometry == "gi_saxs":
                 title_short = r"$Q_r= $" + "%.5f  " % (short_ulabel[s_ind]) + r"$\AA^{-1}$"
             else:
                 title_short = ""
         # print(geometry)
         # filename =''
-        til = "%s:--->%s" % (filename, title_short)
-        if num_long_i <= 4:
-            plt.title(til, fontsize=14, y=1.15)
-            # plt.title( til,fontsize=20, y =1.06)
-            # print('here')
+        if geometry == "ang_saxs":
+            til = title_short
         else:
-            plt.title(til, fontsize=20, y=1.06)
+            til = "%s:--->%s" % (filename, title_short)
+        for page in figure_list:
+            title_weight = "bold" if title_short.startswith("|q|") else "normal"
+            page.suptitle(til, fontsize=13 if geometry == "ang_saxs" else 11, fontweight=title_weight)
+            if geometry == "ang_saxs":
+                page.text(0.01, 0.99, filename, fontsize=7, color="0.4", ha="left", va="top")
         # print( num_long )
         if num_long != 1:
-            # print( 'here')
-            plt.axis("off")
             # sy =   min(num_long_i,4)
             sy = min(num_long_i, int(np.ceil(min(max_plotnum_fig, num_long_i) / 4)))
             # fig.set_size_inches(10, 12)
@@ -5901,6 +5954,9 @@ def plot_g2_general(
         temp = sy
         sy = sx
         sx = temp
+        if tuple(figsize) == (10, 12):
+            for page in figure_list:
+                _size_g2_page(page, sx, sy)
 
         # print( num_long_i, sx, sy )
         # print( master_plot )
@@ -5923,39 +5979,52 @@ def plot_g2_general(
                 ax = fig[fig_subnum].add_subplot(sx, sy, i + 1 - fig_subnum * max_plotnum_fig)
 
             ax.set_ylabel(r"$%s$" % ylabel + "(" + r"$\tau$" + ")")
-            ax.set_xlabel(r"$\tau $ $(s)$", fontsize=16)
+            ax.set_xlabel(r"$\tau $ $(s)$", fontsize=10)
+            ax.tick_params(labelsize=8)
             if master_plot == "qz" or master_plot == "angle":
-                if geometry != "gi_waxs":
+                if geometry == "ang_saxs":
+                    title_long = f"|q| = {long_label[l_ind]:.5f} Å⁻¹"
+                elif geometry != "gi_waxs":
                     title_long = r"$Q_r= $" + "%.5f  " % (long_label[l_ind]) + r"$\AA^{-1}$"
                 else:
                     title_long = r"$Q_r= $" + "%i  " % (long_label[l_ind])
                 # print(  title_long,long_label,l_ind   )
             else:
                 if geometry == "ang_saxs":
-                    # title_long = 'Ang= ' + '%.2f'%(  long_label[l_ind] ) + r'$^\circ$' + '( %d )'%(l_ind)
-                    title_long = "Ang= " + "%.2f" % (long_label[l_ind])  # + r'$^\circ$' + '( %d )'%(l_ind)
+                    title_long = f"φ = {long_label[l_ind]:.2f}°"
                 elif geometry == "gi_saxs":
                     title_long = r"$Q_z= $" + "%.5f  " % (long_label[l_ind]) + r"$\AA^{-1}$"
                 else:
                     title_long = ""
             # print( master_plot )
             if master_plot != "qz":
-                ax.set_title(title_long + " (%s  )" % (1 + l_ind), y=1.1, fontsize=12)
+                if geometry == "ang_saxs":
+                    subplot_title = f"{title_long} · ROI {l_ind + 1}"
+                else:
+                    subplot_title = f"{title_long} ({l_ind + 1})"
+                ax.set_title(subplot_title, y=1.03, fontsize=9)
             else:
-                ax.set_title(title_long + " (%s  )" % (1 + l_ind), y=1.05, fontsize=fontsize_sublabel)
+                ax.set_title(
+                    title_long + " (%s)" % (1 + l_ind),
+                    y=1.03,
+                    fontsize=min(fontsize_sublabel, 9),
+                    fontweight="bold" if geometry == "ang_saxs" else "normal",
+                )
                 # print( geometry )
                 # print( title_long )
                 if qth_interest is not None:  # it might have a bug here, todolist!!!
                     lab = sorted(list(qval_dict_.keys()))
                     # print( lab, l_ind)
-                    ax.set_title(title_long + " (%s  )" % (lab[l_ind] + 1), y=1.05, fontsize=12)
+                    ax.set_title(
+                        title_long + " (%s)" % (lab[l_ind] + 1),
+                        y=1.03,
+                        fontsize=9,
+                        fontweight="bold" if geometry == "ang_saxs" else "normal",
+                    )
             for ki, k in enumerate(list(g2_dict_.keys())):
                 if ki == 0:
                     c = "b"
-                    if fit_res is None:
-                        m = "-o"
-                    else:
-                        m = "o"
+                    m = "-o"
                 elif ki == 1:
                     c = "r"
                     if fit_res is None:
@@ -5986,22 +6055,31 @@ def plot_g2_general(
                             ymin, ymax = min(y), max(y[1:])
                         if g2_err_dict is None:
                             if g2_labels is None:
-                                ax.semilogx(x, y, m, color=c, markersize=6)
+                                ax.semilogx(x, y, m, color=c, markersize=3, linewidth=1)
                             else:
                                 # print('here ki ={} nlst = {}'.format( ki, nlst ))
                                 if nlst == 0:
-                                    ax.semilogx(x, y, m, color=c, markersize=6, label=g2_labels[ki])
+                                    ax.semilogx(x, y, m, color=c, markersize=3, linewidth=1, label=g2_labels[ki])
                                 else:
-                                    ax.semilogx(x, y, m, color=c, markersize=6)
+                                    ax.semilogx(x, y, m, color=c, markersize=3, linewidth=1)
                         else:
                             yerr = g2_err_dict[k][nlst][:, l_ind]
                             if g2_labels is None:
-                                ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6)
+                                ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=3, linewidth=1)
                             else:
                                 if nlst == 0:
-                                    ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6, label=g2_labels[ki])
+                                    ax.errorbar(
+                                        x,
+                                        y,
+                                        yerr=yerr,
+                                        fmt=m,
+                                        color=c,
+                                        markersize=3,
+                                        linewidth=1,
+                                        label=g2_labels[ki],
+                                    )
                                 else:
-                                    ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6)
+                                    ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=3, linewidth=1)
                             ax.set_xscale("log", nonpositive="clip")
                         if g2_labels is not None and nlst == 0:
                             if l_ind == 0:
@@ -6014,17 +6092,26 @@ def plot_g2_general(
                         ymin, ymax = min(y), max(y[1:])
                     if g2_err_dict is None:
                         if g2_labels is None:
-                            ax.semilogx(x, y, m, color=c, markersize=6)
+                            ax.semilogx(x, y, m, color=c, markersize=3, linewidth=1)
                         else:
-                            ax.semilogx(x, y, m, color=c, markersize=6, label=g2_labels[ki])
+                            ax.semilogx(x, y, m, color=c, markersize=3, linewidth=1, label=g2_labels[ki])
                     else:
                         yerr = g2_err_dict[k][:, l_ind]
                         # print(x.shape, y.shape, yerr.shape)
                         # print(yerr)
                         if g2_labels is None:
-                            ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6)
+                            ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=3, linewidth=1)
                         else:
-                            ax.errorbar(x, y, yerr=yerr, fmt=m, color=c, markersize=6, label=g2_labels[ki])
+                            ax.errorbar(
+                                x,
+                                y,
+                                yerr=yerr,
+                                fmt=m,
+                                color=c,
+                                markersize=3,
+                                linewidth=1,
+                                label=g2_labels[ki],
+                            )
                         ax.set_xscale("log", nonpositive="clip")
                     if g2_labels is not None and l_ind == 0:
                         ax.legend(loc="best", fontsize=8, fancybox=True, framealpha=0.5)
@@ -6063,29 +6150,18 @@ def plot_g2_general(
                         pass
 
                 if rate != 0:
-                    txts = r"$\tau_0$" + r"$ = %.3f$" % (1 / rate) + r"$ s$"
+                    fit_text = [r"$\tau_0=%.3f\,\mathrm{s}$" % (1 / rate)]
                 else:
-                    txts = r"$\tau_0$" + r"$ = inf$" + r"$ s$"
-                x = 0.25
-                y0 = 0.9
-                fontsize = 12
-                ax.text(x=x, y=y0, s=txts, fontsize=fontsize, transform=ax.transAxes)
-                # print(function)
-                dt = 0
+                    fit_text = [r"$\tau_0=\infty\,\mathrm{s}$"]
                 if (
                     function != "flow_para_function"
                     and function != "flow_para"
                     and function != "flow_vibration"
                     and function != "flow_para_qang"
                 ):
-                    txts = r"$\alpha$" + r"$ = %.3f$" % (alpha)
-                    dt += 0.1
-                    # txts = r'$\beta$' + r'$ = %.3f$'%(beta[i]) +  r'$ s^{-1}$'
-                    ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                    fit_text.append(r"$\alpha=%.3f$" % alpha)
 
-                txts = r"$baseline$" + r"$ = %.3f$" % (baseline)
-                dt += 0.1
-                ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                fit_text.append(r"$b=%.3f$" % baseline)
 
                 if (
                     function == "flow_para_function"
@@ -6093,17 +6169,20 @@ def plot_g2_general(
                     or function == "flow_vibration"
                     or function == "flow_para_qang"
                 ):
-                    txts = r"$flow_v$" + r"$ = %.3f$" % (flow)
-                    dt += 0.1
-                    ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                    fit_text.append(r"$v_{flow}=%.3f$" % flow)
                 if function == "stretched_vibration" or function == "flow_vibration":
-                    txts = r"$vibration$" + r"$ = %.1f Hz$" % (freq)
-                    dt += 0.1
-                    ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                    fit_text.append(r"$f=%.1f\,\mathrm{Hz}$" % freq)
 
-                txts = r"$\beta$" + r"$ = %.3f$" % (beta)
-                dt += 0.1
-                ax.text(x=x, y=y0 - dt, s=txts, fontsize=fontsize, transform=ax.transAxes)
+                fit_text.append(r"$\beta=%.3f$" % beta)
+                ax.text(
+                    0.04,
+                    0.96,
+                    "\n".join(fit_text),
+                    fontsize=7,
+                    va="top",
+                    transform=ax.transAxes,
+                    bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.72, "pad": 1.5},
+                )
 
             if "ylim" in kwargs:
                 ax.set_ylim(kwargs["ylim"])
@@ -6124,35 +6203,41 @@ def plot_g2_general(
 
         if append_name != "":
             fp = fp + append_name
-        fps.append(fp + ".png")
         # if num_long_i <= 16:
         if num_long_i <= max_plotnum_fig:
-            fig.tight_layout()
+            _adjust_g2_page_layout(fig, sx, sy)
             # print(fig)
             try:
-                plt.savefig(fp + ".png", dpi=fig.dpi)
+                fig.savefig(fp + ".png", dpi=fig.dpi, pil_kwargs={"compress_level": 3})
+                all_fps.append(fp + ".png")
             except Exception:
                 print("Can not save figure here.")
 
         else:
-            fps = []
             for fn, f in enumerate(fig):
-                f.tight_layout()
-                fp = path + filename + "_q_%s_%s" % (fn * 16, (fn + 1) * 16)
+                _adjust_g2_page_layout(f, sx, sy)
+                if num_short == 1:
+                    fp = path + filename
+                else:
+                    fp = path + filename + "_%s_%s" % (mastp, s_ind)
+                fp += "_q_%s_%s" % (
+                    fn * max_plotnum_fig,
+                    min((fn + 1) * max_plotnum_fig, num_long_i),
+                )
                 if append_name != "":
                     fp = fp + append_name
-                fps.append(fp + ".png")
-                f.savefig(fp + ".png", dpi=f.dpi)
+                all_fps.append(fp + ".png")
+                f.savefig(fp + ".png", dpi=f.dpi, pil_kwargs={"compress_level": 3})
         # plt.savefig( fp + '.png', dpi=fig.dpi)
     # combine each saved images together
 
-    if (num_short != 1) or (num_long_i > 16):
+    if (num_short != 1) or (num_long_i > max_plotnum_fig):
         outputfile = path + filename + ".png"
         if append_name != "":
             outputfile = path + filename + append_name + "__joint.png"
         else:
             outputfile = path + filename + "__joint.png"
-        combine_images(fps, outputfile, outsize=outsize)
+        combine_images(all_fps, outputfile, outsize=outsize)
     if return_fig:
         return fig
 

@@ -56,6 +56,24 @@ def test_functions_do_not_use_mutable_literal_defaults():
 
 
 @pytest.mark.portable
+@pytest.mark.parametrize("module_name", ["chx_correlation", "chx_correlationc"])
+def test_correlation_state_preserves_sparse_label_order_and_dtype(module_name):
+    import importlib
+
+    module = importlib.import_module(f"pyCHX.{module_name}")
+    labels = np.asarray([[0, 1000, 5], [9, 1000, 5]], dtype=np.int16)
+
+    state = module._validate_and_transform_inputs(num_bufs=4, num_levels=2, labels=labels)
+    remapped_labels, pixel_list, num_rois, num_pixels = state[:4]
+
+    np.testing.assert_array_equal(pixel_list, [1, 2, 3, 4, 5])
+    np.testing.assert_array_equal(remapped_labels, [3, 1, 2, 3, 1])
+    np.testing.assert_array_equal(num_pixels, [2, 1, 2])
+    assert remapped_labels.dtype == labels.dtype
+    assert num_rois == 3
+
+
+@pytest.mark.portable
 def test_file_consumers_do_not_receive_unmanaged_open_streams():
     package = Path(__file__).parents[1]
     offenders = []
@@ -450,6 +468,10 @@ def test_array_two_time_helpers_support_sparse_roi_labels():
     np.testing.assert_allclose(mean_intensity[2], data[:, :2].mean(axis=1))
     np.testing.assert_allclose(mean_intensity[5], data[:, 2:].mean(axis=1))
     np.testing.assert_array_equal(auto_two_Arrayc(data, roi_mask, index=5), expected_auto[:, :, 1:])
+    np.testing.assert_array_equal(auto_two_Arrayc(data, roi_mask, index=[5, 2]), expected_auto[:, :, ::-1])
+    duplicated = auto_two_Arrayc(data, roi_mask, index=[2, 2])
+    np.testing.assert_array_equal(duplicated[:, :, 0], expected_auto[:, :, 0])
+    np.testing.assert_array_equal(duplicated[:, :, 1], expected_auto[:, :, 0])
 
     with pytest.raises(ValueError, match="ROI labels not present"):
         auto_two_Arrayc(data, roi_mask, index=3)
@@ -477,6 +499,45 @@ def test_production_two_time_path_prenormalizes_before_symmetric_blas(monkeypatc
     assert observed["alpha"] == pytest.approx(1 / data.shape[1])
     np.testing.assert_allclose(observed["means"], 1.0, rtol=1e-14, atol=1e-14)
     np.testing.assert_allclose(actual, expected, rtol=2e-13, atol=1e-14)
+
+
+@pytest.mark.portable
+@pytest.mark.parametrize("use_data_mean", [True, False])
+def test_two_time_gather_normalizes_private_float64_copy_in_place(use_data_mean):
+    from pyCHX.chx_correlationc import _prepare_two_time_roi, _upper_two_time_product
+
+    generator = np.random.default_rng(29)
+    data = 0.5 + generator.random((512, 512))
+    original = data.copy()
+    norm = None if use_data_mean else 0.5 + generator.random(data.shape)
+    original_norm = None if norm is None else norm.copy()
+    selected, row_norm, input_pre_normalized = _prepare_two_time_roi(
+        data,
+        np.arange(data.shape[1]),
+        norm=norm,
+        use_data_mean=use_data_mean,
+    )
+
+    normalization_source = original if use_data_mean else original_norm
+    expected_norm = np.average(normalization_source[:, np.arange(data.shape[1])], axis=1)
+    expected_selected = original / row_norm[:, None]
+    assert input_pre_normalized is True
+    assert selected.flags.f_contiguous
+    np.testing.assert_array_equal(data, original)
+    np.testing.assert_array_equal(row_norm, expected_norm)
+    if norm is not None:
+        np.testing.assert_array_equal(norm, original_norm)
+    np.testing.assert_array_equal(selected, expected_selected)
+
+    upper, pre_normalized = _upper_two_time_product(
+        selected,
+        row_norm,
+        selected.shape[1],
+        input_pre_normalized=input_pre_normalized,
+    )
+    expected_upper = np.triu(np.dot(expected_selected, expected_selected.T) / selected.shape[1])
+    assert pre_normalized is True
+    np.testing.assert_allclose(np.triu(upper), expected_upper, rtol=2e-13, atol=1e-14)
 
 
 @pytest.mark.portable
@@ -1074,6 +1135,12 @@ def test_image_file_helpers_support_standard_png_images(tmp_path):
     with Image.open(output) as combined:
         assert combined.size == (8, 8)
 
+    jpeg_output = tmp_path / "combined.jpg"
+    combine_images([first, second], jpeg_output, outsize=(64, 64))
+    with Image.open(jpeg_output) as combined:
+        assert combined.size == (64, 64)
+        assert combined.quantization[0][:8] == [1] * 8
+
 
 @pytest.mark.portable
 def test_validate_uid_dict_checks_the_passed_mapping(monkeypatch, capsys):
@@ -1249,7 +1316,188 @@ def test_general_g2_plot_supports_error_bars(tmp_path):
         assert (tmp_path / "synthetic_g2.png").is_file()
         data_axes = [axes for axes in figure.axes if axes.has_data()]
         assert len(data_axes) == 2
+        assert figure.get_size_inches()[1] < 5
         assert all(axes.get_xscale() == "log" for axes in data_axes)
+    finally:
+        plt.close(figure)
+
+
+@pytest.mark.portable
+def test_large_angular_g2_plot_keeps_every_curve_and_data_marker(tmp_path):
+    from pyCHX.chx_generic_functions import plot_g2_general
+
+    taus = np.geomspace(1e-3, 10, 20)
+    q_values = {
+        index: np.asarray(
+            [
+                0.01 + 0.001 * (index // 13) + (7e-8 if index % 13 in {1, 4, 7, 10} else 0),
+                -90 + 15 * (index % 13),
+            ]
+        )
+        for index in range(65)
+    }
+    g2 = np.column_stack([1 + 0.1 * np.exp(-(1 + index // 13) * taus) for index in range(65)])
+    old_figures = set(plt.get_fignums())
+    _ = plot_g2_general(
+        {1: g2, 2: g2 * 0.999},
+        {1: taus, 2: taus},
+        q_values,
+        geometry="ang_saxs",
+        filename="angular_g2",
+        path=f"{tmp_path}/",
+        return_fig=True,
+    )
+    try:
+        created = [plt.figure(number) for number in set(plt.get_fignums()) - old_figures]
+        data_axes = [axes for page in created for axes in page.axes if axes.has_data()]
+        assert len(created) == 5
+        assert all(len([axes for axes in page.axes if axes.has_data()]) == 13 for page in created)
+        assert len(data_axes) == 65
+        assert all(len(axes.lines) == 2 for axes in data_axes)
+        assert all(axes.lines[0].get_marker() == "o" for axes in data_axes)
+        assert all(axes.lines[0].get_linestyle() == "-" for axes in data_axes)
+        assert all(page.get_size_inches()[0] >= 12 for page in created)
+        assert all(page._suptitle.get_text().startswith("|q| = ") for page in created)
+        assert all(page._suptitle.get_fontweight() == "bold" for page in created)
+        assert all("φ = " in axes.get_title() and "° · ROI " in axes.get_title() for axes in data_axes)
+        assert (tmp_path / "angular_g2__joint.png").is_file()
+    finally:
+        for number in set(plt.get_fignums()) - old_figures:
+            plt.close(number)
+
+
+@pytest.mark.portable
+def test_large_isotropic_g2_plot_keeps_every_q_curve(tmp_path):
+    from pyCHX.chx_generic_functions import plot_g2_general
+
+    taus = np.geomspace(1e-3, 10, 20)
+    q = np.linspace(0.002, 0.08, 65)
+    q_values = {index: np.asarray([value]) for index, value in enumerate(q)}
+    g2 = np.column_stack([1 + 0.1 * np.exp(-(1 + 20 * value) * taus) for value in q])
+    old_figures = set(plt.get_fignums())
+    figures = plot_g2_general(
+        {1: g2},
+        {1: taus},
+        q_values,
+        geometry="saxs",
+        filename="isotropic_g2",
+        path=f"{tmp_path}/",
+        return_fig=True,
+    )
+    try:
+        assert isinstance(figures, list)
+        data_axes = [axes for figure in figures for axes in figure.axes if axes.has_data()]
+        assert len(data_axes) == 65
+        assert all(axes.get_xscale() == "log" for axes in data_axes)
+        assert all(axes.lines[0].get_marker() == "o" for axes in data_axes)
+        assert (tmp_path / "isotropic_g2__joint.png").is_file()
+    finally:
+        for number in set(plt.get_fignums()) - old_figures:
+            plt.close(number)
+
+
+@pytest.mark.portable
+def test_paginated_g2_plot_preserves_explicit_figure_size(tmp_path):
+    from pyCHX.chx_generic_functions import plot_g2_general
+
+    taus = np.geomspace(1e-3, 10, 8)
+    q_values = {index: np.asarray([value]) for index, value in enumerate(np.linspace(0.002, 0.08, 20))}
+    g2 = np.column_stack([1 + 0.1 * np.exp(-taus) for _ in q_values])
+    figures = plot_g2_general(
+        {1: g2},
+        {1: taus},
+        q_values,
+        geometry="saxs",
+        filename="explicit_size_g2",
+        path=f"{tmp_path}/",
+        figsize=(7, 5),
+        return_fig=True,
+    )
+    try:
+        assert isinstance(figures, list)
+        assert len(figures) == 2
+        for figure in figures:
+            np.testing.assert_allclose(figure.get_size_inches(), [7, 5])
+    finally:
+        for figure in figures:
+            plt.close(figure)
+
+
+@pytest.mark.portable
+def test_many_roi_intensity_plot_uses_heatmap_and_compact_summary(tmp_path):
+    from PIL import Image
+
+    from pyCHX.chx_compress_analysis import plot_each_ring_mean_intensityc
+
+    times = np.arange(40)
+    intensities = 1 + times[:, None] / 20 + np.arange(30)[None, :]
+    plot_each_ring_mean_intensityc(
+        times,
+        intensities,
+        uid="synthetic",
+        save=True,
+        path=f"{tmp_path}/",
+    )
+    figure = plt.gcf()
+    try:
+        heatmap_axes = figure.axes[0]
+        np.testing.assert_array_equal(heatmap_axes.images[0].get_array(), intensities.T)
+        assert heatmap_axes.get_ylabel() == "ROI"
+        assert figure.axes[1].get_xlabel() == "Frame"
+        with Image.open(tmp_path / "synthetic_t_ROIs.png") as image:
+            assert image.width > image.height
+    finally:
+        plt.close(figure)
+
+
+@pytest.mark.portable
+def test_two_time_plot_uses_compact_scientific_labels(tmp_path):
+    from pyCHX.Two_Time_Correlation_Function import show_C12
+
+    correlation = np.linspace(1.0, 1.2, 50).reshape(5, 5, 2)
+    correlation[1, 3, 1] = np.nan
+    figure, axes, image = show_C12(
+        correlation,
+        q_ind=2,
+        qlabel={0: [0.01, -15], 1: [0.02, 30]},
+        logs=False,
+        uid="synthetic-uid",
+        save=True,
+        path=f"{tmp_path}/",
+        return_fig=True,
+    )
+    try:
+        np.testing.assert_allclose(figure.get_size_inches(), [6.4, 4.8])
+        assert axes.get_aspect() == 1.0
+        assert "TTCF — ROI 2" in axes.get_title(loc="left")
+        assert "0.02" in axes.get_title(loc="left")
+        assert any(text.get_text() == "synthetic-uid" for text in figure.texts)
+        assert figure.axes[-1].get_ylabel() == r"$g_2(t_1,t_2)$"
+        np.testing.assert_array_equal(image.get_array(), correlation[:, :, 1])
+        np.testing.assert_allclose(image.cmap.get_bad(), [0.9, 0.9, 0.9, 1.0])
+        assert np.isnan(correlation[1, 3, 1])
+        assert (tmp_path / "synthetic-uid_Two_time.png").is_file()
+    finally:
+        plt.close(figure)
+
+
+@pytest.mark.portable
+def test_two_time_plot_accepts_textual_q_labels(tmp_path):
+    from pyCHX.Two_Time_Correlation_Function import show_C12
+
+    correlation = np.ones((3, 3, 1), dtype=np.float64)
+    figure, axes, _ = show_C12(
+        correlation,
+        q_ind=1,
+        qlabel=["custom q label"],
+        logs=False,
+        uid="synthetic-uid",
+        save=False,
+        path=f"{tmp_path}/",
+        return_fig=True,
+    )
+    try:
+        assert "custom q label" in axes.get_title(loc="left")
     finally:
         plt.close(figure)
 

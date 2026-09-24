@@ -379,11 +379,11 @@ def _validate_and_transform_inputs(num_bufs, num_levels, labels):
         raise ValueError("There must be an even number of `num_bufs`. You " "provided %s" % num_bufs)
     label_array, pixel_list = extract_label_indices(labels)
 
-    # map the indices onto a sequential list of integers starting at 1
-    label_mapping = {label: n + 1 for n, label in enumerate(np.unique(label_array))}
-    # remap the label array to go from 1 -> max(_labels)
-    for label, n in label_mapping.items():
-        label_array[label_array == label] = n
+    # Map sparse labels onto a sequential list in one grouped pass. Preserve
+    # the label dtype exposed through the resumable correlation state.
+    unique_labels, inverse = np.unique(label_array, return_inverse=True)
+    label_mapping = {label: n + 1 for n, label in enumerate(unique_labels)}
+    label_array = (inverse + 1).astype(label_array.dtype, copy=False)
 
     # number of ROI's
     num_rois = len(label_mapping)
@@ -1791,7 +1791,7 @@ class Get_Pixel_Arrayc(object):
 def _select_two_time_rois(rois, index):
     """Return flattened ROI labels, selected labels, and their pixel counts."""
     qind, _ = roi.extract_label_indices(rois)
-    roi_labels = np.unique(qind)
+    roi_labels, roi_counts = np.unique(qind, return_counts=True)
     if index is None:
         selected_labels = roi_labels
     else:
@@ -1801,8 +1801,17 @@ def _select_two_time_rois(rois, index):
             raise ValueError(f"ROI labels not present in rois: {missing_labels.tolist()}")
     if selected_labels.size == 0:
         raise ValueError("rois contains no positive ROI labels")
-    pixel_counts = np.array([np.count_nonzero(qind == label) for label in selected_labels])
+    pixel_counts = roi_counts[np.searchsorted(roi_labels, selected_labels)]
     return qind, selected_labels, pixel_counts
+
+
+def _group_two_time_roi_pixels(qind, selected_labels):
+    """Group selected-pixel columns by ROI while preserving column order."""
+    order = np.argsort(qind, kind="stable")
+    ordered_labels = qind[order]
+    starts = np.searchsorted(ordered_labels, selected_labels, side="left")
+    stops = np.searchsorted(ordered_labels, selected_labels, side="right")
+    return [order[start:stop] for start, stop in zip(starts, stops)]
 
 
 def _symmetric_two_time_product(data, row_norm, pixel_count):
@@ -1822,10 +1831,22 @@ def _symmetric_two_time_product(data, row_norm, pixel_count):
     return correlation
 
 
-def _upper_two_time_product(data, row_norm, pixel_count, output=None):
+def _upper_two_time_product(data, row_norm, pixel_count, output=None, input_pre_normalized=False):
     """Compute one ROI's upper triangle, optionally into a reusable buffer."""
     pre_normalized = False
-    if np.issubdtype(data.dtype, np.floating):
+    if input_pre_normalized:
+        kwargs = {}
+        if output is not None:
+            kwargs = {"c": output, "overwrite_c": 1}
+        correlation = dsyrk(
+            1.0 / pixel_count,
+            np.asarray(data, dtype=np.float64, order="F"),
+            lower=0,
+            trans=0,
+            **kwargs,
+        )
+        pre_normalized = True
+    elif np.issubdtype(data.dtype, np.floating):
         if data.size >= 262_144 and np.all(np.isfinite(row_norm)) and np.all(row_norm != 0):
             fortran_data = np.asarray(data, dtype=np.float64, order="F")
             if np.all(row_norm == 1):
@@ -1857,6 +1878,30 @@ def _upper_two_time_product(data, row_norm, pixel_count, output=None):
     return correlation, pre_normalized
 
 
+def _prepare_two_time_roi(data_pixel, pixel_indices, norm=None, use_data_mean=True):
+    """Gather one ROI and normalize its private float64 copy when safe."""
+    selected_data = data_pixel[:, pixel_indices]
+    if use_data_mean:
+        row_norm = np.average(selected_data, axis=1)
+    elif norm is None:
+        row_norm = np.ones(data_pixel.shape[0], dtype=np.float64)
+    else:
+        row_norm = np.average(norm[:, pixel_indices], axis=1)
+
+    input_pre_normalized = False
+    if (
+        selected_data.dtype == np.float64
+        and selected_data.size >= 262_144
+        and np.all(np.isfinite(row_norm))
+        and np.all(row_norm != 0)
+    ):
+        selected_data = np.asarray(selected_data, dtype=np.float64, order="F")
+        if not np.all(row_norm == 1):
+            selected_data /= row_norm[:, None]
+        input_pre_normalized = True
+    return selected_data, row_norm, input_pre_normalized
+
+
 def _two_time_batch_size(frame_count, roi_count):
     """Choose a cache-friendly batch while bounding its square work buffers."""
     matrix_bytes = max(1, frame_count * frame_count * np.dtype(np.float64).itemsize)
@@ -1886,13 +1931,12 @@ def _fill_two_time_output(
         batch_index = roi_index - batch_start
         batch_count = min(batch_size, roi_count - batch_start)
         pixel_indices = roi_pixel_indices[roi_index]
-        selected_data = data_pixel[:, pixel_indices]
-        if use_data_mean:
-            row_norm = np.average(selected_data, axis=1)
-        elif norm is None:
-            row_norm = np.ones(frame_count, dtype=np.float64)
-        else:
-            row_norm = np.average(norm[:, pixel_indices], axis=1)
+        selected_data, row_norm, input_pre_normalized = _prepare_two_time_roi(
+            data_pixel,
+            pixel_indices,
+            norm=norm,
+            use_data_mean=use_data_mean,
+        )
         row_norms[:, batch_index] = row_norm
         batch_pixel_counts[batch_index] = pixel_counts[roi_index]
         _, pre_normalized[batch_index] = _upper_two_time_product(
@@ -1900,6 +1944,7 @@ def _fill_two_time_output(
             row_norm,
             pixel_counts[roi_index],
             output=upper_triangles[:, :, batch_index],
+            input_pre_normalized=input_pre_normalized,
         )
         if batch_index + 1 == batch_count:
             store_symmetric_two_time_batch(
@@ -1936,7 +1981,7 @@ def auto_two_Arrayc(data_pixel, rois, index=None):
     """
 
     qind, qlist, nopr = _select_two_time_rois(rois, index)
-    roi_pixel_indices = [np.flatnonzero(qind == label) for label in qlist]
+    roi_pixel_indices = _group_two_time_roi_pixels(qind, qlist)
     noframes = data_pixel.shape[0]
     # print( qlist )
     try:
@@ -1997,7 +2042,7 @@ def auto_two_Arrayc_ExplicitNorm(data_pixel, rois, norm=None, index=None):
         """TO be done here  """
         DO = False
     if DO:
-        roi_pixel_indices = [np.flatnonzero(qind == label) for label in qlist]
+        roi_pixel_indices = _group_two_time_roi_pixels(qind, qlist)
         core_count = physical_core_count()
         with (
             threadpool_limits(limits=core_count, user_api="blas"),
@@ -2051,9 +2096,9 @@ def two_time_norm(data_pixel, rois, index=None):
         DO = False
 
     if DO:
-        for i, qi in enumerate(tqdm(qlist)):
+        roi_pixel_indices = _group_two_time_roi_pixels(qind, qlist)
+        for i, pixelist_qi in enumerate(tqdm(roi_pixel_indices)):
             # print (qi-1)
-            pixelist_qi = np.where(qind == qi)[0]
             # print (pixelist_qi.shape,  data_pixel[qi].shape)
             data_pixel_qi = data_pixel[:, pixelist_qi]
             sum1 = (np.average(data_pixel_qi, axis=1)).reshape(1, noframes)

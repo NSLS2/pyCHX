@@ -799,11 +799,11 @@ def _validate_and_transform_inputs(num_bufs, num_levels, labels):
         raise ValueError("There must be an even number of `num_bufs`. You " "provided %s" % num_bufs)
     label_array, pixel_list = extract_label_indices(labels)
 
-    # map the indices onto a sequential list of integers starting at 1
-    label_mapping = {label: n + 1 for n, label in enumerate(np.unique(label_array))}
-    # remap the label array to go from 1 -> max(_labels)
-    for label, n in label_mapping.items():
-        label_array[label_array == label] = n
+    # Map sparse labels onto a sequential list in one grouped pass. Preserve
+    # the label dtype exposed through the resumable correlation state.
+    unique_labels, inverse = np.unique(label_array, return_inverse=True)
+    label_mapping = {label: n + 1 for n, label in enumerate(unique_labels)}
+    label_array = (inverse + 1).astype(label_array.dtype, copy=False)
 
     # number of ROI's
     num_rois = len(label_mapping)

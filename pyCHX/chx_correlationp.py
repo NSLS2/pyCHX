@@ -7,6 +7,7 @@ This module is for parallel computation of time correlation
 from __future__ import absolute_import, division, print_function
 
 import logging
+import time as _time
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -685,6 +686,8 @@ def cal_g2p(
     for a compressed file with parallel calculation
     if return_g2_details: return g2 with g2_denomitor, g2_past, g2_future
     """
+    stage_stats = getattr(FD, "_one_time_stats", None)
+    setup_started = _time.perf_counter() if stage_stats is not None else None
     FD.beg = max(FD.beg, good_start)
     noframes = FD.end - FD.beg + 1  # preserve the historical level-selection convention
     if num_lev is None:
@@ -697,13 +700,11 @@ def cal_g2p(
     print("%s frames will be processed..." % (noframes - 1))
 
     qind, pixel_list = roi.extract_label_indices(ring_mask)
-    roi_labels = np.unique(qind)
+    roi_labels, pixel_counts = np.unique(qind, return_counts=True)
     if roi_labels.size == 0:
         raise ValueError("ring_mask contains no positive ROI labels")
-    original_columns = [np.flatnonzero(qind == label) for label in roi_labels]
-    permutation = np.concatenate(original_columns)
+    permutation = np.argsort(qind, kind="stable")
     grouped_pixels = np.asarray(pixel_list[permutation], dtype=np.int64)
-    pixel_counts = np.asarray([len(columns) for columns in original_columns], dtype=np.int64)
     roi_starts = np.concatenate(([0], np.cumsum(pixel_counts))).astype(np.int64)
 
     lookup = np.full(FD.md["ncols"] * FD.md["nrows"], -1, dtype=np.int64)
@@ -750,6 +751,21 @@ def cal_g2p(
     groups = _balance_roi_jobs(pixel_counts, worker_count)
     target_bytes = min(256 * 1024**2, max(8 * grouped_pixels.size, int(available_memory_bytes() * 0.10)))
     block_frames = max(1, min(1024, target_bytes // max(8, 8 * grouped_pixels.size)))
+    double_buffer = worker_count > 1 and getattr(FD, "_one_time_double_buffer", True)
+    if double_buffer:
+        block_frames = max(1, block_frames // 2)
+    if stage_stats is not None:
+        stage_stats.update(
+            {
+                "setup_seconds": _time.perf_counter() - setup_started,
+                "worker_count": worker_count,
+                "block_frames": int(block_frames),
+                "roi_count": int(roi_labels.size),
+                "selected_pixel_count": int(grouped_pixels.size),
+                "minimum_group_pixels": int(min(sum(pixel_counts[index] for index in group) for group in groups)),
+                "maximum_group_pixels": int(max(sum(pixel_counts[index] for index in group) for group in groups)),
+            }
+        )
 
     def process_group(group, block):
         for roi_index in group:
@@ -773,47 +789,130 @@ def cal_g2p(
                 cal_error,
             )
 
-    if hasattr(FD, "_ensure_index"):
+    use_buffered_reader = hasattr(FD, "_iter_raw_frames_buffered") and getattr(
+        FD, "_one_time_use_buffered_reader", True
+    )
+    index_started = _time.perf_counter() if stage_stats is not None else None
+    if hasattr(FD, "_ensure_index") and not use_buffered_reader:
         FD._ensure_index()
+    if stage_stats is not None:
+        stage_stats["index_seconds"] = _time.perf_counter() - index_started
+        stage_stats["reader"] = "buffered" if use_buffered_reader else "indexed"
+    if use_buffered_reader:
+        read_block_size = getattr(FD, "_buffered_read_block_size", 8 * 1024**2)
+        frame_iterator = iter(FD._iter_raw_frames_buffered(FD.beg, FD.end, block_size=read_block_size))
+    else:
+        frame_iterator = None
+    populate_seconds = 0.0
+    correlate_seconds = 0.0
+    pipeline_wait_seconds = 0.0
+    block_count = 0
     executor = ThreadPoolExecutor(max_workers=worker_count) if worker_count > 1 else None
-    try:
-        starts = range(FD.beg, FD.end, block_frames)
-        for block_start in tqdm(starts, desc="Correlating frame blocks"):
-            block_stop = min(FD.end, block_start + block_frames)
-            block = np.zeros((block_stop - block_start, grouped_pixels.size), dtype=np.float64)
-            for output_row, frame_index in enumerate(range(block_start, block_stop)):
-                if frame_index in bad_frames:
-                    block[output_row].fill(np.nan)
-                    continue
+
+    def populate_block(block, block_start, block_stop):
+        block[: block_stop - block_start].fill(0)
+        for output_row, frame_index in enumerate(range(block_start, block_stop)):
+            if frame_iterator is not None:
+                actual_frame_index, (positions, values) = next(frame_iterator)
+                if actual_frame_index != frame_index:
+                    raise RuntimeError("buffered CMP reader returned frames out of order")
+            if frame_index in bad_frames:
+                block[output_row].fill(np.nan)
+                continue
+            if frame_iterator is None:
                 if hasattr(FD, "_raw_frame_view"):
                     positions, values = FD._raw_frame_view(frame_index)
                 else:
                     positions, values = FD.rdrawframe(frame_index)
-                sparse_scatter_normalized(
-                    positions,
-                    values,
-                    lookup,
-                    block,
-                    output_row,
-                    frame_index,
-                    norm_1d,
-                    norm_2d,
-                    norm_columns,
-                    image_sums,
-                    dummy_means,
-                    dummy_qind,
-                    normalization_flags,
-                )
+            sparse_scatter_normalized(
+                positions,
+                values,
+                lookup,
+                block,
+                output_row,
+                frame_index,
+                norm_1d,
+                norm_2d,
+                norm_columns,
+                image_sums,
+                dummy_means,
+                dummy_qind,
+                normalization_flags,
+            )
+
+    def submit_block(block):
+        if executor is None:
+            process_group(groups[0], block)
+            return None
+        return [executor.submit(process_group, group, block) for group in groups]
+
+    def wait_for_block(futures):
+        if futures is not None:
+            for future in futures:
+                future.result()
+
+    try:
+        starts = list(range(FD.beg, FD.end, block_frames))
+        buffers = [
+            np.empty((block_frames, grouped_pixels.size), dtype=np.float64)
+            for _ in range(2 if double_buffer else 1)
+        ]
+        pending = None
+        pending_started = None
+        for block_number, block_start in enumerate(tqdm(starts, desc="Correlating frame blocks")):
+            populate_started = _time.perf_counter() if stage_stats is not None else None
+            block_stop = min(FD.end, block_start + block_frames)
+            block = buffers[block_number % len(buffers)][: block_stop - block_start]
+            populate_block(block, block_start, block_stop)
+            if stage_stats is not None:
+                populate_seconds += _time.perf_counter() - populate_started
+            if pending is not None:
+                wait_started = _time.perf_counter()
+                wait_for_block(pending)
+                pipeline_wait_seconds += _time.perf_counter() - wait_started
+                if stage_stats is not None:
+                    correlate_seconds += _time.perf_counter() - pending_started
+            correlate_started = _time.perf_counter()
+            pending = submit_block(block)
+            pending_started = correlate_started
             if executor is None:
-                process_group(groups[0], block)
+                if stage_stats is not None:
+                    correlate_seconds += _time.perf_counter() - correlate_started
+                pending_started = None
+            elif not double_buffer:
+                wait_for_block(pending)
+                if stage_stats is not None:
+                    correlate_seconds += _time.perf_counter() - correlate_started
+                pending = None
+                pending_started = None
+            if stage_stats is not None:
+                block_count += 1
+        if pending is not None:
+            wait_started = _time.perf_counter()
+            wait_for_block(pending)
+            pipeline_wait_seconds += _time.perf_counter() - wait_started
+            if stage_stats is not None:
+                correlate_seconds += _time.perf_counter() - pending_started
+        if frame_iterator is not None:
+            try:
+                next(frame_iterator)
+            except StopIteration:
+                pass
             else:
-                futures = [executor.submit(process_group, group, block) for group in groups]
-                for future in futures:
-                    future.result()
+                raise RuntimeError("buffered CMP reader returned more frames than requested")
     finally:
+        if frame_iterator is not None:
+            frame_iterator.close()
         if executor is not None:
             executor.shutdown()
+    if stage_stats is not None:
+        stage_stats["populate_blocks_seconds"] = populate_seconds
+        stage_stats["correlate_blocks_seconds"] = correlate_seconds
+        stage_stats["pipeline_wait_seconds"] = pipeline_wait_seconds
+        stage_stats["double_buffer"] = double_buffer
+        stage_stats["block_count"] = block_count
 
+    finalize_started = _time.perf_counter() if stage_stats is not None else None
     if not cal_error:
         roi_results = []
         valid_lengths = []
@@ -829,6 +928,8 @@ def cal_g2p(
             )
         common_length = min(valid_lengths)
         g2 = np.column_stack([result[:common_length] for result in roi_results])
+        if stage_stats is not None:
+            stage_stats["finalize_seconds"] = _time.perf_counter() - finalize_started
         print("G2 calculation DONE!")
         return g2, lag_steps[:common_length]
 
@@ -856,6 +957,8 @@ def cal_g2p(
             * dev_past[:valid_length] ** 2
         )
         maximum_length = max(maximum_length, valid_length)
+    if stage_stats is not None:
+        stage_stats["finalize_seconds"] = _time.perf_counter() - finalize_started
     print("G2 with error bar calculation DONE!")
     return (
         g2[:maximum_length],

@@ -1256,6 +1256,9 @@ def show_C12(
     else:
         title = True
 
+    # Keep this as a view of one ROI. The image renderer handles non-finite
+    # pixels, so callers do not need to copy the complete 3D array with
+    # ``np.nan_to_num`` before plotting.
     data = C12[N1:N2, N1:N2, C12_num]
     if fig_ax is None:
         if RUN_GUI:
@@ -1268,39 +1271,60 @@ def show_C12(
 
     # extent=[0, data.shape[0]*timeperframe, 0, data.shape[0]*timeperframe ]
     extent = np.array([N1, N2, N1, N2]) * timeperframe + timeoffset  # added timeoffset to extend
+    plot_cmap = plt.get_cmap(cmap).with_extremes(bad=(0.9, 0.9, 0.9, 1.0))
 
     if logs:
         im = imshow(
             ax,
             data,
             origin="lower",
-            cmap=cmap,
+            cmap=plot_cmap,
             norm=LogNorm(vmin, vmax),
             interpolation=interpolation,
             extent=extent,
         )
     else:
         im = imshow(
-            ax, data, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax, interpolation=interpolation, extent=extent
+            ax,
+            data,
+            origin="lower",
+            cmap=plot_cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation=interpolation,
+            extent=extent,
         )
     if qlabel is not None:
         if isinstance(q_ind, int):
-            qstr = "Qth= %s-qval=%s" % (C12_num + 1, qlabel[C12_num])
+            label_value = qlabel[C12_num]
+            qvalue = np.atleast_1d(label_value)
+            try:
+                if qvalue.size > 1:
+                    qstr = r"$q_r=%.5g\,\AA^{-1}$, $\phi=%.2f^\circ$" % (qvalue[0], qvalue[1])
+                else:
+                    qstr = r"$q=%.5g\,\AA^{-1}$" % qvalue[0]
+            except (TypeError, ValueError):
+                qstr = str(label_value)
     else:
-        qstr = "Qth= %s" % (C12_num + 1)
+        qstr = None
     if title:
         if isinstance(q_ind, int):
-            tit = "%s-[%s-%s] frames--" % (uid, N1, N2) + qstr
+            tit = "TTCF — ROI %s · frames %s:%s" % (C12_num + 1, N1, N2)
+            if qstr is not None:
+                tit += "\n" + qstr
         else:
-            tit = "%s-[%s-%s] frames--Qzth= %s--Qrth= %s" % (uid, N1, N2, qz_ind, qr_ind)
-        ax.set_title(tit)
+            tit = "TTCF — frames %s:%s · Qz %s · Qr %s" % (N1, N2, qz_ind, qr_ind)
+        ax.set_title(tit, fontsize=11, loc="left", pad=10)
+        fig.text(0.99, 0.01, str(uid), fontsize=7, color="0.4", ha="right", va="bottom")
     else:
         tit = ""
         # ax.set_title('%s-%s frames--Qth= %s'%(N1,N2,g12_num))
     ax.set_xlabel(r"$t_1$ $(s)$", fontsize=18)
     ax.set_ylabel(r"$t_2$ $(s)$", fontsize=18)
+    ax.set_aspect("equal")
     if show_colorbar:
-        fig.colorbar(im)
+        colorbar = fig.colorbar(im, ax=ax, pad=0.02)
+        colorbar.set_label(r"$g_2(t_1,t_2)$")
 
     save = False
     if "save" in kwargs:
@@ -1309,7 +1333,7 @@ def show_C12(
         path = kwargs["path"]
         # fp = path + 'Two-time--uid=%s'%(uid) + tit + CurTime + '.png'
         fp = path + "%s_Two_time" % (uid) + ".png"
-        plt.savefig(fp, dpi=fig.dpi)
+        fig.savefig(fp, dpi=fig.dpi, pil_kwargs={"compress_level": 3})
 
     if return_fig:
         return fig, ax, im
