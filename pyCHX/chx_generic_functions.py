@@ -1139,7 +1139,7 @@ def get_eigerImage_per_file(data_fullpath):
         return len(dset)
 
 
-def copy_data(old_path, new_path="/tmp_data/data/"):
+def copy_data(old_path, new_path="/tmp/"):
     """YG Dev July@CHX
     Copy Eiger file containing master and data files to a new path
     old_path: the full path of the Eiger master file
@@ -1150,7 +1150,7 @@ def copy_data(old_path, new_path="/tmp_data/data/"):
     import shutil
 
     # old_path = sud[2][0]
-    # new_path = '/tmp_data/data/'
+    # new_path = '/tmp/'
     fps = glob.glob(old_path[:-10] + "*")
     for fp in tqdm(fps):
         if not os.path.exists(new_path + os.path.basename(fp)):
@@ -1158,7 +1158,7 @@ def copy_data(old_path, new_path="/tmp_data/data/"):
     print("The files %s are copied: %s." % (old_path[:-10] + "*", new_path + os.path.basename(fp)))
 
 
-def delete_data(old_path, new_path="/tmp_data/data/"):
+def delete_data(old_path, new_path="/tmp/"):
     """YG Dev July@CHX
     Delete copied Eiger file containing master and data in a new path
     old_path: the full path of the Eiger master file
@@ -1167,7 +1167,7 @@ def delete_data(old_path, new_path="/tmp_data/data/"):
     import glob
 
     # old_path = sud[2][0]
-    # new_path = '/tmp_data/data/'
+    # new_path = '/tmp/'
     fps = glob.glob(old_path[:-10] + "*")
     for fp in tqdm(fps):
         nfp = new_path + os.path.basename(fp)
