@@ -61,6 +61,7 @@ def test_eiger_images_per_file_reads_first_dataset(tmp_path):
 
     assert get_eigerImage_per_file(master) == 5
 
+
 @pytest.mark.portable
 def test_xpcs_result_export_preserves_array_dataframe_and_metadata_layout(tmp_path, monkeypatch):
     import h5py
