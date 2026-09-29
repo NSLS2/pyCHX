@@ -61,9 +61,6 @@ def test_eiger_images_per_file_reads_first_dataset(tmp_path):
 
     assert get_eigerImage_per_file(master) == 5
 
-
-"""
-# Temporarily removing test for investigation.
 @pytest.mark.portable
 def test_xpcs_result_export_preserves_array_dataframe_and_metadata_layout(tmp_path, monkeypatch):
     import h5py
@@ -114,4 +111,3 @@ def test_xpcs_result_export_preserves_array_dataframe_and_metadata_layout(tmp_pa
     np.testing.assert_array_equal(extracted["g2"], exported["g2"])
     np.testing.assert_array_equal(extracted["g12b"], g12b)
     pd.testing.assert_frame_equal(extracted["g2_fit_paras"], fit)
-"""
