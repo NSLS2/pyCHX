@@ -1948,10 +1948,10 @@ def export_xpcs_results_to_h5(filename, export_dir, export_dict):
     fout = export_dir + filename
     dicts = ["md", "qval_dict", "qval_dict_v", "qval_dict_p"]
     dict_nest = ["taus_uids", "g2_uids"]
+    dataframe_keys = ["g2_fit_paras", "g2b_fit_paras", "spec_km_pds", "spec_pds", "qr_1d_pds"]
 
     hf = _open_xpcs_h5(fout)
     try:
-        flag = False
         for key in list(export_dict.keys()):
             # print( key )
             if key in dicts:  # =='md' or key == 'qval_dict':
@@ -1963,19 +1963,18 @@ def export_xpcs_results_to_h5(filename, export_dir, export_dict):
                 except Exception:
                     print("Can't export the key: %s in this dataset." % key)
 
-            elif key in ["g2_fit_paras", "g2b_fit_paras", "spec_km_pds", "spec_pds", "qr_1d_pds"]:
-                try:
-                    _write_xpcs_dataframe(export_dict[key], fout, key)
-                except Exception:
-                    flag = True
+            elif key in dataframe_keys:
+                # pandas opens the HDF5 file itself, so write these entries
+                # after the h5py handle has been closed.
+                continue
             else:
                 _write_xpcs_array(hf, key, export_dict[key])
     finally:
         _close_xpcs_h5(hf)
-    if flag:
-        for key in list(export_dict.keys()):
-            if key in ["g2_fit_paras", "g2b_fit_paras", "spec_km_pds", "spec_pds", "qr_1d_pds"]:
-                _write_xpcs_dataframe(export_dict[key], fout, key)
+
+    for key in dataframe_keys:
+        if key in export_dict:
+            _write_xpcs_dataframe(export_dict[key], fout, key)
 
     print("The xpcs analysis results are exported to %s with filename as %s" % (export_dir, filename))
 

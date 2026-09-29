@@ -1144,7 +1144,7 @@ def copy_data(old_path, new_path="/tmp/"):
     Copy Eiger file containing master and data files to a new path
     old_path: the full path of the Eiger master file
     new_path: the new path
-
+    Updated default new_path to "/tmp/"
     """
     import glob
     import shutil
@@ -1163,6 +1163,7 @@ def delete_data(old_path, new_path="/tmp/"):
     Delete copied Eiger file containing master and data in a new path
     old_path: the full path of the Eiger master file
     new_path: the new path
+    Updated default new_path to "/tmp/"
     """
     import glob
 
