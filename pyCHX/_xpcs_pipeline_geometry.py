@@ -1,0 +1,435 @@
+"""Private geometry helpers for the unified XPCS notebook.
+
+Coordinates in this module are in the oriented analysis image: x is a column,
+y is a row, distances are millimetres, and q is in inverse Angstroms.
+"""
+
+import pickle
+from pathlib import Path
+
+import numpy as np
+from scipy.ndimage import gaussian_filter
+
+MODES = ("saxs", "gi_saxs", "waxs", "gi_waxs")
+
+
+def resolve_geometry(metadata, notebook_value):
+    """Start metadata wins; otherwise retain the editable notebook value."""
+    mode = metadata.get("scat_geometry", notebook_value)
+    if mode not in MODES:
+        raise ValueError(f"Unknown scat_geometry {mode!r}; choose one of {', '.join(MODES)}")
+    return mode
+
+
+def _positive_number(value, name):
+    try:
+        value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite positive number") from exc
+    if not np.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be a finite positive number")
+    return value
+
+
+def _setting(metadata, explicit, keys, name):
+    for key in keys:
+        if key in metadata and metadata[key] is not None:
+            return metadata[key]
+    if explicit is not None:
+        return explicit
+    raise ValueError(f"Missing {name} in run metadata; set {name} in the notebook")
+
+
+def surface_q_maps(
+    shape, center, dpix, distance, wavelength, metadata, incident_angle_deg=None, inplane_angle_deg=0
+):
+    """Calculate calibrated q_parallel and q_z for one oriented detector image."""
+    angle = _positive_number(
+        _setting(
+            metadata, incident_angle_deg, ("inc_ang", "incident_angle", "incident_angle_deg"), "incident_angle_deg"
+        ),
+        "incident_angle_deg",
+    )
+    azimuth = _setting(
+        metadata, inplane_angle_deg, ("inc_phi", "inplane_angle", "inplane_angle_deg"), "inplane_angle_deg"
+    )
+    azimuth = float(azimuth)
+    if not np.isfinite(azimuth):
+        raise ValueError("inplane_angle_deg must be finite")
+    pixel_mm = _positive_number(dpix, "pixel size")
+    distance_mm = _positive_number(distance, "sample-detector distance")
+    wavelength_a = _positive_number(wavelength, "wavelength")
+    x0, y0 = map(float, center)
+    if not np.isfinite([x0, y0]).all():
+        raise ValueError("Incident beam center must be finite")
+    alpha_i = np.deg2rad(angle)
+    phi = np.deg2rad(azimuth)
+    reflected_y = y0 + np.tan(2 * alpha_i) * distance_mm / pixel_mm
+    reflected_x = x0 - np.tan(phi) * (reflected_y - y0)
+    rows, cols = np.indices(shape)
+    # This is the same grazing-incidence convention as convert_gisaxs_pixel_to_q.
+    alpha_f = np.arctan2((rows - y0) * pixel_mm, distance_mm) - alpha_i
+    theta_f = np.arctan2((cols - x0) * pixel_mm, distance_mm) / 2
+    qx = np.cos(alpha_f) * np.cos(2 * theta_f) - np.cos(alpha_i)
+    qy_lab = np.cos(alpha_f) * np.sin(2 * theta_f)
+    qz_lab = np.sin(alpha_f) + np.sin(alpha_i)
+    qy = qz_lab * np.sin(phi) + qy_lab * np.cos(phi)
+    qz = qz_lab * np.cos(phi) - qy_lab * np.sin(phi)
+    factor = 2 * np.pi / wavelength_a
+    return {
+        "q_parallel": np.hypot(qx, qy) * factor,
+        "q_z": qz * factor,
+        "incident_angle_deg": angle,
+        "inplane_angle_deg": azimuth,
+        "incident_center": (x0, y0),
+        "reflected_center": (reflected_x, reflected_y),
+    }
+
+
+def _edges(values, valid, requested, count, name):
+    if requested is not None:
+        edges = np.asarray(requested, dtype=float)
+        if edges.ndim != 1 or len(edges) < 2 or not np.isfinite(edges).all() or np.any(np.diff(edges) <= 0):
+            raise ValueError(f"{name} must be strictly increasing finite bin edges")
+        return edges
+    selected = np.asarray(values)[valid]
+    selected = selected[np.isfinite(selected) & (selected > 0)]
+    if selected.size < 4:
+        raise ValueError(f"Too few valid pixels to derive {name}; supply explicit bin edges")
+    low, high = np.quantile(selected, [0.02, 0.98])
+    if high <= low:
+        raise ValueError(f"No usable {name} range; supply explicit bin edges")
+    return np.linspace(low, high, count + 1)
+
+
+def _rectangular_rois(q_parallel, q_z, valid, parallel_edges, z_edges):
+    labels = np.zeros(q_parallel.shape, dtype=np.int32)
+    q_values = {}
+    for z_lo, z_hi in zip(z_edges[:-1], z_edges[1:]):
+        z_band = valid & (q_z >= z_lo) & (q_z < z_hi)
+        shared_z = float(np.mean(q_z[z_band])) if z_band.any() else (z_lo + z_hi) / 2
+        for p_lo, p_hi in zip(parallel_edges[:-1], parallel_edges[1:]):
+            selected = valid & (q_parallel >= p_lo) & (q_parallel < p_hi) & (q_z >= z_lo) & (q_z < z_hi)
+            if selected.any():
+                number = len(q_values) + 1
+                labels[selected] = number
+                q_values[number - 1] = np.array([np.mean(q_parallel[selected]), shared_z])
+    if not q_values:
+        raise ValueError("No populated surface q ROIs; adjust the q bin edges")
+    return labels, q_values
+
+
+def build_surface_rois(q_parallel, q_z, mask, parallel_edges=None, z_edges=None, parallel_count=8, z_count=3):
+    valid = np.asarray(mask, dtype=bool) & np.isfinite(q_parallel) & np.isfinite(q_z) & (q_z > 0)
+    p_edges = _edges(q_parallel, valid, parallel_edges, parallel_count, "q_parallel edges")
+    z_edges = _edges(q_z, valid, z_edges, z_count, "q_z edges")
+    roi_mask, qval_dict = _rectangular_rois(q_parallel, q_z, valid, p_edges, z_edges)
+
+    # The legacy GISAXS profile functions accept [start, end, width, number].
+    def profile_args(edges):
+        count = len(edges) - 1
+        return [float(edges[0]), float(edges[-1]), float(np.min(np.diff(edges)) * 0.8), count]
+
+    return {
+        "roi_mask": roi_mask,
+        "qval_dict": qval_dict,
+        "parallel_edges": p_edges,
+        "z_edges": z_edges,
+        "Qr": profile_args(p_edges),
+        "Qz": profile_args(z_edges),
+    }
+
+
+def surface_profile_args_from_roi(roi_mask, qval_dict, q_maps):
+    """Derive legacy GISAXS profile ranges from a validated saved surface ROI."""
+    selected = np.asarray(roi_mask) > 0
+    centers = np.stack([np.asarray(value)[:2] for value in qval_dict.values()])
+    result = {}
+    for index, (name, map_key) in enumerate((("Qr", "q_parallel"), ("Qz", "q_z"))):
+        values = np.asarray(q_maps[map_key])[selected]
+        low, high = float(np.min(values)), float(np.max(values))
+        count = max(1, len(np.unique(np.round(centers[:, index], 8))))
+        if high <= low:
+            high = low + 1e-5
+        edges = np.linspace(low, high, count + 1)
+        result[name] = [low, high, float((high - low) / count * 0.8), count]
+        result["parallel_edges" if index == 0 else "z_edges"] = edges
+    return result
+
+
+def build_waxs_rois(image, mask):
+    """Preserve the WAXS notebook's smoothed-intensity percentile bands."""
+    smoothed = gaussian_filter(np.where(mask, np.asarray(image, dtype=float), 0), 2)
+    valid = np.asarray(mask, dtype=bool) & np.isfinite(smoothed)
+    if not valid.any():
+        raise ValueError("No valid WAXS pixels")
+    values = smoothed[np.isfinite(smoothed)]
+    cutoffs = [100, 99.95, 99.9, 99.8, 99.6, 99.3, 98.5, 97, 95]
+    labels = np.zeros(smoothed.shape, dtype=np.int32)
+    q_values = {}
+    for high, next_high in zip(cutoffs[:-1], cutoffs[1:]):
+        low = high - 0.3 * (high - next_high)
+        selected = valid & (smoothed <= np.percentile(values, high)) & (smoothed > np.percentile(values, low))
+        if selected.any():
+            number = len(q_values) + 1
+            labels[selected] = number
+            q_values[number - 1] = np.array([float(number)])
+    if not q_values:
+        raise ValueError("No populated WAXS intensity bands")
+    return labels, q_values
+
+
+def _read_saved(path, array_key):
+    path = Path(path)
+    if path.suffix == ".npz":
+        with np.load(path, allow_pickle=False) as loaded:
+            return {key: loaded[key].copy() for key in loaded.files}
+    if path.suffix == ".npy":
+        return {array_key: np.load(path, allow_pickle=False)}
+    if path.suffix in (".pkl", ".pickle"):
+        with path.open("rb") as stream:
+            return pickle.load(stream)
+    raise ValueError(f"Unsupported saved input format: {path.suffix}")
+
+
+def _orientation(saved, explicit):
+    orientation = saved.get("orientation", explicit) if isinstance(saved, dict) else explicit
+    if isinstance(orientation, np.ndarray):
+        orientation = orientation.item()
+    if orientation != "analysis":
+        raise ValueError("Saved input must declare orientation='analysis' for the oriented detector image")
+
+
+def load_manual_mask(path, shape, orientation=None, geometry=None):
+    saved = _read_saved(path, "mask")
+    if isinstance(saved, dict):
+        _orientation(saved, orientation)
+        if geometry is not None and "geometry" in saved and str(np.asarray(saved["geometry"]).item()) != geometry:
+            raise ValueError("Saved mask geometry does not match selected scat_geometry")
+        data = saved.get("mask")
+    else:
+        _orientation(saved, orientation)
+        data = saved
+    data = np.asarray(data)
+    if data.shape != tuple(shape) or not np.isfinite(data).all() or not np.isin(data, [0, 1]).all():
+        raise ValueError("Saved mask shape or values do not match the oriented detector image")
+    return data.astype(bool)
+
+
+def combine_detector_masks(saved, shape, detector):
+    """Validate and combine the components of an analysis-oriented detector mask."""
+    expected = detector.split("_")[0]
+    actual = saved.get("detector") if isinstance(saved, dict) else None
+    if not isinstance(actual, str) or actual.casefold() != expected.casefold():
+        raise ValueError(f"Detector mask identity {actual!r} does not match {expected!r}")
+    components = saved.get("masks")
+    if not isinstance(components, dict) or not components:
+        raise ValueError("Detector mask must contain at least one mask component")
+    combined = np.ones(shape, dtype=bool)
+    for name, pixels in components.items():
+        try:
+            part = np.asarray(pixels)
+        except ValueError as exc:
+            raise ValueError(f"Detector mask component {name!r} has an invalid shape") from exc
+        if part.shape != tuple(shape):
+            raise ValueError(f"Detector mask component {name!r} does not match the oriented detector shape")
+        if not np.isin(part, [0, 1]).all():
+            raise ValueError(f"Detector mask component {name!r} must contain only 0/1 values")
+        combined &= part.astype(bool)
+    return combined
+
+
+def _radial_q(shape, center, dpix, distance, wavelength):
+    rows, cols = np.indices(shape)
+    radius_mm = np.hypot(rows - center[1], cols - center[0]) * dpix
+    return 4 * np.pi / wavelength * np.sin(np.arctan2(radius_mm, distance) / 2)
+
+
+def validate_roi(
+    roi_mask,
+    qval_dict,
+    shape,
+    geometry,
+    mask=None,
+    q_maps=None,
+    center=None,
+    dpix=None,
+    distance=None,
+    wavelength=None,
+):
+    roi_mask = np.asarray(roi_mask)
+    if roi_mask.shape != tuple(shape) or not np.issubdtype(roi_mask.dtype, np.integer):
+        raise ValueError("ROI labels must be an integer image matching the oriented detector shape")
+    labels = np.unique(roi_mask)
+    positive = labels[labels > 0]
+    if np.any(labels < 0) or not np.array_equal(positive, np.arange(1, len(positive) + 1)):
+        raise ValueError("ROI labels must be contiguous positive integers starting at 1")
+    if not len(positive) or set(qval_dict) != set(range(len(positive))):
+        raise ValueError("ROI q-value keys must match every populated ROI label")
+    if mask is not None and np.any((roi_mask > 0) & ~np.asarray(mask, dtype=bool)):
+        raise ValueError("ROI contains pixels excluded by the analysis mask")
+    if geometry == "waxs":
+        expected = np.arange(1, len(positive) + 1)
+        actual = np.asarray([qval_dict[i][0] for i in range(len(positive))], dtype=float)
+        if not np.array_equal(actual, expected):
+            raise ValueError("WAXS q values must be ROI indices 1, 2, ...")
+        return roi_mask, qval_dict
+    if geometry == "saxs":
+        if any(value is None for value in (center, dpix, distance, wavelength)):
+            raise ValueError("SAXS calibration is required to validate ROI q values")
+        maps = (_radial_q(shape, center, dpix, distance, wavelength),)
+    else:
+        if q_maps is None:
+            raise ValueError("Calibrated surface q maps are required to validate ROI q values")
+        maps = (q_maps["q_parallel"], q_maps["q_z"])
+    for index, label in enumerate(positive):
+        values = np.asarray(qval_dict[index], dtype=float).reshape(-1)
+        required = len(maps)
+        if len(values) < required or not np.isfinite(values).all() or values[0] <= 0:
+            raise ValueError(f"Invalid q values for ROI {label}")
+        selected = roi_mask == label
+        for coordinate, q_map in enumerate(maps):
+            observed = np.asarray(q_map)[selected]
+            span = max(float(np.ptp(observed)), float(np.ptp(q_map)) * 0.005, 1e-5)
+            if not (observed.min() - span <= values[coordinate] <= observed.max() + span):
+                raise ValueError(f"ROI {label} q value disagrees with calibrated image orientation")
+    return roi_mask, qval_dict
+
+
+def intersect_roi_with_mask(roi_mask, qval_dict, mask, geometry=None):
+    """Apply a later dynamic mask and keep labels aligned with q-value keys."""
+    selected = np.where(mask, roi_mask, 0)
+    labels = np.unique(selected)
+    labels = labels[labels > 0]
+    if not len(labels):
+        raise ValueError("Dynamic mask removed every ROI")
+    renumbered = np.zeros(selected.shape, dtype=np.int32)
+    values = {}
+    for number, old_label in enumerate(labels, start=1):
+        renumbered[selected == old_label] = number
+        values[number - 1] = (
+            np.array([float(number)]) if geometry == "waxs" else np.asarray(qval_dict[int(old_label) - 1])
+        )
+    return renumbered, values
+
+
+def load_manual_roi(path, shape, geometry, orientation=None, **validation):
+    saved = _read_saved(path, "roi_mask")
+    _orientation(saved, orientation)
+    if isinstance(saved, tuple) and len(saved) == 2:
+        roi_mask, qval_dict = saved
+    elif isinstance(saved, dict):
+        roi_mask = saved.get("roi_mask")
+        if "geometry" in saved and str(np.asarray(saved["geometry"]).item()) != geometry:
+            raise ValueError("Saved ROI geometry does not match selected scat_geometry")
+        if "q_values" in saved:
+            qval_dict = {i: np.atleast_1d(row) for i, row in enumerate(np.asarray(saved["q_values"]))}
+        else:
+            qval_dict = saved.get("qval_dict")
+    else:
+        raise ValueError("Saved ROI must contain a mask and q values")
+    if not isinstance(qval_dict, dict):
+        raise ValueError("Saved ROI has no q-value dictionary")
+    return validate_roi(roi_mask, qval_dict, shape, geometry, **validation)
+
+
+def plot_surface_roi(image, roi_mask, q_maps, path, uid):
+    """Plot calibrated surface coordinates without changing public plot APIs."""
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8, 7))
+    ax.imshow(image, origin="lower", norm="log" if np.any(np.asarray(image) > 0) else None)
+    ax.contour(roi_mask, levels=np.arange(0.5, int(np.max(roi_mask)) + 1), colors="white", linewidths=0.4)
+    for key, color in (("q_parallel", "cyan"), ("q_z", "orange")):
+        q_map = np.asarray(q_maps[key])
+        levels = np.quantile(q_map[np.isfinite(q_map)], [0.2, 0.4, 0.6, 0.8])
+        if np.unique(levels).size > 1:
+            ax.contour(q_map, levels=np.unique(levels), colors=color, linewidths=0.5, alpha=0.6)
+    ax.set(
+        xlabel="detector column",
+        ylabel="detector row",
+        title=f"{uid} surface q ROIs (cyan: q_parallel; orange: q_z), Å⁻¹",
+    )
+    fig.savefig(Path(path) / f"{uid}_ROI_on_Image.png", dpi=140)
+    plt.close(fig)
+
+
+def plot_roi_index_rates(rates, path, uid):
+    """Show WAXS relaxation rates by ROI index without implying a calibrated q."""
+    import matplotlib.pyplot as plt
+
+    values = np.asarray(rates, dtype=float)
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(np.arange(1, len(values) + 1), values, "o-")
+    ax.set(xlabel="WAXS ROI index", ylabel="relaxation rate (s$^{-1}$)")
+    fig.tight_layout()
+    fig.savefig(Path(path) / f"{uid}_Q_Rate_fit.png", dpi=140)
+    plt.close(fig)
+
+
+def plot_xpcs_correlation(
+    g2_dict,
+    taus_dict,
+    qval_dict,
+    *,
+    mode,
+    geometry,
+    filename,
+    path,
+    append_name="",
+    ylabel="g2",
+    g2_labels=None,
+    g2_err_dict=None,
+    **kwargs,
+):
+    """Use ROI-index panels for WAXS and the existing plotter elsewhere."""
+    if mode != "waxs":
+        from pyCHX.chx_generic_functions import plot_g2_general
+
+        return plot_g2_general(
+            g2_dict=g2_dict,
+            taus_dict=taus_dict,
+            qval_dict=qval_dict,
+            geometry=geometry,
+            filename=filename,
+            path=path,
+            append_name=append_name,
+            ylabel=ylabel,
+            g2_labels=g2_labels,
+            g2_err_dict=g2_err_dict,
+            **kwargs,
+        )
+    import matplotlib.pyplot as plt
+
+    count = len(qval_dict)
+    columns = min(4, count)
+    rows = int(np.ceil(count / columns))
+    fig, axes = plt.subplots(rows, columns, figsize=(3.4 * columns, 2.8 * rows), squeeze=False)
+    for index, ax in enumerate(axes.flat):
+        if index >= count:
+            ax.axis("off")
+            continue
+        for series, (key, values) in enumerate(g2_dict.items()):
+            tau = np.asarray(taus_dict[key])
+            y = np.asarray(values)[:, index]
+            label = g2_labels[series] if g2_labels is not None else ("data" if series == 0 else "fit")
+            if g2_err_dict is not None and key in g2_err_dict:
+                ax.errorbar(
+                    tau,
+                    y,
+                    yerr=np.asarray(g2_err_dict[key])[:, index],
+                    marker="o",
+                    markersize=2,
+                    linewidth=0.8,
+                    label=label,
+                )
+            else:
+                ax.plot(tau, y, marker="o" if series == 0 else None, markersize=2, linewidth=0.9, label=label)
+        if np.any(tau > 0):
+            ax.set_xscale("log")
+        ax.set(title=f"ROI {index + 1} (intensity band)", xlabel="delay (s)", ylabel=ylabel)
+        if index == 0 and len(g2_dict) > 1:
+            ax.legend(fontsize=7)
+    fig.tight_layout()
+    fig.savefig(Path(path) / f"{filename}{append_name}.png", dpi=140)
+    plt.close(fig)
