@@ -12,7 +12,9 @@ from skbeam.core.correlation import multi_tau_auto_corr
 from pyCHX._xpcs_pipeline_geometry import (
     build_surface_rois,
     build_waxs_rois,
+    cal_1d_qr_from_roi,
     combine_detector_masks,
+    get_t_qrc_from_roi,
     intersect_roi_with_mask,
     load_manual_mask,
     load_manual_roi,
@@ -21,7 +23,6 @@ from pyCHX._xpcs_pipeline_geometry import (
     plot_surface_roi,
     plot_xpcs_correlation,
     resolve_geometry,
-    surface_profile_args_from_roi,
     surface_q_maps,
     validate_roi,
 )
@@ -232,9 +233,9 @@ def test_surface_roi_recipe_counts_shared_z_ranges_once(tmp_path):
     recipe_path.write_text(json.dumps(recipe))
 
     labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
-    profile = surface_profile_args_from_roi(labels, values, q_maps)
+    profile = cal_1d_qr_from_roi(np.ones(mask.shape), labels, values, save=False)
 
-    assert profile["Qz"][3] == 2
+    assert len(profile.columns) - 1 == 2
     assert values[0][1] == values[1][1]
     assert values[0][1] != values[2][1]
     validate_roi(labels, values, mask.shape, "gi_saxs", mask=mask, q_maps=q_maps)
@@ -262,7 +263,7 @@ def test_surface_roi_recipe_keeps_base_z_band_after_reprojection(tmp_path, repro
     labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
 
     assert values[0][1] == values[1][1]
-    assert surface_profile_args_from_roi(labels, values, q_maps)["Qz"][3] == 1
+    assert len(cal_1d_qr_from_roi(np.ones(mask.shape), labels, values, save=False).columns) - 1 == 1
 
 
 @pytest.mark.portable
@@ -286,7 +287,131 @@ def test_surface_roi_recipe_new_box_extends_retained_base_z_band(tmp_path):
     labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
 
     assert values[0][1] == values[1][1]
-    assert surface_profile_args_from_roi(labels, values, q_maps)["Qz"][3] == 1
+    assert len(cal_1d_qr_from_roi(np.ones(mask.shape), labels, values, save=False).columns) - 1 == 1
+
+
+@pytest.mark.portable
+def test_sparse_surface_profiles_use_only_configured_roi_pixels(tmp_path):
+    import pandas as pd
+
+    from pyCHX.Create_Report import export_xpcs_results_to_h5
+    from pyCHX.XPCS_GiSAXS import plot_qr_1d_with_ROI, plot_qrt_pds
+
+    rows, cols = np.indices((2, 8))
+    q_maps = {"q_parallel": cols.astype(float) + 1, "q_z": rows.astype(float) + 1}
+    mask = np.ones((2, 8), dtype=bool)
+    recipe = {
+        "geometry": "gi_saxs",
+        "orientation": "analysis",
+        "boxes": [
+            {"q_parallel": [1, 3], "q_z": [1, 2]},
+            {"q_parallel": [7, 9], "q_z": [1, 2]},
+            {"q_parallel": [1, 3], "q_z": [2, 3]},
+        ],
+    }
+    recipe_path = tmp_path / "rois.json"
+    recipe_path.write_text(json.dumps(recipe))
+    labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
+    image = np.array([[10, 10, 999, 999, 999, 999, 20, 20], [30, 30, 999, 999, 999, 999, 999, 999]])
+
+    static = cal_1d_qr_from_roi(image, labels, values, path=tmp_path, uid="sample")
+    np.testing.assert_allclose(static["qr"], [1.5, 1.5, 7.5])
+    np.testing.assert_allclose(static["qz0=1.0000"], [10, np.nan, 20])
+    np.testing.assert_allclose(static["qz1=2.0000"], [np.nan, 30, np.nan])
+    assert (tmp_path / "sample_qr_1d.csv").exists()
+
+    def average_image(_fd, *, beg, end, sampling, plot_):
+        assert (end - beg, sampling, plot_) == (2, 1, False)
+        return image * (1 + beg // 2)
+
+    timed = get_t_qrc_from_roi(
+        object(), [[0, 2], [2, 4]], labels, values, average_image, path=tmp_path, uid="sample"
+    )
+    assert list(timed.columns) == [
+        "qr",
+        "qz0=1.0000_fra_0_to_2",
+        "qz0=1.0000_fra_2_to_4",
+        "qz1=2.0000_fra_0_to_2",
+        "qz1=2.0000_fra_2_to_4",
+    ]
+    np.testing.assert_allclose(timed["qz0=1.0000_fra_2_to_4"], [20, np.nan, 40])
+    assert (tmp_path / "sample_qrt_pds.csv").exists()
+    plot_qr_1d_with_ROI(static, qr_center=[1.5, 7.5], uid="sample", path=str(tmp_path) + "/")
+    plot_qrt_pds(timed, [[0, 2], [2, 4]], uid="sample", path=str(tmp_path) + "/")
+    assert (tmp_path / "sample_Qr_ROI.png").exists()
+    assert (tmp_path / "sample_Iq_t.png").exists()
+    export_xpcs_results_to_h5("profiles.h5", str(tmp_path) + "/", {"qr_1d_pds": static})
+    pd.testing.assert_frame_equal(pd.read_hdf(tmp_path / "profiles.h5", key="qr_1d_pds"), static)
+
+
+@pytest.mark.portable
+def test_nonuniform_surface_edges_do_not_claim_legacy_regular_profile_args():
+    rows, cols = np.indices((3, 6))
+    result = build_surface_rois(
+        cols.astype(float) + 1,
+        rows.astype(float) + 1,
+        np.ones((3, 6), dtype=bool),
+        parallel_edges=[0.5, 2.5, 6.5],
+        z_edges=[0.5, 1.5, 2.5, 3.5],
+    )
+
+    assert result["Qr"] is None
+    assert result["Qz"] is not None
+
+
+@pytest.mark.portable
+def test_notebook_routes_custom_gisaxs_profiles_through_roi_mask(tmp_path):
+    import time
+    from types import SimpleNamespace
+
+    notebook = json.loads((Path(__file__).resolve().parents[2] / "pipelines/XPCS_auto.ipynb").read_text())
+    setup = "".join(notebook["cells"][43]["source"])
+    assert "use_roi_profiles = (surface_roi_config_file is not None or manual_roi_file is not None" in setup
+    assert "surface_profile_args_from_roi" not in setup
+    export = "".join(notebook["cells"][147]["source"])
+    assert "if scat_geometry in ('gi_saxs', 'gi_waxs') and surface_rois is not None:" in export
+
+    calls = []
+
+    def roi_time(*args, **kwargs):
+        calls.append("time")
+        return "roi time profile"
+
+    def roi_static(*args, **kwargs):
+        calls.append("static")
+        return "roi static profile"
+
+    def legacy(*args, **kwargs):
+        raise AssertionError("Custom ROIs must not use legacy regular q bins")
+
+    state = {
+        "time": time,
+        "np": np,
+        "scat_geometry": "gi_saxs",
+        "FD": SimpleNamespace(beg=0, end=4),
+        "create_time_slice": lambda **kwargs: [[0, 2], [2, 4]],
+        "good_start": 0,
+        "use_roi_profiles": True,
+        "roi_mask": np.array([[1]], dtype=np.int32),
+        "qval_dict": {0: np.array([1.0, 1.0])},
+        "get_t_qrc_from_roi": roi_time,
+        "cal_1d_qr_from_roi": roi_static,
+        "get_t_qrc": legacy,
+        "cal_1d_qr": legacy,
+        "get_avg_imgc": lambda *args, **kwargs: None,
+        "plot_qrt_pds": lambda *args, **kwargs: None,
+        "plot_qr_1d_with_ROI": lambda *args, **kwargs: None,
+        "avg_img": np.ones((1, 1)),
+        "data_dir": str(tmp_path) + "/",
+        "uidstr": "sample",
+        "_record_xpcs_cell_timing": lambda *args: None,
+    }
+    exec("".join(notebook["cells"][80]["source"]), state)
+    exec("".join(notebook["cells"][85]["source"]), state)
+
+    assert calls == ["time", "static"]
+    assert state["qrt_pds"] == "roi time profile"
+    assert state["qr_1d_pds"] == "roi static profile"
 
 
 def test_surface_q_calibration_matches_existing_conversion(synthetic_inputs):
@@ -463,8 +588,8 @@ def test_surface_saved_roi_works_when_auto_bins_have_too_few_pixels():
     q_values = {0: np.array([1.5, 1.0])}
     maps = {"q_parallel": parallel, "q_z": q_z}
     validate_roi(roi_mask, q_values, roi_mask.shape, "gi_saxs", mask=mask, q_maps=maps)
-    profile = surface_profile_args_from_roi(roi_mask, q_values, maps)
-    assert profile["Qr"][3] == 1 and profile["Qz"][3] == 1
+    profile = cal_1d_qr_from_roi(np.ones(roi_mask.shape), roi_mask, q_values, save=False)
+    assert len(profile) == 1 and len(profile.columns) == 2
 
     root = Path(__file__).resolve().parents[2]
     notebook = json.loads((root / "pipelines/XPCS_auto.ipynb").read_text())

@@ -9,6 +9,7 @@ import pickle
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from scipy.ndimage import gaussian_filter
 
 MODES = ("saxs", "gi_saxs", "waxs", "gi_waxs")
@@ -128,8 +129,11 @@ def build_surface_rois(q_parallel, q_z, mask, parallel_edges=None, z_edges=None,
 
     # The legacy GISAXS profile functions accept [start, end, width, number].
     def profile_args(edges):
+        widths = np.diff(edges)
+        if not np.allclose(widths, widths[0], rtol=1e-10, atol=0):
+            return None
         count = len(edges) - 1
-        return [float(edges[0]), float(edges[-1]), float(np.min(np.diff(edges)) * 0.8), count]
+        return [float(edges[0]), float(edges[-1]), float(widths[0] * 0.8), count]
 
     return {
         "roi_mask": roi_mask,
@@ -141,21 +145,61 @@ def build_surface_rois(q_parallel, q_z, mask, parallel_edges=None, z_edges=None,
     }
 
 
-def surface_profile_args_from_roi(roi_mask, qval_dict, q_maps):
-    """Derive legacy GISAXS profile ranges from a validated saved surface ROI."""
-    selected = np.asarray(roi_mask) > 0
-    centers = np.stack([np.asarray(value)[:2] for value in qval_dict.values()])
-    result = {}
-    for index, (name, map_key) in enumerate((("Qr", "q_parallel"), ("Qz", "q_z"))):
-        values = np.asarray(q_maps[map_key])[selected]
-        low, high = float(np.min(values)), float(np.max(values))
-        count = max(1, len(np.unique(np.round(centers[:, index], 8))))
-        if high <= low:
-            high = low + 1e-5
-        edges = np.linspace(low, high, count + 1)
-        result[name] = [low, high, float((high - low) / count * 0.8), count]
-        result["parallel_edges" if index == 0 else "z_edges"] = edges
-    return result
+def cal_1d_qr_from_roi(data, roi_mask, qval_dict, path=None, uid=None, save=True):
+    """Average each surface ROI without integrating unselected q-space gaps."""
+    image = np.asarray(data, dtype=float)
+    labels = np.asarray(roi_mask)
+    if image.shape != labels.shape:
+        raise ValueError("Surface profile image and ROI mask must have the same shape")
+    if not np.issubdtype(labels.dtype, np.integer) or np.any(labels < 0):
+        raise ValueError("Surface profile ROI labels must be nonnegative integers")
+    count = int(labels.max())
+    if count < 1 or not np.array_equal(np.unique(labels[labels > 0]), np.arange(1, count + 1)):
+        raise ValueError("Surface profile ROI labels must be contiguous and populated")
+    if set(qval_dict) != set(range(count)):
+        raise ValueError("Surface profile q values must match the ROI labels")
+    centers = np.stack([np.asarray(qval_dict[index], dtype=float)[:2] for index in range(count)])
+    if centers.shape != (count, 2) or not np.isfinite(centers).all():
+        raise ValueError("Surface profile q values must contain finite q_parallel and q_z centers")
+
+    selected = (labels > 0) & np.isfinite(image)
+    totals = np.bincount(labels[selected], weights=image[selected], minlength=count + 1)[1:]
+    sizes = np.bincount(labels[selected], minlength=count + 1)[1:]
+    means = np.divide(totals, sizes, out=np.full(count, np.nan), where=sizes > 0)
+    order = np.argsort(centers[:, 0], kind="stable")
+    z_centers = np.round(centers[:, 1], 8)
+    columns = {"qr": centers[order, 0]}
+    for index, z_center in enumerate(np.unique(z_centers)):
+        columns[f"qz{index}={z_center:.4f}"] = np.where(z_centers[order] == z_center, means[order], np.nan)
+    profile = pd.DataFrame(columns)
+    if save:
+        if path is None or uid is None:
+            raise ValueError("Surface profile path and uid are required when saving")
+        profile.to_csv(Path(path) / f"{uid}_qr_1d.csv")
+    return profile
+
+
+def get_t_qrc_from_roi(FD, frame_edge, roi_mask, qval_dict, get_avg_image, path=None, uid="uid", save=True):
+    """Build time-dependent q_parallel profiles from the same selected ROI pixels."""
+    frame_edge = list(frame_edge)
+    frames = [
+        cal_1d_qr_from_roi(
+            get_avg_image(FD, beg=start, end=stop, sampling=1, plot_=False), roi_mask, qval_dict, save=False
+        )
+        for start, stop in frame_edge
+    ]
+    if not frames:
+        raise ValueError("Surface time profiles require at least one frame range")
+    columns = {"qr": frames[0]["qr"].to_numpy()}
+    for band in frames[0].columns[1:]:
+        for (start, stop), frame in zip(frame_edge, frames):
+            columns[f"{band}_fra_{start}_to_{stop}"] = frame[band].to_numpy()
+    profile = pd.DataFrame(columns)
+    if save:
+        if path is None:
+            raise ValueError("Surface time profile path is required when saving")
+        profile.to_csv(Path(path) / f"{uid}_qrt_pds.csv")
+    return profile
 
 
 def build_waxs_rois(image, mask):

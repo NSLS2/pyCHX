@@ -87,6 +87,11 @@ Boxes with the same `q_z` bounds share one z profile band. A box also joins a
 retained saved band when its z range contains that band's pixels and no other
 saved band.
 
+GI-SAXS intensity profiles for JSON, manual, or explicitly edged ROIs use one
+mean-intensity point per ROI at its calibrated `q_parallel` center; gaps between
+boxes are excluded. The automatic grid keeps the existing continuous q profile
+calculation.
+
 With `base_qmap_file`, the loader estimates each old ROI's q bounds from its
 saved pixels and draws those ranges on the **current** q maps. Inspect the
 resulting ROI overlay: this reprojection is an approximation and can produce
