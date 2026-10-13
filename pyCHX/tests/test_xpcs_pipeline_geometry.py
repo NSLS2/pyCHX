@@ -155,6 +155,37 @@ def test_surface_roi_recipe_edits_legacy_labels_with_q_boxes(tmp_path):
 
 
 @pytest.mark.portable
+def test_surface_roi_recipe_removes_base_label_before_current_mask_validation(tmp_path):
+    rows, cols = np.indices((2, 4))
+    q_maps = {"q_parallel": cols.astype(float) + 1, "q_z": rows.astype(float) + 1}
+    mask = np.ones((2, 4), dtype=bool)
+    mask[0, 0] = False
+    base = np.zeros(mask.shape, dtype=np.int32)
+    base[:, :2] = 1
+    base[:, 2:] = 2
+    with (tmp_path / "base.pkl").open("wb") as stream:
+        pickle.dump([base, {0: np.array([1.5, 1.5]), 1: np.array([3.5, 1.5])}], stream)
+    recipe = {
+        "geometry": "gi_saxs",
+        "orientation": "analysis",
+        "base_roi_file": "base.pkl",
+        "remove_labels": [1],
+    }
+    recipe_path = tmp_path / "rois.json"
+    recipe_path.write_text(json.dumps(recipe))
+
+    labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
+    np.testing.assert_array_equal(labels[:, :2], np.zeros((2, 2), dtype=np.int32))
+    np.testing.assert_array_equal(labels[:, 2:], np.ones((2, 2), dtype=np.int32))
+    assert len(values) == 1
+
+    recipe["remove_labels"] = []
+    recipe_path.write_text(json.dumps(recipe))
+    with pytest.raises(ValueError, match="analysis mask"):
+        load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
+
+
+@pytest.mark.portable
 def test_surface_roi_recipe_reprojects_legacy_q_ranges(tmp_path):
     rows, cols = np.indices((4, 6))
     old_maps = {"q_parallel": 1 + 0.1 * cols, "q_z": 1 + 0.1 * rows}

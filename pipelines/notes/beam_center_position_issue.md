@@ -9,4 +9,4 @@ The [acquisition center finder](https://github.com/NSLS2/chx-profile-collection/
 
 The same conversion appears in the SAXS mask and ROI notebooks. It can shift beam masks, ROIs, and calibrated q maps. Separately, the unified pipeline writes SAXS result metadata with `beam_center_x` and `beam_center_y` swapped.
 
-**Check before changing historical results:** compare a direct-beam pixel in a raw frame, its BeamX/BeamY values, and its location in the oriented analysis image for each detector. The automatic finder is zero-based; manually entered centers may have a different convention. See [coordinate conventions](pipelines/COORDINATE_CONVENTIONS.md) for the full trace.
+**Check before changing historical results:** compare a direct-beam pixel in a raw frame, its BeamX/BeamY values, and its location in the oriented analysis image for each detector. The automatic finder is zero-based; manually entered centers may have a different convention. See [coordinate conventions](../COORDINATE_CONVENTIONS.md) for the full trace.

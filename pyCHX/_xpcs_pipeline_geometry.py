@@ -371,7 +371,9 @@ def load_surface_roi_config(path, shape, geometry, mask, q_maps):
             shape,
             geometry,
             orientation="analysis",
-            mask=None if old_qmap_file is not None else mask,
+            # Removed labels may intersect the current mask; check retained
+            # labels against it after applying the recipe.
+            mask=None,
             q_maps=old_maps,
         )
         roi_mask = roi_mask.copy()
