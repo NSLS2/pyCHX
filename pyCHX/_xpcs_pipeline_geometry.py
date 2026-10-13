@@ -4,6 +4,7 @@ Coordinates in this module are in the oriented analysis image: x is a column,
 y is a row, distances are millimetres, and q is in inverse Angstroms.
 """
 
+import json
 import pickle
 from pathlib import Path
 
@@ -163,7 +164,7 @@ def build_waxs_rois(image, mask):
     valid = np.asarray(mask, dtype=bool) & np.isfinite(smoothed)
     if not valid.any():
         raise ValueError("No valid WAXS pixels")
-    values = smoothed[np.isfinite(smoothed)]
+    values = smoothed[valid]
     cutoffs = [100, 99.95, 99.9, 99.8, 99.6, 99.3, 98.5, 97, 95]
     labels = np.zeros(smoothed.shape, dtype=np.int32)
     q_values = {}
@@ -316,7 +317,7 @@ def intersect_roi_with_mask(roi_mask, qval_dict, mask, geometry=None):
 def load_manual_roi(path, shape, geometry, orientation=None, **validation):
     saved = _read_saved(path, "roi_mask")
     _orientation(saved, orientation)
-    if isinstance(saved, tuple) and len(saved) == 2:
+    if isinstance(saved, (list, tuple)) and len(saved) == 2:
         roi_mask, qval_dict = saved
     elif isinstance(saved, dict):
         roi_mask = saved.get("roi_mask")
@@ -331,6 +332,118 @@ def load_manual_roi(path, shape, geometry, orientation=None, **validation):
     if not isinstance(qval_dict, dict):
         raise ValueError("Saved ROI has no q-value dictionary")
     return validate_roi(roi_mask, qval_dict, shape, geometry, **validation)
+
+
+def load_surface_roi_config(path, shape, geometry, mask, q_maps):
+    """Edit a saved surface ROI or create new q-space boxes from a JSON recipe."""
+    if geometry not in ("gi_saxs", "gi_waxs"):
+        raise ValueError("Surface ROI configurations require gi_saxs or gi_waxs")
+    path = Path(path)
+    with path.open() as stream:
+        config = json.load(stream)
+    if (
+        not isinstance(config, dict)
+        or config.get("geometry") != geometry
+        or config.get("orientation") != "analysis"
+    ):
+        raise ValueError("Surface ROI configuration needs matching geometry and orientation='analysis'")
+    base_file = config.get("base_roi_file")
+    old_qmap_file = config.get("base_qmap_file")
+    if old_qmap_file is not None and base_file is None:
+        raise ValueError("base_qmap_file requires base_roi_file")
+
+    def from_recipe(value):
+        source = Path(value)
+        return source if source.is_absolute() else path.parent / source
+
+    if base_file is not None:
+        old_maps = q_maps
+        if old_qmap_file is not None:
+            old_data = _read_saved(from_recipe(old_qmap_file), "q_parallel")
+            if not isinstance(old_data, (list, tuple)) or len(old_data) < 2:
+                raise ValueError("Legacy base q map must contain q_parallel and q_z arrays")
+            old_maps = {"q_parallel": np.asarray(old_data[0]), "q_z": np.asarray(old_data[1])}
+            if any(values.shape != tuple(shape) for values in old_maps.values()):
+                raise ValueError("Legacy base q map shape must match the oriented image")
+        roi_mask, _ = load_manual_roi(
+            from_recipe(base_file),
+            shape,
+            geometry,
+            orientation="analysis",
+            mask=None if old_qmap_file is not None else mask,
+            q_maps=old_maps,
+        )
+        roi_mask = roi_mask.copy()
+    else:
+        roi_mask = np.zeros(shape, dtype=np.int32)
+
+    removed = config.get("remove_labels", [])
+    if (
+        not isinstance(removed, list)
+        or any(
+            isinstance(label, bool) or not isinstance(label, int) or label < 1 or label > roi_mask.max()
+            for label in removed
+        )
+        or len(set(removed)) != len(removed)
+    ):
+        raise ValueError("remove_labels must contain distinct labels from the base ROI")
+    if removed:
+        roi_mask[np.isin(roi_mask, removed)] = 0
+
+    q_parallel = np.asarray(q_maps["q_parallel"])
+    q_z = np.asarray(q_maps["q_z"])
+    valid = np.asarray(mask, dtype=bool) & np.isfinite(q_parallel) & np.isfinite(q_z) & (q_z > 0)
+    if old_qmap_file is not None:
+        projected = np.zeros(shape, dtype=np.int32)
+        for label in np.unique(roi_mask):
+            if label <= 0:
+                continue
+            old_selected = roi_mask == label
+            old_parallel = old_maps["q_parallel"][old_selected]
+            old_z = old_maps["q_z"][old_selected]
+            p_lo, p_hi = np.nextafter([np.min(old_parallel), np.max(old_parallel)], [-np.inf, np.inf])
+            z_lo, z_hi = np.nextafter([np.min(old_z), np.max(old_z)], [-np.inf, np.inf])
+            selected = valid & (q_parallel >= p_lo) & (q_parallel <= p_hi) & (q_z >= z_lo) & (q_z <= z_hi)
+            if not selected.any():
+                raise ValueError(f"Legacy ROI {label} has no pixels in the current q calibration")
+            if np.any(projected[selected]):
+                raise ValueError(f"Projected legacy ROI {label} overlaps another ROI")
+            projected[selected] = label
+        roi_mask = projected
+
+    boxes = config.get("boxes", [])
+    if not isinstance(boxes, list) or (base_file is None and not boxes):
+        raise ValueError("Surface ROI configuration needs a base ROI or at least one box")
+    for index, box in enumerate(boxes, start=1):
+        if not isinstance(box, dict) or "q_parallel" not in box or "q_z" not in box:
+            raise ValueError(f"Box {index} needs q_parallel and q_z ranges")
+        bounds = []
+        for key in ("q_parallel", "q_z"):
+            try:
+                pair = np.asarray(box[key], dtype=float)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Box {index} has invalid {key} bounds") from exc
+            if pair.shape != (2,) or not np.isfinite(pair).all() or pair[0] < 0 or pair[1] <= pair[0]:
+                raise ValueError(f"Box {index} has invalid {key} bounds")
+            bounds.append(pair)
+        (p_lo, p_hi), (z_lo, z_hi) = bounds
+        selected = valid & (q_parallel >= p_lo) & (q_parallel < p_hi) & (q_z >= z_lo) & (q_z < z_hi)
+        if not selected.any():
+            raise ValueError(f"Box {index} contains no valid pixels")
+        if np.any(roi_mask[selected] != 0):
+            raise ValueError(f"Box {index} overlaps an existing ROI; remove its label first")
+        roi_mask[selected] = int(roi_mask.max()) + 1
+
+    result = np.zeros(shape, dtype=np.int32)
+    q_values = {}
+    for label in np.unique(roi_mask):
+        if label <= 0:
+            continue
+        selected = roi_mask == label
+        number = len(q_values) + 1
+        result[selected] = number
+        q_values[number - 1] = np.array([np.mean(q_parallel[selected]), np.mean(q_z[selected])])
+    return validate_roi(result, q_values, shape, geometry, mask=mask, q_maps=q_maps)
 
 
 def plot_surface_roi(image, roi_mask, q_maps, path, uid):

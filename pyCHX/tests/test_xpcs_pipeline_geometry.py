@@ -1,6 +1,7 @@
 """Synthetic checks for the four modes of the unified XPCS notebook."""
 
 import json
+import pickle
 from pathlib import Path
 
 import h5py
@@ -15,6 +16,7 @@ from pyCHX._xpcs_pipeline_geometry import (
     intersect_roi_with_mask,
     load_manual_mask,
     load_manual_roi,
+    load_surface_roi_config,
     plot_roi_index_rates,
     plot_surface_roi,
     plot_xpcs_correlation,
@@ -83,6 +85,102 @@ def test_metadata_geometry_precedence_and_missing_surface_angle():
         resolve_geometry({"scat_geometry": "invalid"}, "saxs")
     with pytest.raises(ValueError, match="set incident_angle_deg"):
         surface_q_maps(SHAPE, CENTER, PIXEL_MM, DISTANCE_MM, WAVELENGTH_A, {})
+
+
+@pytest.mark.portable
+def test_waxs_bands_use_only_unmasked_pixels_for_percentiles():
+    rng = np.random.default_rng(24)
+    image = np.zeros((100, 100), dtype=float)
+    mask = np.zeros_like(image, dtype=bool)
+    mask[40:60, 40:60] = True
+    image[mask] = rng.lognormal(mean=3, sigma=1, size=mask.sum())
+
+    labels, q_values = build_waxs_rois(image, mask)
+
+    assert np.count_nonzero(labels) > 0
+    assert len(q_values) >= 5
+    assert not np.any(labels[~mask])
+
+
+@pytest.mark.portable
+def test_legacy_gisaxs_roi_list_can_be_loaded(synthetic_inputs, tmp_path):
+    mask, image, q_maps = synthetic_inputs
+    roi_mask, q_values = _mode_roi("gi_saxs", mask, image, q_maps)
+    path = tmp_path / "legacy_roi.pkl"
+    with path.open("wb") as stream:
+        pickle.dump([roi_mask, q_values], stream)
+
+    loaded_roi, loaded_values = load_manual_roi(
+        path, SHAPE, "gi_saxs", orientation="analysis", **_validation("gi_saxs", mask, q_maps)
+    )
+
+    np.testing.assert_array_equal(loaded_roi, roi_mask)
+    assert loaded_values.keys() == q_values.keys()
+
+
+@pytest.mark.portable
+def test_surface_roi_recipe_edits_legacy_labels_with_q_boxes(tmp_path):
+    rows, cols = np.indices((4, 6))
+    q_maps = {"q_parallel": cols.astype(float) + 1, "q_z": rows.astype(float) + 1}
+    mask = np.ones((4, 6), dtype=bool)
+    base = np.zeros(mask.shape, dtype=np.int32)
+    base[:2, :2] = 1
+    base[:2, 2:4] = 2
+    base_path = tmp_path / "base.pkl"
+    with base_path.open("wb") as stream:
+        pickle.dump([base, {0: np.array([1.5, 1.5]), 1: np.array([3.5, 1.5])}], stream)
+    recipe_path = tmp_path / "rois.json"
+    recipe = {
+        "geometry": "gi_saxs",
+        "orientation": "analysis",
+        "base_roi_file": base_path.name,
+        "remove_labels": [2],
+        "boxes": [
+            {"q_parallel": [3, 5], "q_z": [1, 3]},
+            {"q_parallel": [5, 7], "q_z": [3, 5]},
+        ],
+    }
+    recipe_path.write_text(json.dumps(recipe))
+
+    labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
+
+    np.testing.assert_array_equal(labels[:2, :4], base[:2, :4])
+    np.testing.assert_array_equal(labels[2:, 4:], np.full((2, 2), 3))
+    np.testing.assert_array_equal(values[2], [5.5, 3.5])
+
+    recipe["remove_labels"] = []
+    recipe_path.write_text(json.dumps(recipe))
+    with pytest.raises(ValueError, match="overlaps an existing ROI"):
+        load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
+
+
+@pytest.mark.portable
+def test_surface_roi_recipe_reprojects_legacy_q_ranges(tmp_path):
+    rows, cols = np.indices((4, 6))
+    old_maps = {"q_parallel": 1 + 0.1 * cols, "q_z": 1 + 0.1 * rows}
+    new_maps = {"q_parallel": 0.9 + 0.1 * cols, "q_z": old_maps["q_z"]}
+    mask = np.ones((4, 6), dtype=bool)
+    base = np.zeros(mask.shape, dtype=np.int32)
+    base[1:3, 1:3] = 1
+    with (tmp_path / "base.pkl").open("wb") as stream:
+        pickle.dump([base, {0: np.array([1.15, 1.15])}], stream)
+    with (tmp_path / "qmap.pkl").open("wb") as stream:
+        pickle.dump([old_maps["q_parallel"], old_maps["q_z"]], stream)
+    recipe = {
+        "geometry": "gi_saxs",
+        "orientation": "analysis",
+        "base_roi_file": "base.pkl",
+        "base_qmap_file": "qmap.pkl",
+    }
+    recipe_path = tmp_path / "rois.json"
+    recipe_path.write_text(json.dumps(recipe))
+
+    labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, new_maps)
+
+    expected = np.zeros(mask.shape, dtype=np.int32)
+    expected[1:3, 2:4] = 1
+    np.testing.assert_array_equal(labels, expected)
+    np.testing.assert_allclose(values[0], [1.15, 1.15])
 
 
 def test_surface_q_calibration_matches_existing_conversion(synthetic_inputs):
