@@ -4,10 +4,12 @@ Coordinates in this module are in the oriented analysis image: x is a column,
 y is a row, distances are millimetres, and q is in inverse Angstroms.
 """
 
+import json
 import pickle
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from scipy.ndimage import gaussian_filter
 
 MODES = ("saxs", "gi_saxs", "waxs", "gi_waxs")
@@ -127,8 +129,11 @@ def build_surface_rois(q_parallel, q_z, mask, parallel_edges=None, z_edges=None,
 
     # The legacy GISAXS profile functions accept [start, end, width, number].
     def profile_args(edges):
+        widths = np.diff(edges)
+        if not np.allclose(widths, widths[0], rtol=1e-10, atol=0):
+            return None
         count = len(edges) - 1
-        return [float(edges[0]), float(edges[-1]), float(np.min(np.diff(edges)) * 0.8), count]
+        return [float(edges[0]), float(edges[-1]), float(widths[0] * 0.8), count]
 
     return {
         "roi_mask": roi_mask,
@@ -140,21 +145,61 @@ def build_surface_rois(q_parallel, q_z, mask, parallel_edges=None, z_edges=None,
     }
 
 
-def surface_profile_args_from_roi(roi_mask, qval_dict, q_maps):
-    """Derive legacy GISAXS profile ranges from a validated saved surface ROI."""
-    selected = np.asarray(roi_mask) > 0
-    centers = np.stack([np.asarray(value)[:2] for value in qval_dict.values()])
-    result = {}
-    for index, (name, map_key) in enumerate((("Qr", "q_parallel"), ("Qz", "q_z"))):
-        values = np.asarray(q_maps[map_key])[selected]
-        low, high = float(np.min(values)), float(np.max(values))
-        count = max(1, len(np.unique(np.round(centers[:, index], 8))))
-        if high <= low:
-            high = low + 1e-5
-        edges = np.linspace(low, high, count + 1)
-        result[name] = [low, high, float((high - low) / count * 0.8), count]
-        result["parallel_edges" if index == 0 else "z_edges"] = edges
-    return result
+def cal_1d_qr_from_roi(data, roi_mask, qval_dict, path=None, uid=None, save=True):
+    """Average each surface ROI without integrating unselected q-space gaps."""
+    image = np.asarray(data, dtype=float)
+    labels = np.asarray(roi_mask)
+    if image.shape != labels.shape:
+        raise ValueError("Surface profile image and ROI mask must have the same shape")
+    if not np.issubdtype(labels.dtype, np.integer) or np.any(labels < 0):
+        raise ValueError("Surface profile ROI labels must be nonnegative integers")
+    count = int(labels.max())
+    if count < 1 or not np.array_equal(np.unique(labels[labels > 0]), np.arange(1, count + 1)):
+        raise ValueError("Surface profile ROI labels must be contiguous and populated")
+    if set(qval_dict) != set(range(count)):
+        raise ValueError("Surface profile q values must match the ROI labels")
+    centers = np.stack([np.asarray(qval_dict[index], dtype=float)[:2] for index in range(count)])
+    if centers.shape != (count, 2) or not np.isfinite(centers).all():
+        raise ValueError("Surface profile q values must contain finite q_parallel and q_z centers")
+
+    selected = (labels > 0) & np.isfinite(image)
+    totals = np.bincount(labels[selected], weights=image[selected], minlength=count + 1)[1:]
+    sizes = np.bincount(labels[selected], minlength=count + 1)[1:]
+    means = np.divide(totals, sizes, out=np.full(count, np.nan), where=sizes > 0)
+    order = np.argsort(centers[:, 0], kind="stable")
+    z_centers = np.round(centers[:, 1], 8)
+    columns = {"qr": centers[order, 0]}
+    for index, z_center in enumerate(np.unique(z_centers)):
+        columns[f"qz{index}={z_center:.4f}"] = np.where(z_centers[order] == z_center, means[order], np.nan)
+    profile = pd.DataFrame(columns)
+    if save:
+        if path is None or uid is None:
+            raise ValueError("Surface profile path and uid are required when saving")
+        profile.to_csv(Path(path) / f"{uid}_qr_1d.csv")
+    return profile
+
+
+def get_t_qrc_from_roi(FD, frame_edge, roi_mask, qval_dict, get_avg_image, path=None, uid="uid", save=True):
+    """Build time-dependent q_parallel profiles from the same selected ROI pixels."""
+    frame_edge = list(frame_edge)
+    frames = [
+        cal_1d_qr_from_roi(
+            get_avg_image(FD, beg=start, end=stop, sampling=1, plot_=False), roi_mask, qval_dict, save=False
+        )
+        for start, stop in frame_edge
+    ]
+    if not frames:
+        raise ValueError("Surface time profiles require at least one frame range")
+    columns = {"qr": frames[0]["qr"].to_numpy()}
+    for band in frames[0].columns[1:]:
+        for (start, stop), frame in zip(frame_edge, frames):
+            columns[f"{band}_fra_{start}_to_{stop}"] = frame[band].to_numpy()
+    profile = pd.DataFrame(columns)
+    if save:
+        if path is None:
+            raise ValueError("Surface time profile path is required when saving")
+        profile.to_csv(Path(path) / f"{uid}_qrt_pds.csv")
+    return profile
 
 
 def build_waxs_rois(image, mask):
@@ -163,7 +208,7 @@ def build_waxs_rois(image, mask):
     valid = np.asarray(mask, dtype=bool) & np.isfinite(smoothed)
     if not valid.any():
         raise ValueError("No valid WAXS pixels")
-    values = smoothed[np.isfinite(smoothed)]
+    values = smoothed[valid]
     cutoffs = [100, 99.95, 99.9, 99.8, 99.6, 99.3, 98.5, 97, 95]
     labels = np.zeros(smoothed.shape, dtype=np.int32)
     q_values = {}
@@ -316,7 +361,7 @@ def intersect_roi_with_mask(roi_mask, qval_dict, mask, geometry=None):
 def load_manual_roi(path, shape, geometry, orientation=None, **validation):
     saved = _read_saved(path, "roi_mask")
     _orientation(saved, orientation)
-    if isinstance(saved, tuple) and len(saved) == 2:
+    if isinstance(saved, (list, tuple)) and len(saved) == 2:
         roi_mask, qval_dict = saved
     elif isinstance(saved, dict):
         roi_mask = saved.get("roi_mask")
@@ -331,6 +376,158 @@ def load_manual_roi(path, shape, geometry, orientation=None, **validation):
     if not isinstance(qval_dict, dict):
         raise ValueError("Saved ROI has no q-value dictionary")
     return validate_roi(roi_mask, qval_dict, shape, geometry, **validation)
+
+
+def load_surface_roi_config(path, shape, geometry, mask, q_maps):
+    """Edit a saved surface ROI or create new q-space boxes from a JSON recipe."""
+    if geometry not in ("gi_saxs", "gi_waxs"):
+        raise ValueError("Surface ROI configurations require gi_saxs or gi_waxs")
+    path = Path(path)
+    with path.open() as stream:
+        config = json.load(stream)
+    if (
+        not isinstance(config, dict)
+        or config.get("geometry") != geometry
+        or config.get("orientation") != "analysis"
+    ):
+        raise ValueError("Surface ROI configuration needs matching geometry and orientation='analysis'")
+    base_file = config.get("base_roi_file")
+    old_qmap_file = config.get("base_qmap_file")
+    if old_qmap_file is not None and base_file is None:
+        raise ValueError("base_qmap_file requires base_roi_file")
+
+    def from_recipe(value):
+        source = Path(value)
+        return source if source.is_absolute() else path.parent / source
+
+    z_groups = {}
+    if base_file is not None:
+        old_maps = q_maps
+        if old_qmap_file is not None:
+            old_data = _read_saved(from_recipe(old_qmap_file), "q_parallel")
+            if not isinstance(old_data, (list, tuple)) or len(old_data) < 2:
+                raise ValueError("Legacy base q map must contain q_parallel and q_z arrays")
+            old_maps = {"q_parallel": np.asarray(old_data[0]), "q_z": np.asarray(old_data[1])}
+            if any(values.shape != tuple(shape) for values in old_maps.values()):
+                raise ValueError("Legacy base q map shape must match the oriented image")
+        roi_mask, base_q_values = load_manual_roi(
+            from_recipe(base_file),
+            shape,
+            geometry,
+            orientation="analysis",
+            # Removed labels may intersect the current mask; check retained
+            # labels against it after applying the recipe.
+            mask=None,
+            q_maps=old_maps,
+        )
+        roi_mask = roi_mask.copy()
+        # Saved surface ROIs use one q_z value for every label in a z band.
+        for label in range(1, int(roi_mask.max()) + 1):
+            z_groups[label] = ("base", round(float(base_q_values[label - 1][1]), 8))
+    else:
+        roi_mask = np.zeros(shape, dtype=np.int32)
+
+    removed = config.get("remove_labels", [])
+    if (
+        not isinstance(removed, list)
+        or any(
+            isinstance(label, bool) or not isinstance(label, int) or label < 1 or label > roi_mask.max()
+            for label in removed
+        )
+        or len(set(removed)) != len(removed)
+    ):
+        raise ValueError("remove_labels must contain distinct labels from the base ROI")
+    if removed:
+        roi_mask[np.isin(roi_mask, removed)] = 0
+
+    q_parallel = np.asarray(q_maps["q_parallel"])
+    q_z = np.asarray(q_maps["q_z"])
+    valid = np.asarray(mask, dtype=bool) & np.isfinite(q_parallel) & np.isfinite(q_z) & (q_z > 0)
+    if old_qmap_file is not None:
+        projected = np.zeros(shape, dtype=np.int32)
+        for label in np.unique(roi_mask):
+            if label <= 0:
+                continue
+            old_selected = roi_mask == label
+            old_parallel = old_maps["q_parallel"][old_selected]
+            old_z = old_maps["q_z"][old_selected]
+            p_lo, p_hi = np.nextafter([np.min(old_parallel), np.max(old_parallel)], [-np.inf, np.inf])
+            z_lo, z_hi = np.nextafter([np.min(old_z), np.max(old_z)], [-np.inf, np.inf])
+            selected = valid & (q_parallel >= p_lo) & (q_parallel <= p_hi) & (q_z >= z_lo) & (q_z <= z_hi)
+            if not selected.any():
+                raise ValueError(f"Legacy ROI {label} has no pixels in the current q calibration")
+            if np.any(projected[selected]):
+                raise ValueError(f"Projected legacy ROI {label} overlaps another ROI")
+            projected[selected] = label
+        roi_mask = projected
+
+    boxes = config.get("boxes", [])
+    if not isinstance(boxes, list) or (base_file is None and not boxes):
+        raise ValueError("Surface ROI configuration needs a base ROI or at least one box")
+    for index, box in enumerate(boxes, start=1):
+        if not isinstance(box, dict) or "q_parallel" not in box or "q_z" not in box:
+            raise ValueError(f"Box {index} needs q_parallel and q_z ranges")
+        bounds = []
+        for key in ("q_parallel", "q_z"):
+            try:
+                pair = np.asarray(box[key], dtype=float)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Box {index} has invalid {key} bounds") from exc
+            if pair.shape != (2,) or not np.isfinite(pair).all() or pair[0] < 0 or pair[1] <= pair[0]:
+                raise ValueError(f"Box {index} has invalid {key} bounds")
+            bounds.append(pair)
+        (p_lo, p_hi), (z_lo, z_hi) = bounds
+        selected = valid & (q_parallel >= p_lo) & (q_parallel < p_hi) & (q_z >= z_lo) & (q_z < z_hi)
+        if not selected.any():
+            raise ValueError(f"Box {index} contains no valid pixels")
+        if np.any(roi_mask[selected] != 0):
+            raise ValueError(f"Box {index} overlaps an existing ROI; remove its label first")
+        label = int(roi_mask.max()) + 1
+        roi_mask[selected] = label
+        z_groups[label] = ("box", float(z_lo), float(z_hi))
+
+    # A new box can extend a retained saved band. Match only when its z range
+    # contains exactly one retained band's pixels in the current calibration.
+    base_groups = {}
+    for label in np.unique(roi_mask):
+        if label > 0 and z_groups[int(label)][0] == "base":
+            base_groups.setdefault(z_groups[int(label)], []).append(label)
+    base_ranges = {}
+    for group, labels in base_groups.items():
+        values = q_z[np.isin(roi_mask, labels)]
+        base_ranges[group] = (float(np.min(values)), float(np.max(values)))
+    for label in np.unique(roi_mask):
+        if label <= 0:
+            continue
+        group = z_groups[int(label)]
+        if group[0] != "box":
+            continue
+        matches = [base for base, (low, high) in base_ranges.items() if group[1] <= low and high < group[2]]
+        if len(matches) == 1:
+            z_groups[int(label)] = matches[0]
+
+    result = np.zeros(shape, dtype=np.int32)
+    q_values = {}
+    z_totals = {}
+    z_counts = {}
+    parallel_centers = {}
+    for label in np.unique(roi_mask):
+        if label <= 0:
+            continue
+        selected = roi_mask == label
+        group = z_groups[int(label)]
+        z_totals[group] = z_totals.get(group, 0.0) + float(np.sum(q_z[selected]))
+        z_counts[group] = z_counts.get(group, 0) + int(np.count_nonzero(selected))
+        parallel_centers[int(label)] = float(np.mean(q_parallel[selected]))
+    for label in np.unique(roi_mask):
+        if label <= 0:
+            continue
+        selected = roi_mask == label
+        number = len(q_values) + 1
+        result[selected] = number
+        group = z_groups[int(label)]
+        q_values[number - 1] = np.array([parallel_centers[int(label)], z_totals[group] / z_counts[group]])
+    return validate_roi(result, q_values, shape, geometry, mask=mask, q_maps=q_maps)
 
 
 def plot_surface_roi(image, roi_mask, q_maps, path, uid):
