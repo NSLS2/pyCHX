@@ -356,6 +356,7 @@ def load_surface_roi_config(path, shape, geometry, mask, q_maps):
         source = Path(value)
         return source if source.is_absolute() else path.parent / source
 
+    z_groups = {}
     if base_file is not None:
         old_maps = q_maps
         if old_qmap_file is not None:
@@ -365,7 +366,7 @@ def load_surface_roi_config(path, shape, geometry, mask, q_maps):
             old_maps = {"q_parallel": np.asarray(old_data[0]), "q_z": np.asarray(old_data[1])}
             if any(values.shape != tuple(shape) for values in old_maps.values()):
                 raise ValueError("Legacy base q map shape must match the oriented image")
-        roi_mask, _ = load_manual_roi(
+        roi_mask, base_q_values = load_manual_roi(
             from_recipe(base_file),
             shape,
             geometry,
@@ -374,6 +375,9 @@ def load_surface_roi_config(path, shape, geometry, mask, q_maps):
             q_maps=old_maps,
         )
         roi_mask = roi_mask.copy()
+        # Saved surface ROIs use one q_z value for every label in a z band.
+        for label in range(1, int(roi_mask.max()) + 1):
+            z_groups[label] = ("base", round(float(base_q_values[label - 1][1]), 8))
     else:
         roi_mask = np.zeros(shape, dtype=np.int32)
 
@@ -432,17 +436,51 @@ def load_surface_roi_config(path, shape, geometry, mask, q_maps):
             raise ValueError(f"Box {index} contains no valid pixels")
         if np.any(roi_mask[selected] != 0):
             raise ValueError(f"Box {index} overlaps an existing ROI; remove its label first")
-        roi_mask[selected] = int(roi_mask.max()) + 1
+        label = int(roi_mask.max()) + 1
+        roi_mask[selected] = label
+        z_groups[label] = ("box", float(z_lo), float(z_hi))
+
+    # A new box can extend a retained saved band. Match only when its z range
+    # contains exactly one retained band's pixels in the current calibration.
+    base_groups = {}
+    for label in np.unique(roi_mask):
+        if label > 0 and z_groups[int(label)][0] == "base":
+            base_groups.setdefault(z_groups[int(label)], []).append(label)
+    base_ranges = {}
+    for group, labels in base_groups.items():
+        values = q_z[np.isin(roi_mask, labels)]
+        base_ranges[group] = (float(np.min(values)), float(np.max(values)))
+    for label in np.unique(roi_mask):
+        if label <= 0:
+            continue
+        group = z_groups[int(label)]
+        if group[0] != "box":
+            continue
+        matches = [base for base, (low, high) in base_ranges.items() if group[1] <= low and high < group[2]]
+        if len(matches) == 1:
+            z_groups[int(label)] = matches[0]
 
     result = np.zeros(shape, dtype=np.int32)
     q_values = {}
+    z_totals = {}
+    z_counts = {}
+    parallel_centers = {}
+    for label in np.unique(roi_mask):
+        if label <= 0:
+            continue
+        selected = roi_mask == label
+        group = z_groups[int(label)]
+        z_totals[group] = z_totals.get(group, 0.0) + float(np.sum(q_z[selected]))
+        z_counts[group] = z_counts.get(group, 0) + int(np.count_nonzero(selected))
+        parallel_centers[int(label)] = float(np.mean(q_parallel[selected]))
     for label in np.unique(roi_mask):
         if label <= 0:
             continue
         selected = roi_mask == label
         number = len(q_values) + 1
         result[selected] = number
-        q_values[number - 1] = np.array([np.mean(q_parallel[selected]), np.mean(q_z[selected])])
+        group = z_groups[int(label)]
+        q_values[number - 1] = np.array([parallel_centers[int(label)], z_totals[group] / z_counts[group]])
     return validate_roi(result, q_values, shape, geometry, mask=mask, q_maps=q_maps)
 
 

@@ -183,6 +183,81 @@ def test_surface_roi_recipe_reprojects_legacy_q_ranges(tmp_path):
     np.testing.assert_allclose(values[0], [1.15, 1.15])
 
 
+@pytest.mark.portable
+def test_surface_roi_recipe_counts_shared_z_ranges_once(tmp_path):
+    rows, cols = np.indices((4, 6))
+    q_maps = {"q_parallel": cols.astype(float) + 1, "q_z": rows + 1 + cols * 0.1}
+    mask = np.ones((4, 6), dtype=bool)
+    recipe = {
+        "geometry": "gi_saxs",
+        "orientation": "analysis",
+        "boxes": [
+            {"q_parallel": [1, 3], "q_z": [1, 3]},
+            {"q_parallel": [3, 5], "q_z": [1, 3]},
+            {"q_parallel": [1, 3], "q_z": [3, 5]},
+        ],
+    }
+    recipe_path = tmp_path / "rois.json"
+    recipe_path.write_text(json.dumps(recipe))
+
+    labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
+    profile = surface_profile_args_from_roi(labels, values, q_maps)
+
+    assert profile["Qz"][3] == 2
+    assert values[0][1] == values[1][1]
+    assert values[0][1] != values[2][1]
+    validate_roi(labels, values, mask.shape, "gi_saxs", mask=mask, q_maps=q_maps)
+
+
+@pytest.mark.portable
+@pytest.mark.parametrize("reproject", [False, True])
+def test_surface_roi_recipe_keeps_base_z_band_after_reprojection(tmp_path, reproject):
+    rows, cols = np.indices((4, 6))
+    q_maps = {"q_parallel": 1 + 0.1 * cols, "q_z": 1 + 0.1 * rows + 0.01 * cols}
+    mask = np.ones((4, 6), dtype=bool)
+    base = np.zeros(mask.shape, dtype=np.int32)
+    base[1:3, 1:3] = 1
+    base[1:3, 3:5] = 2
+    with (tmp_path / "base.pkl").open("wb") as stream:
+        pickle.dump([base, {0: np.array([1.15, 1.18]), 1: np.array([1.35, 1.18])}], stream)
+    recipe = {"geometry": "gi_saxs", "orientation": "analysis", "base_roi_file": "base.pkl"}
+    if reproject:
+        with (tmp_path / "qmap.pkl").open("wb") as stream:
+            pickle.dump([q_maps["q_parallel"], q_maps["q_z"]], stream)
+        recipe["base_qmap_file"] = "qmap.pkl"
+    recipe_path = tmp_path / "rois.json"
+    recipe_path.write_text(json.dumps(recipe))
+
+    labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
+
+    assert values[0][1] == values[1][1]
+    assert surface_profile_args_from_roi(labels, values, q_maps)["Qz"][3] == 1
+
+
+@pytest.mark.portable
+def test_surface_roi_recipe_new_box_extends_retained_base_z_band(tmp_path):
+    rows, cols = np.indices((4, 6))
+    q_maps = {"q_parallel": cols.astype(float) + 1, "q_z": rows + 1 + cols * 0.1}
+    mask = np.ones((4, 6), dtype=bool)
+    base = np.zeros(mask.shape, dtype=np.int32)
+    base[:2, :2] = 1
+    with (tmp_path / "base.pkl").open("wb") as stream:
+        pickle.dump([base, {0: np.array([1.5, 1.55])}], stream)
+    recipe = {
+        "geometry": "gi_saxs",
+        "orientation": "analysis",
+        "base_roi_file": "base.pkl",
+        "boxes": [{"q_parallel": [3, 5], "q_z": [1, 3]}],
+    }
+    recipe_path = tmp_path / "rois.json"
+    recipe_path.write_text(json.dumps(recipe))
+
+    labels, values = load_surface_roi_config(recipe_path, mask.shape, "gi_saxs", mask, q_maps)
+
+    assert values[0][1] == values[1][1]
+    assert surface_profile_args_from_roi(labels, values, q_maps)["Qz"][3] == 1
+
+
 def test_surface_q_calibration_matches_existing_conversion(synthetic_inputs):
     from pyCHX.XPCS_GiSAXS import convert_gisaxs_pixel_to_q
 

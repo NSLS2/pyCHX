@@ -83,6 +83,10 @@ ROI. Set `remove_labels` and `boxes` to `[]` to start with all saved regions.
 For a new layout, omit both base-file fields and list your boxes. Change
 `geometry` to `gi_waxs` for GI-WAXS.
 
+Boxes with the same `q_z` bounds share one z profile band. A box also joins a
+retained saved band when its z range contains that band's pixels and no other
+saved band.
+
 With `base_qmap_file`, the loader estimates each old ROI's q bounds from its
 saved pixels and draws those ranges on the **current** q maps. Inspect the
 resulting ROI overlay: this reprojection is an approximation and can produce
